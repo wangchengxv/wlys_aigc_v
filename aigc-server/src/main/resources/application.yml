@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: aigc-server
+
+aigc:
+  security:
+    encryption-key: ${ENCRYPTION_KEY:default-encryption-key-change-in-production}
+  ark:
+    base-url: https://ark.cn-beijing.volces.com
+    api-key: ${ARK_API_KEY:1d6c6611-549a-46ca-8593-fb48489a406e}
+    default-image-model: doubao-seedream-5-0-260128
+    default-video-model: doubao-seedance-1-5-pro-251215
+    video-api-path: /api/v3/contents/generations/tasks
+    video-result-api-path: /api/v3/contents/generations/tasks/{taskId}
+    video-poll-max-attempts: 40
+    video-poll-interval-ms: 3000
+    video-duration-seconds: 5
+    image-model-options:
+      - doubao-seedream-5-0-260128
+    video-model-options:
+      - doubao-seedance-1-5-pro-251215
+    response-format: url
+    size: 2K
+    stream: false
+    watermark: true
+    sequential-image-generation: disabled
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
