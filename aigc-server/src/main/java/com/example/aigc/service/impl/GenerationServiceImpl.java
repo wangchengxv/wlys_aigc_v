@@ -8,14 +8,22 @@ import com.example.aigc.entity.GenerationTask;
 import com.example.aigc.enums.GenerateMode;
 import com.example.aigc.enums.TaskStatus;
 import com.example.aigc.exception.BizException;
+import com.example.aigc.model.ConnectionConfig;
+import com.example.aigc.model.ModelConfig;
+import com.example.aigc.repository.ConnectionConfigRepository;
 import com.example.aigc.repository.GenerationTaskRepository;
+import com.example.aigc.repository.ModelConfigRepository;
+import com.example.aigc.service.ApiKeyCryptoService;
 import com.example.aigc.service.GenerationService;
-import org.springframework.http.MediaType;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClient;
+import com.example.aigc.service.ModelCapabilityService;
+import com.example.aigc.service.GatewayKind;
+import com.example.aigc.service.ProviderCatalog;
+import com.example.aigc.service.ProviderGatewayException;
+import com.example.aigc.service.ProviderHttpGateway;
+import com.example.aigc.service.RouterRoutingService;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -25,25 +33,51 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Locale;
 
 @Service
 public class GenerationServiceImpl implements GenerationService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final List<String> BLOCK_WORDS = List.of("暴恐", "色情", "违禁", "涉政");
+    /** 视频：全局风格 + 用户描述合并后最大长度（避免超出模型侧限制） */
+    private static final int MAX_VIDEO_MERGED_PROMPT_CHARS = 8000;
 
     private final GenerationTaskRepository repository;
     private final AigcArkProperties arkProperties;
-    private final RestClient restClient;
+    private final ConnectionConfigRepository connectionConfigRepository;
+    private final ModelConfigRepository modelConfigRepository;
+    private final ApiKeyCryptoService apiKeyCryptoService;
+    private final ProviderCatalog providerCatalog;
+    private final ProviderHttpGateway providerHttpGateway;
+    private final ModelCapabilityService modelCapabilityService;
+    private final RouterRoutingService routerRoutingService;
 
-    public GenerationServiceImpl(GenerationTaskRepository repository, AigcArkProperties arkProperties) {
+    public GenerationServiceImpl(
+            GenerationTaskRepository repository,
+            AigcArkProperties arkProperties,
+            ConnectionConfigRepository connectionConfigRepository,
+            ModelConfigRepository modelConfigRepository,
+            ApiKeyCryptoService apiKeyCryptoService,
+            ProviderCatalog providerCatalog,
+            ProviderHttpGateway providerHttpGateway,
+            ModelCapabilityService modelCapabilityService,
+            RouterRoutingService routerRoutingService
+    ) {
         this.repository = repository;
         this.arkProperties = arkProperties;
-        this.restClient = RestClient.builder().baseUrl(arkProperties.getBaseUrl()).build();
+        this.connectionConfigRepository = connectionConfigRepository;
+        this.modelConfigRepository = modelConfigRepository;
+        this.apiKeyCryptoService = apiKeyCryptoService;
+        this.providerCatalog = providerCatalog;
+        this.providerHttpGateway = providerHttpGateway;
+        this.modelCapabilityService = modelCapabilityService;
+        this.routerRoutingService = routerRoutingService;
     }
 
     @Override
     public GenerateResponseData generate(GenerateRequest request) {
         validatePrompt(request.prompt());
+        validatePrompt(request.style());
 
         long start = System.currentTimeMillis();
         String taskId = "T" + System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(100, 999);
@@ -60,17 +94,25 @@ public class GenerationServiceImpl implements GenerationService {
         List<String> videoResults = new ArrayList<>();
 
         if (request.mode() == GenerateMode.text || request.mode() == GenerateMode.both) {
-            textResults = mockText(request.prompt(), request.style(), request.textLength());
+            textResults = generateTextContent(request.prompt(), request.style(), request.textLength());
         }
         if (request.mode() == GenerateMode.image || request.mode() == GenerateMode.both) {
-            String selectedModel = resolveImageModel(request.imageModel());
-            imageResults = generateImagesFromArk(request.prompt(), safeCount(request.count()), selectedModel);
-            task.setImageModel(selectedModel);
+            MediaResult imageResult = generateImages(request.prompt(), safeCount(request.count()), request.imageModel());
+            imageResults = imageResult.results();
+            task.setImageModel(imageResult.modelName());
+            task.setImageModelSource(imageResult.modelSource());
+            task.setImageModelMatchedBy(imageResult.matchedBy());
+            task.setImageModelRejectReason(imageResult.rejectReason());
         }
         if (request.mode() == GenerateMode.video) {
-            String selectedModel = resolveVideoModel(request.videoModel());
-            videoResults = generateVideosFromArk(request.prompt(), safeCount(request.count()), selectedModel);
-            task.setVideoModel(selectedModel);
+            String videoPrompt = buildVideoPrompt(request.style(), request.prompt());
+            validateVideoMergedPromptLength(videoPrompt);
+            MediaResult videoResult = generateVideos(videoPrompt, safeCount(request.count()), request.videoModel());
+            videoResults = videoResult.results();
+            task.setVideoModel(videoResult.modelName());
+            task.setVideoModelSource(videoResult.modelSource());
+            task.setVideoModelMatchedBy(videoResult.matchedBy());
+            task.setVideoModelRejectReason(videoResult.rejectReason());
         }
 
         task.setTextResults(textResults);
@@ -95,11 +137,37 @@ public class GenerationServiceImpl implements GenerationService {
         return toData(task);
     }
 
+    @Override
+    public void deleteTask(String taskId) {
+        repository.deleteByTaskId(taskId);
+    }
+
     private void validatePrompt(String prompt) {
         for (String word : BLOCK_WORDS) {
             if (prompt.contains(word)) {
                 throw new BizException(400, "输入内容包含敏感词，请调整后重试");
             }
+        }
+    }
+
+    /**
+     * 视频：风格约束在前，用户描述在后（与前端「全局设定优先」一致）。
+     */
+    private static String buildVideoPrompt(String style, String prompt) {
+        String s = style == null ? "" : style.trim();
+        String p = prompt == null ? "" : prompt.trim();
+        if (s.isEmpty()) {
+            return p;
+        }
+        if (p.isEmpty()) {
+            return s;
+        }
+        return s + "\n" + p;
+    }
+
+    private void validateVideoMergedPromptLength(String merged) {
+        if (merged.length() > MAX_VIDEO_MERGED_PROMPT_CHARS) {
+            throw new BizException(400, "视频提示词过长（含全局风格与用户描述），请缩短后重试");
         }
     }
 
@@ -110,18 +178,73 @@ public class GenerationServiceImpl implements GenerationService {
         return Math.max(1, Math.min(count, 4));
     }
 
-    private String resolveImageModel(String imageModel) {
-        if (imageModel == null || imageModel.isBlank()) {
-            return arkProperties.getDefaultImageModel();
+    private List<String> generateTextContent(String prompt, String style, String textLength) {
+        ResolvedModel resolvedModel = resolveModel("text", null);
+        if (resolvedModel == null) {
+            return mockText(prompt, style, textLength);
         }
-        return imageModel.trim();
+
+        Map<String, Object> requestPayload = buildTextRequest(prompt, style, textLength, resolvedModel);
+        try {
+            Map<String, Object> response = providerHttpGateway.invokeChat(
+                    resolvedModel.provider(),
+                    resolvedModel.connection().getBaseUrl(),
+                    resolvedModel.apiKey(),
+                    resolvedModel.metadataPlain(),
+                    requestPayload,
+                    Duration.ofSeconds(Math.max(8, routerRoutingService.timeoutSeconds()))
+            );
+            String content = parseAssistantContent(response, resolvedModel.provider().apiFormat());
+            List<String> lines = splitTextResults(content);
+            return lines.isEmpty() ? mockText(prompt, style, textLength) : lines;
+        } catch (ProviderGatewayException ex) {
+            return mockText(prompt, style, textLength);
+        }
     }
 
-    private String resolveVideoModel(String videoModel) {
-        if (videoModel == null || videoModel.isBlank()) {
-            return arkProperties.getDefaultVideoModel();
+    private MediaResult generateImages(String prompt, int count, String requestedModel) {
+        ResolvedModel resolvedModel = resolveModel("image", requestedModel);
+        if (resolvedModel != null) {
+            return new MediaResult(
+                    resolvedModel.model().getModelName(),
+                    generateImagesWithConfiguredModel(prompt, count, resolvedModel),
+                    resolvedModel.source(),
+                    resolvedModel.matchedBy(),
+                    resolvedModel.rejectReason()
+            );
         }
-        return videoModel.trim();
+        String selectedModel = requestedModel == null || requestedModel.isBlank() ? arkProperties.getDefaultImageModel() : requestedModel.trim();
+        return new MediaResult(
+                selectedModel,
+                generateImagesFromArk(prompt, count, selectedModel),
+                "SYSTEM_FALLBACK",
+                requestedModel == null || requestedModel.isBlank() ? "default-image" : "explicit-no-match",
+                "NO_MATCH"
+        );
+    }
+
+    private MediaResult generateVideos(String prompt, int count, String requestedModel) {
+        ResolvedModel resolvedModel = resolveModel("video", requestedModel);
+        if (resolvedModel != null) {
+            if (!"ark".equalsIgnoreCase(resolvedModel.provider().key())) {
+                throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)连接");
+            }
+            return new MediaResult(
+                    resolvedModel.model().getModelName(),
+                    generateVideosWithArkConnection(prompt, count, resolvedModel),
+                    resolvedModel.source(),
+                    resolvedModel.matchedBy(),
+                    resolvedModel.rejectReason()
+            );
+        }
+        String selectedModel = requestedModel == null || requestedModel.isBlank() ? arkProperties.getDefaultVideoModel() : requestedModel.trim();
+        return new MediaResult(
+                selectedModel,
+                generateVideosFromArk(prompt, count, selectedModel),
+                "SYSTEM_FALLBACK",
+                requestedModel == null || requestedModel.isBlank() ? "default-video" : "explicit-no-match",
+                "NO_MATCH"
+        );
     }
 
     private List<String> mockText(String prompt, String style, String textLength) {
@@ -137,14 +260,111 @@ public class GenerationServiceImpl implements GenerationService {
         );
     }
 
-    private List<String> generateImagesFromArk(String prompt, int count, String imageModel) {
-        if (arkProperties.getApiKey() == null || arkProperties.getApiKey().isBlank()) {
-            throw new BizException(500, "服务未配置ARK_API_KEY，请联系管理员");
+    private Map<String, Object> buildTextRequest(String prompt, String style, String textLength, ResolvedModel resolvedModel) {
+        String lengthDesc = switch (textLength == null ? "medium" : textLength) {
+            case "short" -> "短一点，适合海报或 banner";
+            case "long" -> "长一点，适合详情页或社媒长文案";
+            default -> "中等长度，适合朋友圈、公众号摘要或落地页";
+        };
+        String systemPrompt = "你是一名中文营销创意助手，擅长产出可直接使用的高质量文案。";
+        String userPrompt = """
+                请围绕以下主题生成 2 条中文营销文案，要求：
+                1. 风格为：%s
+                2. 长度要求：%s
+                3. 每条文案都要完整、可直接发布
+                4. 请不要输出解释，只输出两条文案，每条单独一行
+
+                主题：%s
+                """.formatted(style, lengthDesc, prompt);
+
+        if ("anthropic".equalsIgnoreCase(resolvedModel.provider().apiFormat())) {
+            return Map.of(
+                    "model", resolvedModel.model().getModelName(),
+                    "system", systemPrompt,
+                    "messages", List.of(Map.of("role", "user", "content", userPrompt)),
+                    "max_tokens", 1000,
+                    "temperature", 0.8
+            );
+        }
+
+        return Map.of(
+                "model", resolvedModel.model().getModelName(),
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userPrompt)
+                ),
+                "temperature", 0.8,
+                "max_tokens", 1000
+        );
+    }
+
+    private String parseAssistantContent(Map<String, Object> response, String apiFormat) {
+        if ("anthropic".equalsIgnoreCase(apiFormat)) {
+            Object contentNode = response.get("content");
+            if (contentNode instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+                Object text = first.get("text");
+                return text == null ? "" : String.valueOf(text);
+            }
+            return "";
+        }
+        Object choicesNode = response.get("choices");
+        if (choicesNode instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+            Object messageNode = first.get("message");
+            if (messageNode instanceof Map<?, ?> message) {
+                Object content = message.get("content");
+                return content == null ? "" : String.valueOf(content);
+            }
+        }
+        return "";
+    }
+
+    private List<String> splitTextResults(String content) {
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        List<String> lines = content.lines()
+                .map(String::trim)
+                .map(this::stripLeadingBullet)
+                .filter(line -> !line.isBlank())
+                .distinct()
+                .limit(4)
+                .toList();
+        if (lines.isEmpty()) {
+            return List.of(content.trim());
+        }
+        return lines;
+    }
+
+    private String stripLeadingBullet(String line) {
+        return line.replaceFirst("^[\\-•\\d\\.\\)]\\s*", "").trim();
+    }
+
+    private List<String> generateImagesWithConfiguredModel(String prompt, int count, ResolvedModel resolvedModel) {
+        ProviderCatalog.ProviderDefinition provider = resolvedModel.provider();
+        if (provider.imageGenerationPath() == null || provider.imageGenerationPath().isBlank()) {
+            throw new BizException(400, "当前图片模型对应连接未配置图片生成接口");
         }
         List<String> images = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            JsonResponse data = callArkImageApi(prompt, imageModel);
-            String imageUrl = data.imageUrl();
+            Map<String, Object> body;
+            if ("ark".equalsIgnoreCase(provider.key())) {
+                body = callArkImageApi(resolvedModel.connection().getBaseUrl(), resolvedModel.apiKey(), prompt, resolvedModel.model().getModelName());
+            } else {
+                body = providerHttpGateway.generateImage(
+                        provider,
+                        resolvedModel.connection().getBaseUrl(),
+                        resolvedModel.apiKey(),
+                        Map.of(
+                                "model", resolvedModel.model().getModelName(),
+                                "prompt", prompt,
+                                "n", 1,
+                                "size", requestImageSize(),
+                                "response_format", "url"
+                        ),
+                        Duration.ofSeconds(60)
+                );
+            }
+            String imageUrl = parseImageUrl(body);
             if (imageUrl == null || imageUrl.isBlank()) {
                 throw new BizException(502, "模型服务返回异常，未获取到图片地址");
             }
@@ -153,7 +373,21 @@ public class GenerationServiceImpl implements GenerationService {
         return images;
     }
 
-    private JsonResponse callArkImageApi(String prompt, String imageModel) {
+    private List<String> generateImagesFromArk(String prompt, int count, String imageModel) {
+        String apiKey = requireArkApiKey();
+        List<String> images = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Map<String, Object> body = callArkImageApi(arkProperties.getBaseUrl(), apiKey, prompt, imageModel);
+            String imageUrl = parseImageUrl(body);
+            if (imageUrl == null || imageUrl.isBlank()) {
+                throw new BizException(502, "模型服务返回异常，未获取到图片地址");
+            }
+            images.add(imageUrl);
+        }
+        return images;
+    }
+
+    private Map<String, Object> callArkImageApi(String baseUrl, String apiKey, String prompt, String imageModel) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("model", imageModel);
         payload.put("prompt", prompt);
@@ -162,39 +396,38 @@ public class GenerationServiceImpl implements GenerationService {
         payload.put("size", arkProperties.getSize());
         payload.put("stream", arkProperties.isStream());
         payload.put("watermark", arkProperties.isWatermark());
-
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.post()
-                    .uri("/api/v3/images/generations")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + arkProperties.getApiKey())
-                    .body(payload)
-                    .retrieve()
-                    .body(Map.class);
-            return parseArkResponse(body);
-        } catch (HttpStatusCodeException ex) {
-            int code = ex.getStatusCode().value();
-            if (code == 401 || code == 403) {
-                throw new BizException(502, "模型服务鉴权失败，请检查ARK_API_KEY");
-            }
-            throw new BizException(502, "模型服务调用失败，状态码：" + code);
-        } catch (ResourceAccessException ex) {
-            throw new BizException(504, "模型服务请求超时，请稍后重试");
-        } catch (BizException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new BizException(502, "模型服务调用失败，请稍后重试");
+            return providerHttpGateway.generateImage(
+                    providerCatalog.require("ark"),
+                    baseUrl,
+                    apiKey,
+                    payload,
+                    Duration.ofSeconds(60)
+            );
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
         }
     }
 
-    private List<String> generateVideosFromArk(String prompt, int count, String videoModel) {
-        if (arkProperties.getApiKey() == null || arkProperties.getApiKey().isBlank()) {
-            throw new BizException(500, "服务未配置ARK_API_KEY，请联系管理员");
-        }
+    private List<String> generateVideosWithArkConnection(String prompt, int count, ResolvedModel resolvedModel) {
         List<String> videos = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            String videoUrl = callArkVideoApi(prompt, videoModel);
+            String videoUrl = callArkVideoApi(
+                    resolvedModel.connection().getBaseUrl(),
+                    resolvedModel.apiKey(),
+                    prompt,
+                    resolvedModel.model().getModelName()
+            );
+            videos.add(videoUrl);
+        }
+        return videos;
+    }
+
+    private List<String> generateVideosFromArk(String prompt, int count, String videoModel) {
+        String apiKey = requireArkApiKey();
+        List<String> videos = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String videoUrl = callArkVideoApi(arkProperties.getBaseUrl(), apiKey, prompt, videoModel);
             if (videoUrl == null || videoUrl.isBlank()) {
                 throw new BizException(502, "模型服务返回异常，未获取到视频地址");
             }
@@ -203,10 +436,9 @@ public class GenerationServiceImpl implements GenerationService {
         return videos;
     }
 
-    private String callArkVideoApi(String prompt, String videoModel) {
+    private String callArkVideoApi(String baseUrl, String apiKey, String prompt, String videoModel) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("model", videoModel);
-        // 与方舟「内容生成 / 视频」接口一致：content 数组 + 文本内嵌参数（见 Doubao-Seedance 官方示例）
         int duration = safeVideoDuration();
         boolean watermark = arkProperties.isWatermark();
         String textWithParams = prompt.trim()
@@ -215,42 +447,27 @@ public class GenerationServiceImpl implements GenerationService {
         Map<String, Object> textContent = new HashMap<>();
         textContent.put("type", "text");
         textContent.put("text", textWithParams);
-        List<Map<String, Object>> content = new ArrayList<>();
-        content.add(textContent);
-        payload.put("content", content);
+        payload.put("content", List.of(textContent));
 
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> submitBody = restClient.post()
-                    .uri(arkProperties.getVideoApiPath())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + arkProperties.getApiKey())
-                    .body(payload)
-                    .retrieve()
-                    .body(Map.class);
-
+            Map<String, Object> submitBody = providerHttpGateway.submitVideoTask(
+                    providerCatalog.require("ark"),
+                    baseUrl,
+                    apiKey,
+                    payload,
+                    Duration.ofSeconds(60)
+            );
             String directUrl = parseArkVideoUrl(submitBody, false);
             if (directUrl != null) {
                 return directUrl;
             }
-
             String taskId = parseArkVideoTaskId(submitBody);
             if (taskId == null) {
                 throw new BizException(502, "视频模型服务返回异常，缺少task_id或视频地址");
             }
-            return pollArkVideoTask(taskId);
-        } catch (HttpStatusCodeException ex) {
-            int code = ex.getStatusCode().value();
-            if (code == 401 || code == 403) {
-                throw new BizException(502, "模型服务鉴权失败，请检查ARK_API_KEY");
-            }
-            throw new BizException(502, "视频模型服务调用失败，状态码：" + code);
-        } catch (ResourceAccessException ex) {
-            throw new BizException(504, "视频模型服务请求超时，请稍后重试");
-        } catch (BizException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new BizException(502, "视频模型服务调用失败，请稍后重试");
+            return pollArkVideoTask(baseUrl, apiKey, taskId);
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
         }
     }
 
@@ -262,14 +479,14 @@ public class GenerationServiceImpl implements GenerationService {
         return Math.max(1, Math.min(raw, 30));
     }
 
-    private String pollArkVideoTask(String taskId) {
+    private String pollArkVideoTask(String baseUrl, String apiKey, String taskId) {
         int maxAttempts = Math.max(1, arkProperties.getVideoPollMaxAttempts());
         long intervalMs = Math.max(300L, arkProperties.getVideoPollIntervalMs());
         String lastStatus = null;
         Map<String, Object> lastBody = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            Map<String, Object> resultBody = requestVideoTaskResult(taskId);
+            Map<String, Object> resultBody = requestVideoTaskResult(baseUrl, apiKey, taskId);
             lastBody = resultBody;
             String maybeUrl = parseArkVideoUrl(resultBody, false);
             if (maybeUrl != null) {
@@ -278,11 +495,9 @@ public class GenerationServiceImpl implements GenerationService {
 
             String status = parseArkTaskStatus(resultBody);
             lastStatus = status;
-            if (isSuccessStatus(status)) {
-                if (attempt == maxAttempts) {
-                    throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
-                            + taskId + "，status=" + safeStatus(status) + "，响应摘要=" + summarizeBody(resultBody));
-                }
+            if (isSuccessStatus(status) && attempt == maxAttempts) {
+                throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
+                        + taskId + "，status=" + safeStatus(status) + "，响应摘要=" + summarizeBody(resultBody));
             }
             if (isFailedStatus(status)) {
                 throw new BizException(502, "视频任务失败：" + parseArkTaskError(resultBody));
@@ -304,53 +519,164 @@ public class GenerationServiceImpl implements GenerationService {
         throw new BizException(504, "视频生成超时，请稍后重试或缩短提示词");
     }
 
-    private Map<String, Object> requestVideoTaskResult(String taskId) {
-        String resultPath = arkProperties.getVideoResultApiPath();
+    private Map<String, Object> requestVideoTaskResult(String baseUrl, String apiKey, String taskId) {
         try {
-            if (resultPath != null && resultPath.contains("{taskId}")) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> body = restClient.get()
-                        .uri(resultPath, taskId)
-                        .header("Authorization", "Bearer " + arkProperties.getApiKey())
-                        .retrieve()
-                        .body(Map.class);
-                return body;
-            }
-            Map<String, Object> payload = Map.of("task_id", taskId);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.post()
-                    .uri(resultPath == null || resultPath.isBlank() ? arkProperties.getVideoApiPath() : resultPath)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + arkProperties.getApiKey())
-                    .body(payload)
-                    .retrieve()
-                    .body(Map.class);
-            return body;
-        } catch (HttpStatusCodeException ex) {
-            int code = ex.getStatusCode().value();
-            if (code == 404) {
-                throw new BizException(502, "视频任务查询接口不存在，请检查video-result-api-path配置");
-            }
-            throw new BizException(502, "视频任务查询失败，状态码：" + code);
-        } catch (ResourceAccessException ex) {
-            throw new BizException(504, "视频任务查询超时，请稍后重试");
+            return providerHttpGateway.queryVideoTask(
+                    providerCatalog.require("ark"),
+                    baseUrl,
+                    apiKey,
+                    taskId,
+                    Duration.ofSeconds(30)
+            );
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
         }
     }
 
-    private JsonResponse parseArkResponse(Map<String, Object> body) {
+    private String parseImageUrl(Map<String, Object> body) {
         if (body == null) {
-            throw new BizException(502, "模型服务返回为空");
+            return null;
         }
         Object dataNode = body.get("data");
         if (!(dataNode instanceof List<?> dataList) || dataList.isEmpty()) {
-            throw new BizException(502, "模型服务返回异常，缺少data字段");
+            return null;
         }
         Object first = dataList.get(0);
         if (!(first instanceof Map<?, ?> firstMap)) {
-            throw new BizException(502, "模型服务返回异常，图片结果格式错误");
+            return null;
         }
         Object url = firstMap.get("url");
-        return new JsonResponse(url == null ? null : String.valueOf(url));
+        if (url != null) {
+            return String.valueOf(url);
+        }
+        Object b64 = firstMap.get("b64_json");
+        return b64 == null ? null : String.valueOf(b64);
+    }
+
+    private ResolvedModel resolveModel(String capability, String requestedModel) {
+        List<ModelConfig> candidates = modelConfigRepository.findAll().stream()
+                .filter(ModelConfig::isEnabled)
+                .filter(model -> modelCapabilityService.supports(model, capability))
+                .toList();
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        if (requestedModel != null && !requestedModel.isBlank()) {
+            for (ModelConfig candidate : candidates) {
+                String matchedBy = matchExplicitModel(candidate, requestedModel.trim());
+                if (matchedBy != null) {
+                    ResolvedModel resolved = toResolvedModel(candidate);
+                    if (resolved != null) {
+                        return resolved.withMatch(matchedBy);
+                    }
+                }
+            }
+            return null;
+        }
+
+        List<String> orderedConnectionIds = routerRoutingService.resolveOrderedConnections(true).stream()
+                .map(ConnectionConfig::getId)
+                .toList();
+        for (String connectionId : orderedConnectionIds) {
+            for (ModelConfig candidate : candidates) {
+                if (connectionId.equals(candidate.getConnectionId())) {
+                    ResolvedModel resolved = toResolvedModel(candidate);
+                    if (resolved != null) {
+                        return resolved;
+                    }
+                }
+            }
+        }
+        for (ModelConfig candidate : candidates) {
+            ResolvedModel resolved = toResolvedModel(candidate);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return null;
+    }
+
+    private ResolvedModel toResolvedModel(ModelConfig model) {
+        ConnectionConfig connection = connectionConfigRepository.findById(model.getConnectionId()).orElse(null);
+        if (connection == null || !connection.isEnabled()) {
+            return null;
+        }
+        ProviderCatalog.ProviderDefinition provider = providerCatalog.require(connection.getProvider());
+        String apiKey = resolveApiKeyForGeneration(provider, connection);
+        Map<String, Object> metaPlain = com.example.aigc.service.ConnectionMetadataHelper.decryptForUse(connection.getMetadata(), apiKeyCryptoService);
+        return new ResolvedModel(model, connection, provider, apiKey, metaPlain, "USER_CONFIGURED", "modelName", null);
+    }
+
+    private String resolveApiKeyForGeneration(ProviderCatalog.ProviderDefinition provider, ConnectionConfig connection) {
+        if (provider.gatewayKind() == GatewayKind.BEDROCK) {
+            return decryptRequiredApiKey(connection);
+        }
+        if (provider.gatewayKind() == GatewayKind.VERTEX) {
+            return "";
+        }
+        return provider.authMode() == ProviderCatalog.AuthMode.NONE ? "" : decryptRequiredApiKey(connection);
+    }
+
+    private String matchExplicitModel(ModelConfig modelConfig, String requestedModel) {
+        String expected = normalize(requestedModel);
+        if (expected.isBlank()) {
+            return null;
+        }
+        if (expected.equals(normalize(modelConfig.getModelName()))) {
+            return "modelName";
+        }
+        if (expected.equals(normalize(modelConfig.getName()))) {
+            return "name";
+        }
+        Object rawAliases = modelConfig.getMetadata() == null ? null : modelConfig.getMetadata().get("aliases");
+        if (rawAliases instanceof List<?> list) {
+            for (Object item : list) {
+                if (item != null && expected.equals(normalize(String.valueOf(item)))) {
+                    return "alias";
+                }
+            }
+        }
+        if (rawAliases instanceof String aliases) {
+            for (String item : aliases.split(",")) {
+                if (expected.equals(normalize(item))) {
+                    return "alias";
+                }
+            }
+        }
+        return null;
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String decryptRequiredApiKey(ConnectionConfig connection) {
+        if (connection.getEncryptedApiKey() == null || connection.getEncryptedApiKey().isBlank()) {
+            throw new BizException(400, "连接未配置密钥：" + connection.getName());
+        }
+        return apiKeyCryptoService.decrypt(connection.getEncryptedApiKey());
+    }
+
+    private String requireArkApiKey() {
+        if (arkProperties.getApiKey() == null || arkProperties.getApiKey().isBlank()) {
+            throw new BizException(500, "服务未配置ARK_API_KEY，请联系管理员");
+        }
+        return arkProperties.getApiKey();
+    }
+
+    private int requestImageSize() {
+        return 1;
+    }
+
+    private int mapProviderStatus(ProviderGatewayException ex) {
+        if (ex.getStatusCode() == 401 || ex.getStatusCode() == 403) {
+            return 502;
+        }
+        if (ex.getStatusCode() == 408 || ex.getStatusCode() == 504) {
+            return 504;
+        }
+        return 502;
     }
 
     private String parseArkVideoUrl(Map<String, Object> body, boolean strict) {
@@ -556,9 +882,6 @@ public class GenerationServiceImpl implements GenerationService {
         return raw.length() <= 160 ? raw : raw.substring(0, 160);
     }
 
-    private record JsonResponse(String imageUrl) {
-    }
-
     private GenerateResponseData toData(GenerationTask task) {
         return new GenerateResponseData(
                 task.getTaskId(),
@@ -572,7 +895,37 @@ public class GenerationServiceImpl implements GenerationService {
                 task.getMode(),
                 task.getStyle(),
                 task.getImageModel(),
-                task.getVideoModel()
+                task.getVideoModel(),
+                task.getImageModelSource(),
+                task.getVideoModelSource(),
+                task.getImageModelMatchedBy(),
+                task.getVideoModelMatchedBy(),
+                task.getImageModelRejectReason(),
+                task.getVideoModelRejectReason()
         );
+    }
+
+    private record MediaResult(
+            String modelName,
+            List<String> results,
+            String modelSource,
+            String matchedBy,
+            String rejectReason
+    ) {
+    }
+
+    private record ResolvedModel(
+            ModelConfig model,
+            ConnectionConfig connection,
+            ProviderCatalog.ProviderDefinition provider,
+            String apiKey,
+            Map<String, Object> metadataPlain,
+            String source,
+            String matchedBy,
+            String rejectReason
+    ) {
+        private ResolvedModel withMatch(String match) {
+            return new ResolvedModel(model, connection, provider, apiKey, metadataPlain, source, match, rejectReason);
+        }
     }
 }

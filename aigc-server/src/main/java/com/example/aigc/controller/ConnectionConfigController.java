@@ -4,6 +4,8 @@ import com.example.aigc.dto.ApiResponse;
 import com.example.aigc.dto.ConnectionConfigCreateRequest;
 import com.example.aigc.dto.ConnectionConfigResponse;
 import com.example.aigc.dto.ConnectionConfigUpdateRequest;
+import com.example.aigc.dto.QuickConnectionRequest;
+import com.example.aigc.dto.RouterConnectionTestResponse;
 import com.example.aigc.service.ConnectionConfigService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +25,11 @@ public class ConnectionConfigController {
     @PostMapping
     public ApiResponse<ConnectionConfigResponse> create(@RequestBody @Valid ConnectionConfigCreateRequest request) {
         return ApiResponse.ok(connectionConfigService.create(request));
+    }
+
+    @PostMapping("/quick")
+    public ApiResponse<ConnectionConfigResponse> quickCreate(@RequestBody @Valid QuickConnectionRequest request) {
+        return ApiResponse.ok(connectionConfigService.quickCreate(request));
     }
 
     @GetMapping
@@ -47,5 +54,10 @@ public class ConnectionConfigController {
     public ApiResponse<Void> delete(@PathVariable String id) {
         connectionConfigService.delete(id);
         return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/{id}/test")
+    public ApiResponse<RouterConnectionTestResponse> test(@PathVariable String id) {
+        return ApiResponse.ok(connectionConfigService.test(id));
     }
 }

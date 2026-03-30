@@ -17,7 +17,7 @@ public record GenerateRequest(
         GenerateMode mode,
 
         @NotBlank(message = "style不能为空")
-        @Size(max = 30, message = "style最长30字")
+        @Size(max = 4096, message = "style最长4096字")
         String style,
 
         @Pattern(regexp = "^(512x512|768x768|1024x1024)$", message = "imageSize仅支持512x512/768x768/1024x1024")

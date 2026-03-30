@@ -1,0 +1,243 @@
+:root {
+  --font-display: 'Cormorant Garamond', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+  --font-sans: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --duration-fast: 160ms;
+  --duration-normal: 260ms;
+  --duration-slow: 440ms;
+
+  --z-nav: 20;
+  --z-overlay: 40;
+  --z-toast: 80;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-main: #0c0b09;
+  --bg-alt: #151311;
+  --panel: rgba(255, 245, 232, 0.045);
+  --text-main: #f4efe6;
+  --text-muted: #9a9288;
+  --primary: #c9a962;
+  --secondary: #6e8eb5;
+  --danger: #d4847a;
+  --success: #8fb89a;
+  --line: rgba(244, 239, 230, 0.12);
+  --shadow-primary: 0 24px 48px rgba(0, 0, 0, 0.45);
+  --field-bg: color-mix(in srgb, var(--bg-alt) 92%, #000);
+  --focus-border: color-mix(in srgb, var(--primary) 58%, var(--secondary));
+  --tint-primary-08: color-mix(in srgb, var(--primary) 10%, transparent);
+  --tint-primary-14: color-mix(in srgb, var(--primary) 16%, transparent);
+  --tint-primary-22: color-mix(in srgb, var(--primary) 24%, transparent);
+  --overlay-scrim: color-mix(in srgb, var(--bg-main) 74%, transparent);
+  --modal-surface: color-mix(in srgb, var(--bg-alt) 96%, transparent);
+  --toast-bg: color-mix(in srgb, var(--bg-alt) 88%, transparent);
+  --btn-primary-fg: #141210;
+
+  --body-bg:
+    radial-gradient(ellipse 120% 80% at 100% 0%, rgba(201, 169, 98, 0.12), transparent 55%),
+    radial-gradient(ellipse 90% 70% at 0% 100%, rgba(110, 142, 181, 0.1), transparent 50%),
+    linear-gradient(165deg, #080706 0%, #12100d 42%, #0a0908 100%);
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+
+  --font-display: 'Cormorant Garamond', 'Libre Baskerville', 'Noto Serif SC', Georgia, serif;
+
+  --bg-main: #f6f3ec;
+  --bg-alt: #ebe4d8;
+  --panel: rgba(255, 255, 255, 0.58);
+  --text-main: #1f1c18;
+  --text-muted: #5c574f;
+  --primary: #8f6b2c;
+  --secondary: #3d5a80;
+  --danger: #a8464a;
+  --success: #3d6b52;
+  --line: rgba(31, 28, 24, 0.12);
+  --shadow-primary:
+    0 22px 44px rgba(47, 42, 36, 0.07),
+    0 2px 12px rgba(47, 42, 36, 0.04);
+  --field-bg: #fffcf7;
+  --focus-border: color-mix(in srgb, var(--primary) 42%, var(--secondary));
+  --tint-primary-08: color-mix(in srgb, var(--primary) 9%, transparent);
+  --tint-primary-14: color-mix(in srgb, var(--primary) 14%, transparent);
+  --tint-primary-22: color-mix(in srgb, var(--primary) 22%, transparent);
+  --overlay-scrim: rgba(246, 243, 236, 0.78);
+  --modal-surface: #fffcf7;
+  --toast-bg: rgba(255, 252, 247, 0.94);
+  --btn-primary-fg: #141210;
+
+  --body-bg:
+    radial-gradient(ellipse 110% 75% at 92% 6%, rgba(201, 169, 98, 0.18), transparent 52%),
+    radial-gradient(ellipse 95% 65% at 4% 96%, rgba(110, 142, 181, 0.14), transparent 48%),
+    linear-gradient(168deg, #faf7f1 0%, #f0ebe2 45%, #e8e2d6 100%);
+}
+
+html[data-theme='onelink'] {
+  color-scheme: dark;
+
+  --font-display: 'Plus Jakarta Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, sans-serif;
+
+  --bg-main: #04060d;
+  --bg-alt: #0a1020;
+  --panel: rgba(14, 24, 48, 0.52);
+  --text-main: #e8f1ff;
+  --text-muted: #7b92b0;
+  --primary: #22d3ee;
+  --secondary: #6366f1;
+  --danger: #fb7185;
+  --success: #34d399;
+  --line: rgba(120, 170, 255, 0.14);
+  --shadow-primary: 0 24px 56px rgba(0, 8, 32, 0.55);
+  --field-bg: color-mix(in srgb, var(--bg-alt) 94%, #020617);
+  --focus-border: color-mix(in srgb, var(--primary) 55%, var(--secondary));
+  --tint-primary-08: color-mix(in srgb, var(--primary) 12%, transparent);
+  --tint-primary-14: color-mix(in srgb, var(--primary) 18%, transparent);
+  --tint-primary-22: color-mix(in srgb, var(--primary) 28%, transparent);
+  --overlay-scrim: color-mix(in srgb, var(--bg-main) 78%, transparent);
+  --modal-surface: color-mix(in srgb, var(--bg-alt) 96%, transparent);
+  --toast-bg: color-mix(in srgb, #0c1528 88%, transparent);
+  --btn-primary-fg: #031018;
+
+  --body-bg:
+    radial-gradient(ellipse 100% 70% at 85% 8%, rgba(34, 211, 238, 0.14), transparent 52%),
+    radial-gradient(ellipse 80% 60% at 12% 88%, rgba(99, 102, 241, 0.12), transparent 50%),
+    radial-gradient(ellipse 60% 45% at 50% 40%, rgba(168, 85, 247, 0.06), transparent 60%),
+    linear-gradient(168deg, #02040a 0%, #060b18 38%, #03050c 100%);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  background: var(--body-bg);
+  background-attachment: fixed;
+  color: var(--text-main);
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  transition:
+    color var(--duration-normal),
+    background-color var(--duration-normal);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.glass {
+  background: var(--panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+
+html[data-theme='light'] .glass {
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+html[data-theme='onelink'] .glass {
+  backdrop-filter: blur(20px) saturate(1.35);
+}
+
+.panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-primary);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-border);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--duration-normal) ease,
+    transform var(--duration-normal) ease;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 26px color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+}

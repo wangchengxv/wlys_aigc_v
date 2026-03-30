@@ -13,6 +13,12 @@ public class GenerationTask {
     private String style;
     private String imageModel;
     private String videoModel;
+    private String imageModelSource;
+    private String videoModelSource;
+    private String imageModelMatchedBy;
+    private String videoModelMatchedBy;
+    private String imageModelRejectReason;
+    private String videoModelRejectReason;
     private TaskStatus status;
     private Long latencyMs;
     private String errorCode;
@@ -67,6 +73,54 @@ public class GenerationTask {
 
     public void setVideoModel(String videoModel) {
         this.videoModel = videoModel;
+    }
+
+    public String getImageModelSource() {
+        return imageModelSource;
+    }
+
+    public void setImageModelSource(String imageModelSource) {
+        this.imageModelSource = imageModelSource;
+    }
+
+    public String getVideoModelSource() {
+        return videoModelSource;
+    }
+
+    public void setVideoModelSource(String videoModelSource) {
+        this.videoModelSource = videoModelSource;
+    }
+
+    public String getImageModelMatchedBy() {
+        return imageModelMatchedBy;
+    }
+
+    public void setImageModelMatchedBy(String imageModelMatchedBy) {
+        this.imageModelMatchedBy = imageModelMatchedBy;
+    }
+
+    public String getVideoModelMatchedBy() {
+        return videoModelMatchedBy;
+    }
+
+    public void setVideoModelMatchedBy(String videoModelMatchedBy) {
+        this.videoModelMatchedBy = videoModelMatchedBy;
+    }
+
+    public String getImageModelRejectReason() {
+        return imageModelRejectReason;
+    }
+
+    public void setImageModelRejectReason(String imageModelRejectReason) {
+        this.imageModelRejectReason = imageModelRejectReason;
+    }
+
+    public String getVideoModelRejectReason() {
+        return videoModelRejectReason;
+    }
+
+    public void setVideoModelRejectReason(String videoModelRejectReason) {
+        this.videoModelRejectReason = videoModelRejectReason;
     }
 
     public TaskStatus getStatus() {

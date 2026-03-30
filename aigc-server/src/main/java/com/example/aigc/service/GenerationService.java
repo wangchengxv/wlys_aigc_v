@@ -11,4 +11,6 @@ public interface GenerationService {
     PagedResult<GenerateResponseData> history(int page, int pageSize, GenerateMode mode);
 
     GenerateResponseData taskDetail(String taskId);
+
+    void deleteTask(String taskId);
 }

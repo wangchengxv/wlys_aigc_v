@@ -2,15 +2,12 @@ package com.example.aigc.repository;
 
 import com.example.aigc.entity.GenerationTask;
 import com.example.aigc.enums.GenerateMode;
-import org.springframework.stereotype.Repository;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Repository
 public class InMemoryGenerationTaskRepository implements GenerationTaskRepository {
     private final ConcurrentHashMap<String, GenerationTask> map = new ConcurrentHashMap<>();
 
@@ -42,5 +39,10 @@ public class InMemoryGenerationTaskRepository implements GenerationTaskRepositor
     @Override
     public long count(GenerateMode mode) {
         return map.values().stream().filter(task -> mode == null || task.getMode() == mode).count();
+    }
+
+    @Override
+    public void deleteByTaskId(String taskId) {
+        map.remove(taskId);
     }
 }

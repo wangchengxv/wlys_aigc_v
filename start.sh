@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_DIR="$ROOT_DIR/aigc-site"
+FRONTEND_DIR="${FRONTEND_DIR:-$ROOT_DIR/aigc-site}"
 BACKEND_DIR="$ROOT_DIR/aigc-server"
 LOG_DIR="$ROOT_DIR/.logs"
 PID_FILE="$LOG_DIR/backend.pid"
@@ -122,7 +122,7 @@ main() {
   trap cleanup EXIT INT TERM
 
   echo "[前端] 启动中..."
-  echo "[访问地址] 默认 http://localhost:5173（若端口被占用，请看下方 Vite 输出的 Local 地址）"
+  echo "[访问地址] 以终端中 Vite 显示的 Local 为准（Vue 默认 5173，React aigc-site-react 默认 5174）"
   cd "$FRONTEND_DIR"
   npm run dev
 }
