@@ -11,7 +11,9 @@ public interface GenerationTaskRepository {
 
     Optional<GenerationTask> findByTaskId(String taskId);
 
-    List<GenerationTask> page(int page, int pageSize, GenerateMode mode);
+    List<GenerationTask> page(int page, int pageSize, GenerateMode mode, String ownerId);
 
-    long count(GenerateMode mode);
+    long count(GenerateMode mode, String ownerId);
+
+    void deleteByTaskId(String taskId);
 }

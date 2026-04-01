@@ -4,13 +4,45 @@ server:
 spring:
   application:
     name: aigc-server
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:aigc_manju}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:rootroot}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
 aigc:
+  storage:
+    data-dir: ${AIGC_DATA_DIR:${user.home}/.aigcmanju}
+  auth:
+    access-token: ${AIGC_ACCESS_TOKEN:dev-local-token}
+    user-id-required: ${AIGC_USER_ID_REQUIRED:true}
+  pipeline:
+    video:
+      max-parallel: 3
+      poll-interval-ms: 3000
+      max-retries: 2
   security:
     encryption-key: ${ENCRYPTION_KEY:default-encryption-key-change-in-production}
+  onelinkai:
+    enabled: ${AIGC_ONELINKAI_ENABLED:true}
+    base-url: ${AIGC_ONELINKAI_BASE_URL:https://api.onelinkai.cloud}
+    model-list:
+      remote-enabled: ${AIGC_ONELINKAI_MODEL_LIST_REMOTE_ENABLED:true}
+      timeout-ms: ${AIGC_ONELINKAI_MODEL_LIST_TIMEOUT_MS:8000}
+      fallback-static: ${AIGC_ONELINKAI_MODEL_LIST_FALLBACK_STATIC:true}
   ark:
     base-url: https://ark.cn-beijing.volces.com
-    api-key: ${ARK_API_KEY:1d6c6611-549a-46ca-8593-fb48489a406e}
+    api-key: ${ARK_API_KEY:}
     default-image-model: doubao-seedream-5-0-260128
     default-video-model: doubao-seedance-1-5-pro-251215
     video-api-path: /api/v3/contents/generations/tasks

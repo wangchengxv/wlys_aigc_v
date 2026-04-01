@@ -1,26 +1,61 @@
 package com.example.aigc.model;
 
+import com.example.aigc.repository.jpa.ObjectMapJsonConverter;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
+@Entity
+@Table(name = "connection_config")
 public class ConnectionConfig {
 
+    @Id
     private String id;
     private String name;
     private String provider;
+    @Column(name = "base_url")
     private String baseUrl;
+    @Column(name = "encrypted_api_key")
     private String encryptedApiKey;
+    /** Non-secret and encrypted-at-value options (see ConnectionMetadataHelper). */
+    @Convert(converter = ObjectMapJsonConverter.class)
+    @Column(name = "metadata_json", columnDefinition = "LONGTEXT")
+    private Map<String, Object> metadata;
     private boolean enabled;
+    @Column(name = "created_at")
     private Instant createdAt;
+    @Column(name = "updated_at")
     private Instant updatedAt;
 
+    public ConnectionConfig() {
+    }
+
     public static ConnectionConfig create(String name, String provider, String baseUrl, String encryptedApiKey, boolean enabled) {
+        return create(name, provider, baseUrl, encryptedApiKey, enabled, null);
+    }
+
+    public static ConnectionConfig create(
+            String name,
+            String provider,
+            String baseUrl,
+            String encryptedApiKey,
+            boolean enabled,
+            Map<String, Object> metadata
+    ) {
         ConnectionConfig config = new ConnectionConfig();
         config.id = UUID.randomUUID().toString();
         config.name = name;
         config.provider = provider;
         config.baseUrl = baseUrl;
         config.encryptedApiKey = encryptedApiKey;
+        config.metadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
         config.enabled = enabled;
         config.createdAt = Instant.now();
         config.updatedAt = config.createdAt;
@@ -33,6 +68,10 @@ public class ConnectionConfig {
 
     public String getId() {
         return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getName() {
@@ -67,6 +106,17 @@ public class ConnectionConfig {
         this.encryptedApiKey = encryptedApiKey;
     }
 
+    public Map<String, Object> getMetadata() {
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
+        return metadata;
+    }
+
+    public void setMetadata(Map<String, Object> metadata) {
+        this.metadata = metadata == null ? new HashMap<>() : metadata;
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -79,7 +129,15 @@ public class ConnectionConfig {
         return createdAt;
     }
 
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

@@ -1,0 +1,47 @@
+已按你确认的方案完成实现：**用 `.doc/AI视频生成风格与提示词大全.md` 的词典覆盖视频风格预设，并开启强校验**，且所有待办都已完成。
+
+### 本次已落地内容
+
+- 新增统一风格注册表：`aigc-server/src/main/java/com/example/aigc/model/VideoStylePresetRegistry.java`
+  - 内置 14 个 `style key -> 英文锚点词`
+  - 内置英文禁忌词（negative prompt）
+  - 提供严格校验、历史兼容映射、读取归一化能力
+
+- 强校验 `style` 入参（仅允许 14 个 key）
+  - `aigc-server/src/main/java/com/example/aigc/dto/GenerateRequest.java`
+  - `aigc-server/src/main/java/com/example/aigc/dto/ScriptProjectCreateRequest.java`
+
+- 通用视频生成链路改为词典注入
+  - `aigc-server/src/main/java/com/example/aigc/service/impl/GenerationServiceImpl.java`
+  - `buildVideoPrompt(...)` 现在拼接为：
+    - `Visual Style Anchor: <词典锚点>`
+    - 用户 prompt
+    - `Negative Prompt: <禁忌词>`
+  - 并在服务层对 `style` 做严格 key 校验与标准化
+
+- 脚本项目链路 key 化与默认值切换
+  - `aigc-server/src/main/java/com/example/aigc/service/ScriptProjectService.java`
+    - 新建项目默认风格改为 `live-action`
+    - 写入时仅接受合法 key
+    - 读取历史项目时自动归一化旧值（如“电影感写实”）到合法 key
+  - `aigc-server/src/main/java/com/example/aigc/controller/ScriptProjectController.java`
+    - `create` / `upload` 入口增加 visualStyle 严格校验
+
+- 脚本与分镜提示词注入统一改为词典风格锚点
+  - `aigc-server/src/main/java/com/example/aigc/service/ScriptWorkflowService.java`
+  - `aigc-server/src/main/java/com/example/aigc/service/ScriptProductionOrchestrator.java`
+  - 相关 `visualStyle` 注入点改为通过注册表解析，避免旧短词继续直接参与生成
+
+### 验证结果
+
+- 已执行编译：`mvn -DskipTests compile`（在 `aigc-server`）  
+  - **结果：BUILD SUCCESS**
+- 已检查 lints：有 2 条 warning，均为现有代码告警类型（非本次功能阻断）：
+  - `ScriptWorkflowService` 的 `@SuppressWarnings("unchecked")` 冗余警告
+  - `ScriptProductionOrchestrator` 中 `scriptWorkflowService` 字段未使用警告
+
+### 你关心的“报错原因”
+
+当前这次改造**没有编译报错**。如果你后续调用接口出现 400，最可能原因是：
+- `style` 或 `visualStyle` 传了非 14 个 key 之一（现在已强校验）。  
+我可以下一步给你一组可直接调用的示例请求（`/api/v1/generate`、`/api/v1/script-projects`、`/upload`）用于联调。

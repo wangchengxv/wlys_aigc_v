@@ -17,7 +17,7 @@ public record GenerateRequest(
         GenerateMode mode,
 
         @NotBlank(message = "style不能为空")
-        @Size(max = 30, message = "style最长30字")
+        @Size(max = 5000, message = "style最长5000字")
         String style,
 
         @Pattern(regexp = "^(512x512|768x768|1024x1024)$", message = "imageSize仅支持512x512/768x768/1024x1024")
@@ -34,6 +34,10 @@ public record GenerateRequest(
         String imageModel,
 
         @Size(max = 120, message = "videoModel最长120字")
-        String videoModel
+        String videoModel,
+
+        /** Moark 等图生视频：参考图 HTTP(S) URL（可选；未填时 Moark 将报错提示） */
+        @Size(max = 2048, message = "参考图 URL 过长")
+        String videoReferenceImageUrl
 ) {
 }

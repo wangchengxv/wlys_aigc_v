@@ -6,9 +6,11 @@ import com.example.aigc.dto.PagedResult;
 import com.example.aigc.enums.GenerateMode;
 
 public interface GenerationService {
-    GenerateResponseData generate(GenerateRequest request);
+    GenerateResponseData generate(GenerateRequest request, String ownerId);
 
-    PagedResult<GenerateResponseData> history(int page, int pageSize, GenerateMode mode);
+    PagedResult<GenerateResponseData> history(int page, int pageSize, GenerateMode mode, String ownerId);
 
-    GenerateResponseData taskDetail(String taskId);
+    GenerateResponseData taskDetail(String taskId, String ownerId);
+
+    void deleteTask(String taskId, String ownerId);
 }

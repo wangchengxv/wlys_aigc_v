@@ -17,6 +17,12 @@ public record GenerateResponseData(
         GenerateMode mode,
         String style,
         String imageModel,
-        String videoModel
+        String videoModel,
+        String imageModelSource,
+        String videoModelSource,
+        String imageModelMatchedBy,
+        String videoModelMatchedBy,
+        String imageModelRejectReason,
+        String videoModelRejectReason
 ) {
 }
