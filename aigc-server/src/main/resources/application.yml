@@ -9,6 +9,11 @@ spring:
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:rootroot}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    #   datasource:
+    # url: jdbc:mysql://${DB_HOST:115.190.243.55}:${DB_PORT:3306}/${DB_NAME:aigc}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    # username: ${DB_USER:aigc}
+    # password: ${DB_PASSWORD:rootroot}
+    # driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: validate
