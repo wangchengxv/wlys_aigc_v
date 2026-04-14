@@ -8,6 +8,7 @@ import { ScriptRevisionPanel } from '@/components/script/ScriptRevisionPanel'
 import { ScriptAppendPreviewDialog } from '@/components/script/ScriptAppendPreviewDialog'
 import { ScriptRewriteDialog } from '@/components/script/ScriptRewriteDialog'
 import type { RewriteDiffMode } from '@/components/script/ScriptRewriteDiffPanel'
+import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
 import { ScriptStructuredPreview } from '@/components/script/ScriptStructuredPreview'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
@@ -252,6 +253,9 @@ export function ScriptProjectPreviewPage() {
   }
 
   return (
+    <div className="script-project-workflow-layout">
+      <ScriptProjectWorkflowNav projectId={projectId} />
+      <div className="script-project-workflow-layout__main">
     <section className="script-preview-page">
       <input
         ref={fileInputRef}
@@ -424,5 +428,7 @@ export function ScriptProjectPreviewPage() {
         </aside>
       </div>
     </section>
+      </div>
+    </div>
   )
 }

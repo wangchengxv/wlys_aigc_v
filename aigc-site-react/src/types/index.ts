@@ -53,6 +53,30 @@ export interface GenerateResponse {
   style: string
   imageModel?: string
   videoModel?: string
+  /** 已落盘到服务端的图片 fileId 列表（与 imageResults 一一对应成功项） */
+  persistedImageFileIds?: string[]
+  persistedVideoFileIds?: string[]
+}
+
+export type AssetHistoryType =
+  | 'KEYFRAME'
+  | 'TURNAROUND'
+  | 'STORYBOARD'
+  | 'THREE_VIEW'
+  | 'STORYBOARD_CROP'
+  | 'GROUP_SCENE'
+  | 'VIDEO'
+
+export interface AssetGenerationHistoryItem {
+  id: number
+  projectId: string
+  assetType: AssetHistoryType
+  referenceId: string | null
+  fileId: string
+  promptText: string | null
+  modelName: string | null
+  generationParamsJson: string | null
+  createdAt: string
 }
 
 export interface ImageModelOptions {
@@ -263,6 +287,21 @@ export interface StoredFileRecord {
   createdAt: string
 }
 
+export type PromptVersionSource =
+  | 'ai-generated'
+  | 'manual-edit'
+  | 'rollback'
+  | 'imported'
+  | 'system'
+
+export interface PromptVersion {
+  id: string
+  prompt: string
+  createdAt: number
+  source: PromptVersionSource
+  note?: string | null
+}
+
 export interface ExtractedAsset {
   assetId: string
   projectId: string
@@ -274,6 +313,7 @@ export interface ExtractedAsset {
   promptDraft: string
   /** B-2/B-3/B-4/B-5 生成的视觉提示词 */
   visualPrompt?: string | null
+  promptVersions?: PromptVersion[] | null
   /** B-6 九宫格规划 JSON */
   turnaroundPlanJson?: string | null
   /** B-7 九宫格合成图文件 ID */
@@ -300,6 +340,7 @@ export interface KeyframeRecord {
   assetId: string
   shotId?: string | null
   promptText: string
+  promptVersions?: PromptVersion[] | null
   negativePrompt?: string | null
   imageFileId?: string | null
   selected: boolean
@@ -336,6 +377,7 @@ export interface StoryboardShot {
   firstFrameMode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | null
   /** B-9 分镜图像提示词 */
   visualPrompt?: string | null
+  promptVersions?: PromptVersion[] | null
   targetDurationSec?: number | null
   status: string
   createdAt: string
@@ -347,6 +389,7 @@ export interface UpdateShotRequest {
   cameraMove?: string
   emotion?: string
   targetDurationSec?: number
+  visualPrompt?: string
 }
 
 export interface ArtDirectionResponse {
@@ -564,6 +607,15 @@ export interface UpdateAssetRequest {
   tags?: string[]
   promptDraft?: string
   metadata?: Record<string, unknown>
+  visualPrompt?: string
+}
+
+export interface PromptTemplateCatalogItem {
+  path: string
+  title: string
+  category: string
+  description: string
+  defaultBody: string
 }
 
 export interface AppendScriptPreviewRequest {

@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { resolveScriptFileUrl, getModels } from '@/api'
+import {
+  getModels,
+  resolveScriptFileUrl,
+  rollbackAssetVisualPrompt,
+  rollbackKeyframePrompt,
+  updateKeyframePromptText,
+} from '@/api'
 import { AppButton } from '@/components/common/AppButton'
 import { AppInput } from '@/components/common/AppInput'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
+import { AssetHistoryPanel } from '@/components/script/AssetHistoryPanel'
 import { KeyframeCard } from '@/components/script/KeyframeCard'
+import { PromptVersionsEditor } from '@/components/script/PromptVersionsEditor'
 import { ArtDirectionPreview } from '@/components/script/ArtDirectionPreview'
+import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
-import type { AssetType, ExtractedAsset, KeyframeRecord, ModelConfig, StoredFileRecord, StoryboardShot } from '@/types'
+import type { AssetHistoryType, AssetType, ExtractedAsset, KeyframeRecord, ModelConfig, StoredFileRecord, StoryboardShot } from '@/types'
 
 const tabToEndpoint: Record<AssetType, 'characters' | 'backgrounds' | 'props'> = {
   CHARACTER: 'characters',
@@ -64,15 +73,20 @@ function parseStoryboardPanels(asset: ExtractedAsset): StoryboardPanel[] {
 }
 
 function AssetBlock({
+  projectId,
   asset: initial,
   keyframes,
   assetLoading,
   keyframeLoading,
   visualPromptLoading,
   onSave,
+  onSaveVisualPrompt,
+  onRollbackVisualPrompt,
   onGenerate,
   onConfirm,
   onRegenerate,
+  onKeyframeSavePrompt,
+  onKeyframeRollbackPrompt,
   onVisualPrompt,
   onTurnaroundPlan,
   onTurnaroundImage,
@@ -83,16 +97,22 @@ function AssetBlock({
   onStoryboardRewrite,
   onStoryboardImage,
   onApplyStoryboardFirstFrame,
+  onReloadAfterHistory,
 }: {
+  projectId: string
   asset: ExtractedAsset
   keyframes: KeyframeRecord[]
   assetLoading: boolean
   keyframeLoading: boolean
   visualPromptLoading: boolean
   onSave: (a: ExtractedAsset) => void
+  onSaveVisualPrompt: (assetId: string, text: string) => void | Promise<void>
+  onRollbackVisualPrompt: (assetId: string, versionId: string) => void | Promise<void>
   onGenerate: (assetId: string) => void
   onConfirm: (keyframeId: string) => void
   onRegenerate: (keyframeId: string) => void
+  onKeyframeSavePrompt: (keyframeId: string, text: string) => void | Promise<void>
+  onKeyframeRollbackPrompt: (keyframeId: string, versionId: string) => void | Promise<void>
   onVisualPrompt: (assetId: string) => void
   onTurnaroundPlan: (assetId: string) => void
   onTurnaroundImage: (assetId: string) => void
@@ -103,11 +123,13 @@ function AssetBlock({
   onStoryboardRewrite: (assetId: string, instruction: string) => void
   onStoryboardImage: (assetId: string) => void
   onApplyStoryboardFirstFrame: (assetId: string, shotId: string, mode: 'FULL_GRID' | 'CROPPED_PANEL', panelIndex?: number) => void
+  onReloadAfterHistory?: () => void | Promise<void>
 }) {
   const [draft, setDraft] = useState(initial)
   const [selectedPanelIndex, setSelectedPanelIndex] = useState(0)
   const [selectedShotId, setSelectedShotId] = useState('')
   const [rewriteInstruction, setRewriteInstruction] = useState('')
+  const [histOpen, setHistOpen] = useState<{ type: AssetHistoryType; referenceId: string } | null>(null)
   useEffect(() => {
     setDraft(initial)
   }, [initial.assetId, initial.updatedAt])
@@ -186,21 +208,38 @@ function AssetBlock({
       <AppInput value={draft.description} onChange={(v) => setDraft((d) => ({ ...d, description: String(v) }))} label="描述" as="textarea" rows={4} />
       <AppInput value={draft.promptDraft} onChange={(v) => setDraft((d) => ({ ...d, promptDraft: String(v) }))} label="关键帧提示词草稿" as="textarea" rows={4} />
 
-      {draft.visualPrompt ? (
-        <div className="visual-prompt-block">
-          <div className="visual-prompt-head">
-            <span className="eyebrow">视觉提示词（B-3/4/5）</span>
+      <div className="visual-prompt-block">
+        <div className="visual-prompt-head">
+          <span className="eyebrow">视觉提示词（B-3/4/5）</span>
+          {draft.visualPrompt ? (
             <button type="button" className="link-btn" onClick={() => void copyText(draft.visualPrompt || '')}>
-              复制
+              复制当前
             </button>
-          </div>
-          <p className="visual-prompt-text">{draft.visualPrompt}</p>
+          ) : null}
         </div>
-      ) : null}
+        <PromptVersionsEditor
+          label="编辑视觉提示词"
+          value={draft.visualPrompt ?? ''}
+          onChange={(v) => setDraft((d) => ({ ...d, visualPrompt: v }))}
+          versions={draft.promptVersions ?? undefined}
+          busy={assetLoading}
+          onSave={async () => {
+            await onSaveVisualPrompt(draft.assetId, (draft.visualPrompt ?? '').trim())
+          }}
+          onRollback={async (versionId) => {
+            await onRollbackVisualPrompt(draft.assetId, versionId)
+          }}
+        />
+      </div>
 
       {isCharacter && draft.turnaroundImageFileId ? (
         <div className="turnaround-preview">
-          <p className="eyebrow">九宫格造型 B-7</p>
+          <div className="asset-preview-head">
+            <p className="eyebrow">九宫格造型 B-7</p>
+            <AppButton size="sm" variant="ghost" onClick={() => setHistOpen({ type: 'TURNAROUND', referenceId: draft.assetId })}>
+              历史版本
+            </AppButton>
+          </div>
           <img
             className="turnaround-img"
             src={resolveScriptFileUrl(draft.turnaroundImageFileId)}
@@ -211,7 +250,12 @@ function AssetBlock({
 
       {draft.storyboardImageFileId ? (
         <div className="turnaround-preview">
-          <p className="eyebrow">分镜九宫格</p>
+          <div className="asset-preview-head">
+            <p className="eyebrow">分镜九宫格</p>
+            <AppButton size="sm" variant="ghost" onClick={() => setHistOpen({ type: 'STORYBOARD', referenceId: draft.assetId })}>
+              历史版本
+            </AppButton>
+          </div>
           <img
             className="turnaround-img"
             src={resolveScriptFileUrl(draft.storyboardImageFileId)}
@@ -297,7 +341,12 @@ function AssetBlock({
 
       {draft.threeViewImageFileId ? (
         <div className="turnaround-preview">
-          <p className="eyebrow">三视图（正/侧/背）</p>
+          <div className="asset-preview-head">
+            <p className="eyebrow">三视图（正/侧/背）</p>
+            <AppButton size="sm" variant="ghost" onClick={() => setHistOpen({ type: 'THREE_VIEW', referenceId: draft.assetId })}>
+              历史版本
+            </AppButton>
+          </div>
           <img
             className="turnaround-img"
             src={resolveScriptFileUrl(draft.threeViewImageFileId)}
@@ -311,16 +360,31 @@ function AssetBlock({
           {list.map((item) => (
             <KeyframeCard
               key={item.keyframeId}
+              projectId={projectId}
               item={item}
               busy={keyframeLoading}
               onConfirm={onConfirm}
               onRegenerate={onRegenerate}
+              onSavePrompt={onKeyframeSavePrompt}
+              onRollbackPrompt={onKeyframeRollbackPrompt}
+              onHistoryRestored={onReloadAfterHistory}
             />
           ))}
         </div>
       ) : (
         <p className="muted">还没有关键帧，保存后可直接生成。</p>
       )}
+
+      {histOpen ? (
+        <AssetHistoryPanel
+          projectId={projectId}
+          assetType={histOpen.type}
+          referenceId={histOpen.referenceId}
+          open={!!histOpen}
+          onClose={() => setHistOpen(null)}
+          onRestored={onReloadAfterHistory}
+        />
+      ) : null}
     </article>
   )
 }
@@ -415,10 +479,50 @@ export function ScriptProjectAssetsPage() {
         promptDraft: asset.promptDraft,
         tags: asset.tags,
         metadata: asset.metadata,
+        visualPrompt: asset.visualPrompt ?? undefined,
       })
       showToast('资产已保存', 'success')
     } catch (e) {
       showToast(e instanceof Error ? e.message : '保存失败', 'error')
+    }
+  }
+
+  async function handleSaveVisualPrompt(assetId: string, text: string) {
+    try {
+      await saveAsset(projectId, assetId, { visualPrompt: text })
+      showToast('视觉提示词已保存', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '保存失败', 'error')
+    }
+  }
+
+  async function handleRollbackVisualPrompt(assetId: string, versionId: string) {
+    try {
+      await rollbackAssetVisualPrompt(projectId, assetId, { versionId })
+      await loadAssets(projectId)
+      showToast('已回滚到所选版本', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '回滚失败', 'error')
+    }
+  }
+
+  async function handleKeyframeSavePrompt(keyframeId: string, text: string) {
+    try {
+      await updateKeyframePromptText(projectId, keyframeId, { promptText: text })
+      await loadKeyframes(projectId)
+      showToast('关键帧提示词已保存', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '保存失败', 'error')
+    }
+  }
+
+  async function handleKeyframeRollbackPrompt(keyframeId: string, versionId: string) {
+    try {
+      await rollbackKeyframePrompt(projectId, keyframeId, { versionId })
+      await loadKeyframes(projectId)
+      showToast('已回滚关键帧提示词', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '回滚失败', 'error')
     }
   }
 
@@ -592,6 +696,9 @@ export function ScriptProjectAssetsPage() {
   }
 
   return (
+    <div className="script-project-workflow-layout">
+      <ScriptProjectWorkflowNav projectId={projectId} />
+      <div className="script-project-workflow-layout__main">
     <section className="script-assets-page">
       <div className="toolbar panel glass">
         <div>
@@ -610,6 +717,9 @@ export function ScriptProjectAssetsPage() {
           </AppButton>
           <Link className="nav-btn" to={`/script-projects/${projectId}/video`}>
             进入视频页
+          </Link>
+          <Link className="nav-btn" to={`/script-projects/${projectId}/export`}>
+            成片与导出
           </Link>
         </div>
       </div>
@@ -731,15 +841,20 @@ export function ScriptProjectAssetsPage() {
           {currentAssets.map((asset) => (
             <AssetBlock
               key={asset.assetId}
+              projectId={projectId}
               asset={asset}
               keyframes={keyframes}
               assetLoading={assetLoading}
               keyframeLoading={keyframeLoading}
               visualPromptLoading={visualPromptLoading}
               onSave={(a) => void handleSave(a)}
+              onSaveVisualPrompt={(assetId, text) => void handleSaveVisualPrompt(assetId, text)}
+              onRollbackVisualPrompt={(assetId, vid) => void handleRollbackVisualPrompt(assetId, vid)}
               onGenerate={(id) => void handleGenerate(id)}
               onConfirm={(id) => void handleConfirm(id)}
               onRegenerate={(id) => void handleRegenerate(id)}
+              onKeyframeSavePrompt={(kf, text) => void handleKeyframeSavePrompt(kf, text)}
+              onKeyframeRollbackPrompt={(kf, vid) => void handleKeyframeRollbackPrompt(kf, vid)}
               onVisualPrompt={(id) => void handleVisualPrompt(id)}
               onTurnaroundPlan={(id) => void handleTurnaroundPlan(id)}
               onTurnaroundImage={(id) => void handleTurnaroundImage(id)}
@@ -752,6 +867,10 @@ export function ScriptProjectAssetsPage() {
               onApplyStoryboardFirstFrame={(assetId, shotId, mode, panelIndex) =>
                 void handleApplyStoryboardFirstFrame(assetId, shotId, mode, panelIndex)
               }
+              onReloadAfterHistory={async () => {
+                await loadAssets(projectId)
+                await loadKeyframes(projectId)
+              }}
             />
           ))}
         </div>
@@ -759,5 +878,7 @@ export function ScriptProjectAssetsPage() {
         <EmptyState title="当前分类还没有资产" description="点击上方按钮抽取当前分类的视觉资产，然后再生成关键帧。" />
       )}
     </section>
+      </div>
+    </div>
   )
 }

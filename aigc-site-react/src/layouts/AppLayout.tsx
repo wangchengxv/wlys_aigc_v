@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useMatches } from 'react-router-dom'
+import { Outlet, useMatches } from 'react-router-dom'
 import { AppButton } from '@/components/common/AppButton'
-import { ThemeToggle } from '@/components/common/ThemeToggle'
+import { TopNav } from '@/components/layout/TopNav'
 import type { RouteHandle } from '@/routes/types'
 
 const DEFAULT_META: RouteHandle = { title: 'AIGC 图文生成平台', eyebrow: 'Studio' }
@@ -21,49 +21,7 @@ export function AppLayout() {
 
   return (
     <div className="app-layout">
-      <header className="top-nav panel glass">
-        <div className="brand">
-          <span className="dot" aria-hidden />
-          <span className="brand-text">
-            <span className="brand-name">AIGC Studio</span>
-            <span className="brand-tag">Image · Video · Text</span>
-          </span>
-        </div>
-
-        <nav className={`nav-links${navOpen ? ' open' : ''}`}>
-          <NavLink to="/" end onClick={() => setNavOpen(false)}>
-            首页
-          </NavLink>
-          <NavLink to="/global-settings" onClick={() => setNavOpen(false)}>
-            全局设定
-          </NavLink>
-          <NavLink to="/workspace" onClick={() => setNavOpen(false)}>
-            文生图/文生视频
-          </NavLink>
-          <NavLink to="/script-projects" onClick={() => setNavOpen(false)}>
-            剧本工程
-          </NavLink>
-          <NavLink to="/history" onClick={() => setNavOpen(false)}>
-            历史记录
-          </NavLink>
-          <NavLink to="/models" onClick={() => setNavOpen(false)}>
-            模型配置
-          </NavLink>
-          <NavLink to="/settings" onClick={() => setNavOpen(false)}>
-            设置
-          </NavLink>
-        </nav>
-
-        <div className="theme-slot">
-          <ThemeToggle />
-        </div>
-
-        <button className="hamburger" type="button" aria-expanded={navOpen} aria-label="菜单" onClick={() => setNavOpen((o) => !o)}>
-          <span />
-          <span />
-          <span />
-        </button>
-      </header>
+      <TopNav navOpen={navOpen} setNavOpen={setNavOpen} />
 
       <main className="page-container">
         <header className="page-head">

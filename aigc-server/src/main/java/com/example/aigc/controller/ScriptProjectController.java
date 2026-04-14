@@ -10,6 +10,7 @@ import com.example.aigc.dto.RewriteScriptApplyRequest;
 import com.example.aigc.dto.RewriteScriptPreviewRequest;
 import com.example.aigc.dto.RewriteScriptPreviewResponse;
 import com.example.aigc.dto.UpdateScriptRequest;
+import com.example.aigc.dto.PromptTemplateOverridesUpdateRequest;
 import com.example.aigc.dto.WorkflowModelSettingsResponse;
 import com.example.aigc.dto.WorkflowModelSettingsUpdateRequest;
 import com.example.aigc.entity.ScriptProjectAggregate;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/script-projects")
@@ -202,5 +204,18 @@ public class ScriptProjectController {
             @RequestBody WorkflowModelSettingsUpdateRequest request
     ) {
         return ApiResponse.ok(scriptProjectService.updateModelSettings(projectId, request));
+    }
+
+    @GetMapping("/{projectId}/prompt-template-overrides")
+    public ApiResponse<Map<String, String>> getPromptTemplateOverrides(@PathVariable String projectId) {
+        return ApiResponse.ok(scriptProjectService.getPromptTemplateOverrides(projectId));
+    }
+
+    @PutMapping("/{projectId}/prompt-template-overrides")
+    public ApiResponse<Map<String, String>> updatePromptTemplateOverrides(
+            @PathVariable String projectId,
+            @RequestBody PromptTemplateOverridesUpdateRequest request
+    ) {
+        return ApiResponse.ok(scriptProjectService.updatePromptTemplateOverrides(projectId, request));
     }
 }

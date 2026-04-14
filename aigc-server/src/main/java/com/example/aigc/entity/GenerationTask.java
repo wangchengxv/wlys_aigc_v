@@ -60,6 +60,12 @@ public class GenerationTask {
     @Convert(converter = StringListJsonConverter.class)
     @Column(name = "video_results_json", columnDefinition = "LONGTEXT")
     private List<String> videoResults;
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "persisted_image_file_ids_json", columnDefinition = "LONGTEXT")
+    private List<String> persistedImageFileIds;
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "persisted_video_file_ids_json", columnDefinition = "LONGTEXT")
+    private List<String> persistedVideoFileIds;
 
     public String getTaskId() {
         return taskId;
@@ -219,5 +225,21 @@ public class GenerationTask {
 
     public void setVideoResults(List<String> videoResults) {
         this.videoResults = videoResults;
+    }
+
+    public List<String> getPersistedImageFileIds() {
+        return persistedImageFileIds;
+    }
+
+    public void setPersistedImageFileIds(List<String> persistedImageFileIds) {
+        this.persistedImageFileIds = persistedImageFileIds;
+    }
+
+    public List<String> getPersistedVideoFileIds() {
+        return persistedVideoFileIds;
+    }
+
+    public void setPersistedVideoFileIds(List<String> persistedVideoFileIds) {
+        this.persistedVideoFileIds = persistedVideoFileIds;
     }
 }

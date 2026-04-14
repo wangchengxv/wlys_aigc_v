@@ -9,11 +9,11 @@ spring:
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:rootroot}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    #   datasource:
-    # url: jdbc:mysql://${DB_HOST:115.190.243.55}:${DB_PORT:3306}/${DB_NAME:aigc}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    # username: ${DB_USER:aigc}
-    # password: ${DB_PASSWORD:rootroot}
-    # driver-class-name: com.mysql.cj.jdbc.Driver
+  # datasource:
+  #   url: jdbc:mysql://${DB_HOST:115.190.243.55}:${DB_PORT:3306}/${DB_NAME:aigc}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+  #   username: ${DB_USER:aigc}
+  #   password: ${DB_PASSWORD:rootroot}
+  #   driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: validate
@@ -26,6 +26,9 @@ spring:
     baseline-on-migrate: true
 
 aigc:
+  cors:
+    # Override with AIGC_CORS_ALLOWED_ORIGIN_PATTERNS=comma-separated list on the server if needed.
+    allowed-origin-patterns: ${AIGC_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,http://152.136.237.31:*,http://chengxvblog.top,https://chengxvblog.top,http://chengxvblog.top:*,https://chengxvblog.top:*}
   storage:
     data-dir: ${AIGC_DATA_DIR:${user.home}/.aigcmanju}
   auth:
@@ -45,6 +48,8 @@ aigc:
       remote-enabled: ${AIGC_ONELINKAI_MODEL_LIST_REMOTE_ENABLED:true}
       timeout-ms: ${AIGC_ONELINKAI_MODEL_LIST_TIMEOUT_MS:8000}
       fallback-static: ${AIGC_ONELINKAI_MODEL_LIST_FALLBACK_STATIC:true}
+  comfy:
+    base-url: ${AIGC_COMFY_BASE_URL:http://127.0.0.1:8188}
   ark:
     base-url: https://ark.cn-beijing.volces.com
     api-key: ${ARK_API_KEY:}

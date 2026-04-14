@@ -1,10 +1,13 @@
 package com.example.aigc.service.impl;
 
 import com.example.aigc.config.AigcArkProperties;
+import com.example.aigc.constants.WorkspaceConstants;
 import com.example.aigc.dto.GenerateRequest;
 import com.example.aigc.dto.GenerateResponseData;
 import com.example.aigc.dto.PagedResult;
 import com.example.aigc.entity.GenerationTask;
+import com.example.aigc.entity.ScriptProjectAggregate;
+import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.enums.GenerateMode;
 import com.example.aigc.enums.TaskStatus;
 import com.example.aigc.exception.BizException;
@@ -16,7 +19,9 @@ import com.example.aigc.repository.GenerationTaskRepository;
 import com.example.aigc.repository.ModelConfigRepository;
 import com.example.aigc.service.ApiKeyCryptoService;
 import com.example.aigc.service.GenerationService;
+import com.example.aigc.service.LocalAssetFileService;
 import com.example.aigc.service.ModelCapabilityService;
+import com.example.aigc.service.ScriptProjectService;
 import com.example.aigc.service.GatewayKind;
 import com.example.aigc.service.ProviderCatalog;
 import com.example.aigc.service.ProviderGatewayException;
@@ -53,6 +58,8 @@ public class GenerationServiceImpl implements GenerationService {
     private final ModelCapabilityService modelCapabilityService;
     private final RouterRoutingService routerRoutingService;
     private final VideoStylePresetRegistry videoStylePresetRegistry;
+    private final LocalAssetFileService localAssetFileService;
+    private final ScriptProjectService scriptProjectService;
 
     public GenerationServiceImpl(
             GenerationTaskRepository repository,
@@ -64,7 +71,9 @@ public class GenerationServiceImpl implements GenerationService {
             ProviderHttpGateway providerHttpGateway,
             ModelCapabilityService modelCapabilityService,
             RouterRoutingService routerRoutingService,
-            VideoStylePresetRegistry videoStylePresetRegistry
+            VideoStylePresetRegistry videoStylePresetRegistry,
+            LocalAssetFileService localAssetFileService,
+            ScriptProjectService scriptProjectService
     ) {
         this.repository = repository;
         this.arkProperties = arkProperties;
@@ -76,6 +85,8 @@ public class GenerationServiceImpl implements GenerationService {
         this.modelCapabilityService = modelCapabilityService;
         this.routerRoutingService = routerRoutingService;
         this.videoStylePresetRegistry = videoStylePresetRegistry;
+        this.localAssetFileService = localAssetFileService;
+        this.scriptProjectService = scriptProjectService;
     }
 
     @Override
@@ -127,6 +138,7 @@ public class GenerationServiceImpl implements GenerationService {
             task.setTextResults(textResults);
             task.setImageResults(imageResults);
             task.setVideoResults(videoResults);
+            persistWorkspaceGenerationFiles(taskId, task, imageResults, videoResults);
             task.setStatus(TaskStatus.SUCCESS);
             task.setErrorCode(null);
             return toData(task);
@@ -279,7 +291,19 @@ public class GenerationServiceImpl implements GenerationService {
                         resolvedModel.rejectReason()
                 );
             }
-            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)或 Moark(moark) 连接");
+            if ("onelinkai".equalsIgnoreCase(resolvedModel.provider().key())) {
+                if (isViduWorkspaceModel(resolvedModel.model().getModelName())) {
+                    return new MediaResult(
+                            resolvedModel.model().getModelName(),
+                            generateVideosWithViduOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl),
+                            resolvedModel.source(),
+                            resolvedModel.matchedBy(),
+                            resolvedModel.rejectReason()
+                    );
+                }
+                throw new BizException(400, "当前 OneLink 视频模型仅支持 Vidu 图生视频（viduq* 等）；其它模型请使用方舟或等待后续接入");
+            }
+            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark) 或 OneLink+Vidu 连接");
         }
         if (requestedModel != null && !requestedModel.isBlank()) {
             throw new BizException(400, "视频模型未在可用配置中");
@@ -483,6 +507,133 @@ public class GenerationServiceImpl implements GenerationService {
             ));
         }
         return videos;
+    }
+
+    private List<String> generateVideosWithViduOneLinkConnection(String prompt, int count, ResolvedModel resolvedModel, String referenceImageUrl) {
+        if (referenceImageUrl == null || referenceImageUrl.isBlank()) {
+            throw new BizException(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）");
+        }
+        String trimmed = referenceImageUrl.trim();
+        if (!isValidViduRefImage(trimmed)) {
+            throw new BizException(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）");
+        }
+        List<String> videos = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            videos.add(callViduOneLinkVideoApi(trimmed, prompt, resolvedModel));
+        }
+        return videos;
+    }
+
+    private boolean isViduWorkspaceModel(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return false;
+        }
+        String n = modelName.trim().toLowerCase(Locale.ROOT);
+        return n.startsWith("viduq") || n.startsWith("vidu");
+    }
+
+    private boolean isValidViduRefImage(String ref) {
+        if (ref == null || ref.isBlank()) {
+            return false;
+        }
+        String t = ref.trim();
+        if (isValidMediaUrl(t)) {
+            return true;
+        }
+        String low = t.toLowerCase(Locale.ROOT);
+        return low.startsWith("data:image/") && t.contains("base64");
+    }
+
+    private String callViduOneLinkVideoApi(String imageRef, String prompt, ResolvedModel resolvedModel) {
+        ProviderCatalog.ProviderDefinition viduDef = providerCatalog.require("vidu_onelink");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("model", resolvedModel.model().getModelName());
+        payload.put("images", List.of(imageRef));
+        if (prompt != null && !prompt.isBlank()) {
+            payload.put("prompt", prompt.trim());
+        }
+        try {
+            Map<String, Object> submitBody = providerHttpGateway.submitVideoTask(
+                    viduDef,
+                    resolvedModel.connection().getBaseUrl(),
+                    resolvedModel.apiKey(),
+                    resolvedModel.metadataPlain(),
+                    payload,
+                    Duration.ofSeconds(120)
+            );
+            String direct = parseViduPrimaryVideoUrl(submitBody);
+            if (direct != null && !direct.isBlank()) {
+                return direct;
+            }
+            String taskId = parseArkVideoTaskId(submitBody);
+            if (taskId == null) {
+                throw new BizException(502, "Vidu 未返回 task_id 或视频地址");
+            }
+            return pollViduOneLinkVideoTask(resolvedModel.connection().getBaseUrl(), resolvedModel.apiKey(), taskId);
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
+        }
+    }
+
+    private String parseViduPrimaryVideoUrl(Map<String, Object> body) {
+        if (body == null) {
+            return null;
+        }
+        Object creations = body.get("creations");
+        if (creations instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+            Object u = first.get("url");
+            if (u != null) {
+                String s = String.valueOf(u).trim();
+                if (isValidMediaUrl(s)) {
+                    return s;
+                }
+            }
+        }
+        return parseArkVideoUrl(body, false);
+    }
+
+    private String pollViduOneLinkVideoTask(String baseUrl, String apiKey, String taskId) {
+        ProviderCatalog.ProviderDefinition viduDef = providerCatalog.require("vidu_onelink");
+        int maxAttempts = Math.max(1, arkProperties.getVideoPollMaxAttempts());
+        long intervalMs = Math.max(300L, arkProperties.getVideoPollIntervalMs());
+        Map<String, Object> lastBody = null;
+        String lastStatus = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            Map<String, Object> resultBody;
+            try {
+                resultBody = providerHttpGateway.queryVideoTask(viduDef, baseUrl, apiKey, taskId, Duration.ofSeconds(30));
+            } catch (ProviderGatewayException ex) {
+                throw new BizException(mapProviderStatus(ex), ex.getMessage());
+            }
+            lastBody = resultBody;
+            Object errNode = resultBody.get("error");
+            if (errNode != null && !Boolean.FALSE.equals(errNode) && !"false".equalsIgnoreCase(String.valueOf(errNode).trim())) {
+                throw new BizException(502, parseArkTaskError(resultBody));
+            }
+            String maybeUrl = parseViduPrimaryVideoUrl(resultBody);
+            if (maybeUrl != null && !maybeUrl.isBlank()) {
+                return maybeUrl;
+            }
+            String status = parseArkTaskStatus(resultBody);
+            lastStatus = status;
+            if (isFailedStatus(status)) {
+                throw new BizException(502, "视频任务失败：" + parseArkTaskError(resultBody));
+            }
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(intervalMs);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new BizException(504, "视频任务轮询被中断，请稍后重试");
+                }
+            }
+        }
+        if (isSuccessStatus(lastStatus)) {
+            throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
+                    + taskId + "，status=" + lastStatus + "，响应摘要=" + summarizeBody(lastBody));
+        }
+        throw new BizException(504, "视频生成超时，请稍后重试或缩短提示词");
     }
 
     private List<String> generateVideosFromArk(String prompt, int count, String videoModel) {
@@ -890,6 +1041,7 @@ public class GenerationServiceImpl implements GenerationService {
         return firstNonBlank(
                 valueAsString(body.get("status")),
                 valueAsString(body.get("task_status")),
+                valueAsString(body.get("state")),
                 nestedValue(body, "output", "status"),
                 nestedValue(body, "data", "status"),
                 nestedValue(body, "result", "status")
@@ -904,6 +1056,7 @@ public class GenerationServiceImpl implements GenerationService {
                 valueAsString(body.get("message")),
                 valueAsString(body.get("error")),
                 valueAsString(body.get("error_message")),
+                valueAsString(body.get("err_code")),
                 nestedValue(body, "data", "message"),
                 nestedValue(body, "result", "message"),
                 "未知错误"
@@ -1005,8 +1158,145 @@ public class GenerationServiceImpl implements GenerationService {
                 task.getImageModelMatchedBy(),
                 task.getVideoModelMatchedBy(),
                 task.getImageModelRejectReason(),
-                task.getVideoModelRejectReason()
+                task.getVideoModelRejectReason(),
+                task.getPersistedImageFileIds() == null ? List.of() : task.getPersistedImageFileIds(),
+                task.getPersistedVideoFileIds() == null ? List.of() : task.getPersistedVideoFileIds()
         );
+    }
+
+    /**
+     * 将工作台生成的外链图片/视频拉取到本地 {@link WorkspaceConstants#WORKSPACE_PROJECT_ID}，便于长期访问。
+     */
+    private void persistWorkspaceGenerationFiles(
+            String taskId,
+            GenerationTask task,
+            List<String> imageResults,
+            List<String> videoResults
+    ) {
+        boolean hasImages = imageResults != null && !imageResults.isEmpty();
+        boolean hasVideos = videoResults != null && !videoResults.isEmpty();
+        if (!hasImages && !hasVideos) {
+            task.setPersistedImageFileIds(List.of());
+            task.setPersistedVideoFileIds(List.of());
+            return;
+        }
+        try {
+            ScriptProjectAggregate aggregate = scriptProjectService.require(WorkspaceConstants.WORKSPACE_PROJECT_ID);
+            List<String> persistedImg = new ArrayList<>();
+            List<String> displayImg = new ArrayList<>();
+            if (imageResults != null) {
+                for (int i = 0; i < imageResults.size(); i++) {
+                    String url = imageResults.get(i);
+                    if (url == null || url.isBlank()) {
+                        displayImg.add("");
+                        continue;
+                    }
+                    String trimmed = url.trim();
+                    try {
+                        StoredFileRecord rec = storeWorkspaceImage(taskId, i, trimmed);
+                        scriptProjectService.upsertFile(aggregate, rec);
+                        persistedImg.add(rec.fileId);
+                        displayImg.add(localAssetFileService.toPublicUrl(rec.fileId));
+                    } catch (Exception ex) {
+                        displayImg.add(trimmed);
+                    }
+                }
+            }
+            List<String> persistedVid = new ArrayList<>();
+            List<String> displayVid = new ArrayList<>();
+            if (videoResults != null) {
+                for (int i = 0; i < videoResults.size(); i++) {
+                    String url = videoResults.get(i);
+                    if (url == null || url.isBlank()) {
+                        displayVid.add("");
+                        continue;
+                    }
+                    String trimmed = url.trim();
+                    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                        displayVid.add(trimmed);
+                        continue;
+                    }
+                    try {
+                        StoredFileRecord rec = localAssetFileService.storeRemote(
+                                WorkspaceConstants.WORKSPACE_PROJECT_ID,
+                                "workspace-gen/" + taskId + "/vid-" + i + ".mp4",
+                                "video/mp4",
+                                trimmed
+                        );
+                        scriptProjectService.upsertFile(aggregate, rec);
+                        persistedVid.add(rec.fileId);
+                        displayVid.add(localAssetFileService.toPublicUrl(rec.fileId));
+                    } catch (Exception ex) {
+                        displayVid.add(trimmed);
+                    }
+                }
+            }
+            scriptProjectService.save(aggregate);
+            task.setPersistedImageFileIds(persistedImg);
+            task.setPersistedVideoFileIds(persistedVid);
+            if (!displayImg.isEmpty()) {
+                task.setImageResults(displayImg);
+            }
+            if (!displayVid.isEmpty()) {
+                task.setVideoResults(displayVid);
+            }
+        } catch (Exception ex) {
+            task.setPersistedImageFileIds(List.of());
+            task.setPersistedVideoFileIds(List.of());
+        }
+    }
+
+    private StoredFileRecord storeWorkspaceImage(String taskId, int index, String urlOrBase64) {
+        if (urlOrBase64.startsWith("http://") || urlOrBase64.startsWith("https://")) {
+            String ext = guessImageExtension(urlOrBase64);
+            String mediaType = guessImageMediaType(urlOrBase64);
+            return localAssetFileService.storeRemote(
+                    WorkspaceConstants.WORKSPACE_PROJECT_ID,
+                    "workspace-gen/" + taskId + "/img-" + index + ext,
+                    mediaType,
+                    urlOrBase64
+            );
+        }
+        return localAssetFileService.storeBase64(
+                WorkspaceConstants.WORKSPACE_PROJECT_ID,
+                "workspace-gen/" + taskId + "/img-" + index + ".png",
+                "image/png",
+                urlOrBase64
+        );
+    }
+
+    private String guessImageExtension(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.contains(".png")) {
+            return ".png";
+        }
+        if (lower.contains(".webp")) {
+            return ".webp";
+        }
+        if (lower.contains(".gif")) {
+            return ".gif";
+        }
+        if (lower.contains(".jpeg") || lower.contains(".jpg")) {
+            return ".jpg";
+        }
+        return ".png";
+    }
+
+    private String guessImageMediaType(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (lower.contains(".png")) {
+            return "image/png";
+        }
+        if (lower.contains(".webp")) {
+            return "image/webp";
+        }
+        if (lower.contains(".gif")) {
+            return "image/gif";
+        }
+        if (lower.contains(".jpeg") || lower.contains(".jpg")) {
+            return "image/jpeg";
+        }
+        return "image/png";
     }
 
     private record MediaResult(

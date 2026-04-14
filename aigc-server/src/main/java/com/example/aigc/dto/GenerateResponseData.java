@@ -23,6 +23,8 @@ public record GenerateResponseData(
         String imageModelMatchedBy,
         String videoModelMatchedBy,
         String imageModelRejectReason,
-        String videoModelRejectReason
+        String videoModelRejectReason,
+        List<String> persistedImageFileIds,
+        List<String> persistedVideoFileIds
 ) {
 }

@@ -53,6 +53,9 @@ public class ScriptProject {
      */
     @Column(name = "workflow_model_overrides", columnDefinition = "LONGTEXT")
     public String workflowModelOverrides;
+    /** JSON 对象：classpath 模板路径 -> 覆盖正文（仅存储与默认不同的项） */
+    @Column(name = "prompt_template_overrides", columnDefinition = "LONGTEXT")
+    public String promptTemplateOverrides;
     @Column(name = "created_at")
     public Instant createdAt;
     @Column(name = "updated_at")

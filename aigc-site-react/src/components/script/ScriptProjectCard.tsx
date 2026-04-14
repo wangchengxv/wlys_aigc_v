@@ -9,6 +9,10 @@ import type { ScriptProjectSummary } from '@/types'
 type Props = {
   project: ScriptProjectSummary
   deletedView?: boolean
+  /** 突出主入口（例如工作流「场景与道具」 hub → 资产页）。 */
+  primaryCta?: { label: string; to: string }
+  /** 次要入口（例如成片与导出 hub → 工程 export 页）。 */
+  secondaryCta?: { label: string; to: string }
 }
 
 function formatDate(value: string) {
@@ -21,7 +25,7 @@ function formatDate(value: string) {
   })
 }
 
-export function ScriptProjectCard({ project, deletedView = false }: Props) {
+export function ScriptProjectCard({ project, deletedView = false, primaryCta, secondaryCta }: Props) {
   const { showToast } = useToast()
   const removeProject = useScriptProjectStore((s) => s.removeProject)
   const restoreProject = useScriptProjectStore((s) => s.restoreProject)
@@ -77,6 +81,18 @@ export function ScriptProjectCard({ project, deletedView = false }: Props) {
           <span>关键帧 {project.keyframeCount}</span>
           <span>视频任务 {project.videoTaskCount}</span>
         </div>
+        {primaryCta && !deletedView ? (
+          <div className="project-card__primary-cta">
+            <Link className="nav-btn primary" to={primaryCta.to}>
+              {primaryCta.label}
+            </Link>
+            {secondaryCta ? (
+              <Link className="nav-btn" to={secondaryCta.to}>
+                {secondaryCta.label}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
         <div className="footer">
           <span className="muted">{formatDate(project.updatedAt)}</span>
           <div className="links">

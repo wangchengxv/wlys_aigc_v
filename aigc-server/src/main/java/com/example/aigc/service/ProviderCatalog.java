@@ -308,6 +308,24 @@ public class ProviderCatalog {
                 "https://moark.com",
                 true
         ), "moark");
+        /** Internal: Vidu image-to-video paths via OneLink proxy; base URL comes from the user's onelinkai connection. */
+        register(new ProviderDefinition(
+                "vidu_onelink",
+                "Vidu (OneLink)",
+                "https://api.onelinkai.cloud",
+                "openai",
+                null,
+                null,
+                AuthMode.BEARER,
+                false,
+                null,
+                "/vidu/ent/v2/img2video",
+                "/vidu/ent/v2/tasks/{taskId}/creations",
+                GatewayKind.OPENAI_COMPAT,
+                List.of(),
+                null,
+                false
+        ));
     }
 
     private void register(ProviderDefinition definition, String... extraAliases) {

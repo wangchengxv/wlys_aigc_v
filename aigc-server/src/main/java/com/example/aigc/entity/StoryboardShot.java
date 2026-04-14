@@ -1,5 +1,7 @@
 package com.example.aigc.entity;
 
+import com.example.aigc.dto.PromptVersion;
+import com.example.aigc.repository.jpa.PromptVersionListJsonConverter;
 import com.example.aigc.repository.jpa.StringListJsonConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -66,6 +68,9 @@ public class StoryboardShot {
     public String firstFrameMode;
     @Column(name = "visual_prompt", columnDefinition = "TEXT")
     public String visualPrompt;
+    @Convert(converter = PromptVersionListJsonConverter.class)
+    @Column(name = "prompt_versions_json", columnDefinition = "LONGTEXT")
+    public List<PromptVersion> promptVersions = new ArrayList<>();
     public String status;
     @Column(name = "created_at")
     public Instant createdAt;

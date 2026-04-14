@@ -6,6 +6,8 @@ import type {
   ApplyStoryboardFirstFrameRequest,
   AppendScriptPreviewRequest,
   AppendScriptPreviewResponse,
+  AssetGenerationHistoryItem,
+  AssetHistoryType,
   ConnectionConfig,
   ConnectionConfigCreateRequest,
   ConnectionConfigUpdateRequest,
@@ -24,6 +26,7 @@ import type {
   ModelProbeResponse,
   PagedTasks,
   PipelineStatus,
+  PromptTemplateCatalogItem,
   PresetModelListResponse,
   ProviderCatalogListResponse,
   QuickConnectionRequest,
@@ -223,6 +226,8 @@ function normalizeTask(task: GenerateResponse): GenerateResponse {
     textResults: Array.isArray(task.textResults) ? task.textResults : [],
     imageResults: Array.isArray(task.imageResults) ? task.imageResults : [],
     videoResults: Array.isArray(task.videoResults) ? task.videoResults : [],
+    persistedImageFileIds: Array.isArray(task.persistedImageFileIds) ? task.persistedImageFileIds : undefined,
+    persistedVideoFileIds: Array.isArray(task.persistedVideoFileIds) ? task.persistedVideoFileIds : undefined,
   }
 }
 
@@ -1000,6 +1005,84 @@ export async function updateScriptProjectShot(
   return unwrapApiData(data, '更新镜头参数失败')
 }
 
+export async function rollbackShotVisualPrompt(
+  projectId: string,
+  shotId: string,
+  payload: { versionId: string },
+): Promise<StoryboardShot> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<StoryboardShot>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/visual-prompt/rollback`,
+    payload,
+  )
+  return unwrapApiData(data, '回滚镜头提示词失败')
+}
+
+export async function rollbackAssetVisualPrompt(
+  projectId: string,
+  assetId: string,
+  payload: { versionId: string },
+): Promise<ExtractedAsset> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<ExtractedAsset>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}/visual-prompt/rollback`,
+    payload,
+  )
+  return unwrapApiData(data, '回滚资产提示词失败')
+}
+
+export async function updateKeyframePromptText(
+  projectId: string,
+  keyframeId: string,
+  payload: { promptText: string },
+): Promise<KeyframeRecord> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<KeyframeRecord>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/keyframes/${encodeURIComponent(keyframeId)}/prompt`,
+    payload,
+  )
+  return unwrapApiData(data, '更新关键帧提示词失败')
+}
+
+export async function rollbackKeyframePrompt(
+  projectId: string,
+  keyframeId: string,
+  payload: { versionId: string },
+): Promise<KeyframeRecord> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<KeyframeRecord>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/keyframes/${encodeURIComponent(keyframeId)}/prompt/rollback`,
+    payload,
+  )
+  return unwrapApiData(data, '回滚关键帧提示词失败')
+}
+
+export async function getPromptTemplateCatalog(): Promise<PromptTemplateCatalogItem[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<PromptTemplateCatalogItem[]>>('/api/v1/prompt-templates/catalog')
+  return unwrapApiData(data, '获取提示词模板目录失败')
+}
+
+export async function getPromptTemplateOverrides(projectId: string): Promise<Record<string, string>> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<Record<string, string>>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/prompt-template-overrides`,
+  )
+  return unwrapApiData(data, '获取模板覆盖失败')
+}
+
+export async function updatePromptTemplateOverrides(
+  projectId: string,
+  overrides: Record<string, string>,
+): Promise<Record<string, string>> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<Record<string, string>>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/prompt-template-overrides`,
+    { overrides },
+  )
+  return unwrapApiData(data, '保存模板覆盖失败')
+}
+
 export async function generateScriptProjectVideos(projectId: string): Promise<PipelineStatus> {
   requireScriptApi()
   const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/video/generate`)
@@ -1048,4 +1131,39 @@ export function resolveScriptFileUrl(fileId?: string | null): string {
   if (!API_BASE_URL) return `/api/v1/files/${fileId}`
   const normalized = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
   return `${normalized}/api/v1/files/${fileId}`
+}
+
+/** 工作台生成结果：支持外链 URL、已落盘的 `/api/v1/files/...` 路径、或裸 fileId */
+export function resolveApiMediaUrl(pathOrUrl: string): string {
+  if (!pathOrUrl) return ''
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl
+  if (pathOrUrl.startsWith('/')) {
+    if (!API_BASE_URL) return pathOrUrl
+    const normalized = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+    return `${normalized}${pathOrUrl}`
+  }
+  return resolveScriptFileUrl(pathOrUrl)
+}
+
+export async function listAssetHistory(
+  projectId: string,
+  params?: { type?: AssetHistoryType; referenceId?: string },
+): Promise<AssetGenerationHistoryItem[]> {
+  const { data } = await http.get<ApiEnvelope<AssetGenerationHistoryItem[]>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/asset-history`,
+    {
+      params: {
+        type: params?.type,
+        referenceId: params?.referenceId,
+      },
+    },
+  )
+  return unwrapApiData(data, '获取资产历史失败')
+}
+
+export async function restoreAssetHistory(projectId: string, historyId: number): Promise<AssetGenerationHistoryItem> {
+  const { data } = await http.post<ApiEnvelope<AssetGenerationHistoryItem>>(
+    `/api/v1/script-projects/${encodeURIComponent(projectId)}/asset-history/${historyId}/restore`,
+  )
+  return unwrapApiData(data, '恢复历史版本失败')
 }

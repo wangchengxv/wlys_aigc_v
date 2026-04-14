@@ -3,6 +3,7 @@ package com.example.aigc.service;
 import com.example.aigc.dto.ScriptDocumentPayload;
 import com.example.aigc.dto.ScriptProjectCreateRequest;
 import com.example.aigc.dto.UpdateScriptRequest;
+import com.example.aigc.dto.PromptTemplateOverridesUpdateRequest;
 import com.example.aigc.dto.WorkflowModelSettingsResponse;
 import com.example.aigc.dto.WorkflowModelSettingsUpdateRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -42,6 +43,7 @@ public class ScriptProjectService {
     private final ScriptDocxService scriptDocxService;
     private final VideoStylePresetRegistry videoStylePresetRegistry;
     private final ObjectMapper objectMapper;
+    private final PromptTemplateService promptTemplateService;
 
     private static final TypeReference<Map<String, String>> STR_MAP_TYPE = new TypeReference<>() {};
 
@@ -50,13 +52,15 @@ public class ScriptProjectService {
             LocalAssetFileService localAssetFileService,
             ScriptDocxService scriptDocxService,
             VideoStylePresetRegistry videoStylePresetRegistry,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            PromptTemplateService promptTemplateService
     ) {
         this.scriptProjectRepository = scriptProjectRepository;
         this.localAssetFileService = localAssetFileService;
         this.scriptDocxService = scriptDocxService;
         this.videoStylePresetRegistry = videoStylePresetRegistry;
         this.objectMapper = objectMapper;
+        this.promptTemplateService = promptTemplateService;
     }
 
     public ScriptProjectAggregate create(ScriptProjectCreateRequest request) {
@@ -369,6 +373,22 @@ public class ScriptProjectService {
         return null;
     }
 
+    /**
+     * 按 fileId 解析 {@link StoredFileRecord}（跨剧本工程查询，用于历史恢复等）。
+     */
+    public StoredFileRecord findStoredRecordByFileId(String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            return null;
+        }
+        String projectId = localAssetFileService.extractProjectId(fileId);
+        if (projectId == null) {
+            return null;
+        }
+        return scriptProjectRepository.findById(projectId)
+                .map(aggregate -> findFile(aggregate, fileId))
+                .orElse(null);
+    }
+
     public String readText(StoredFileRecord record) {
         return record == null ? "" : localAssetFileService.readText(record);
     }
@@ -592,5 +612,21 @@ public class ScriptProjectService {
                 p.explicitVideoModel,
                 parseOverrides(p.workflowModelOverrides)
         );
+    }
+
+    public Map<String, String> getPromptTemplateOverrides(String projectId) {
+        ScriptProject p = require(projectId).project;
+        return promptTemplateService.parseOverrideMap(p.promptTemplateOverrides);
+    }
+
+    public Map<String, String> updatePromptTemplateOverrides(String projectId, PromptTemplateOverridesUpdateRequest request) {
+        ScriptProjectAggregate aggregate = require(projectId);
+        ScriptProject p = aggregate.project;
+        Map<String, String> incoming = request == null || request.overrides() == null ? Map.of() : request.overrides();
+        String merged = promptTemplateService.mergeSanitizeAllOverrides(p.promptTemplateOverrides, incoming);
+        p.promptTemplateOverrides = merged;
+        p.updatedAt = Instant.now();
+        save(aggregate);
+        return promptTemplateService.parseOverrideMap(merged);
     }
 }

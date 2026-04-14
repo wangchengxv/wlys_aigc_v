@@ -2,6 +2,7 @@ package com.example.aigc.controller;
 
 import com.example.aigc.dto.ApiResponse;
 import com.example.aigc.dto.PipelineStatusData;
+import com.example.aigc.dto.RollbackPromptRequest;
 import com.example.aigc.dto.UpdateShotRequest;
 import com.example.aigc.entity.StoryboardShot;
 import com.example.aigc.entity.VideoSegmentTask;
@@ -50,6 +51,15 @@ public class VideoPipelineController {
             @Valid @RequestBody UpdateShotRequest request
     ) {
         return ApiResponse.ok(scriptWorkflowService.updateShot(projectId, shotId, request));
+    }
+
+    @PostMapping("/shots/{shotId}/visual-prompt/rollback")
+    public ApiResponse<StoryboardShot> rollbackShotVisualPrompt(
+            @PathVariable String projectId,
+            @PathVariable String shotId,
+            @RequestBody RollbackPromptRequest request
+    ) {
+        return ApiResponse.ok(scriptWorkflowService.rollbackShotVisualPrompt(projectId, shotId, request));
     }
 
     @PostMapping("/video/generate")

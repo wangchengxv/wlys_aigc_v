@@ -1,3 +1,10 @@
+// Polyfill: Array.prototype.toReversed (ES2023) — required by @comfyorg/litegraph
+if (!Array.prototype.toReversed) {
+  Array.prototype.toReversed = function <T>(this: T[]): T[] {
+    return this.slice().reverse()
+  }
+}
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'

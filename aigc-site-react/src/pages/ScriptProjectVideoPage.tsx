@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getModels } from '@/api'
+import { getModels, rollbackShotVisualPrompt } from '@/api'
 import { AppButton } from '@/components/common/AppButton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { PipelineProgressBar } from '@/components/script/PipelineProgressBar'
 import { VideoSegmentCard } from '@/components/script/VideoSegmentCard'
+import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
@@ -112,13 +113,23 @@ export function ScriptProjectVideoPage() {
 
   async function handleSaveShot(
     shotId: string,
-    payload: { shotType?: string; cameraMove?: string; emotion?: string },
+    payload: { shotType?: string; cameraMove?: string; emotion?: string; visualPrompt?: string },
   ) {
     try {
       await saveShot(projectId, shotId, payload)
-      showToast('镜头参数已保存', 'success')
+      showToast(payload.visualPrompt !== undefined ? '分镜提示词已保存' : '镜头参数已保存', 'success')
     } catch (e) {
       showToast(e instanceof Error ? e.message : '保存失败', 'error')
+    }
+  }
+
+  async function handleRollbackShotVisual(shotId: string, versionId: string) {
+    try {
+      await rollbackShotVisualPrompt(projectId, shotId, { versionId })
+      await loadShots(projectId)
+      showToast('已回滚到所选版本', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '回滚失败', 'error')
     }
   }
 
@@ -148,6 +159,9 @@ export function ScriptProjectVideoPage() {
   }
 
   return (
+    <div className="script-project-workflow-layout">
+      <ScriptProjectWorkflowNav projectId={projectId} />
+      <div className="script-project-workflow-layout__main">
     <section className="script-video-page">
       <div className="toolbar panel glass">
         <div>
@@ -178,15 +192,20 @@ export function ScriptProjectVideoPage() {
               key={shot.shotId}
               shot={shot}
               task={taskByShot[shot.shotId]}
+              projectId={projectId}
               busy={videoLoading}
               shotVisualBusy={shotVisualLoading}
               shotSaving={shotSaving}
               onRetry={(id) => void retry(id)}
               onGenerateVisualPrompt={(id) => void handleShotVisualPrompt(id)}
               onSaveShot={(id, payload) => void handleSaveShot(id, payload)}
+              onRollbackShotVisual={(id, vid) => void handleRollbackShotVisual(id, vid)}
               onClearFirstFrame={(id) => void handleClearFirstFrame(id)}
               storyboardAssets={storyboardAssets}
               onApplyFirstFrame={(id, payload) => void handleApplyFirstFrame(id, payload)}
+              onVideoHistoryRestored={async () => {
+                await loadVideoTasks(projectId)
+              }}
             />
           ))}
         </div>
@@ -194,5 +213,7 @@ export function ScriptProjectVideoPage() {
         <EmptyState title="还没有镜头" description="请先从完善剧本中拆分镜头，系统会为每个镜头生成独立的视频任务。" />
       )}
     </section>
+      </div>
+    </div>
   )
 }

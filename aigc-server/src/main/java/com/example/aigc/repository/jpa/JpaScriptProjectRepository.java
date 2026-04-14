@@ -1,5 +1,6 @@
 package com.example.aigc.repository.jpa;
 
+import com.example.aigc.constants.WorkspaceConstants;
 import com.example.aigc.entity.KeyframeRecord;
 import com.example.aigc.entity.ScriptProject;
 import com.example.aigc.entity.ScriptProjectAggregate;
@@ -103,6 +104,7 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
                 ? projectRepository.findAllByDeletedAtIsNotNull()
                 : projectRepository.findAllByDeletedAtIsNull();
         return projects.stream()
+                .filter(p -> !WorkspaceConstants.WORKSPACE_PROJECT_ID.equals(p.projectId))
                 .map(this::toSummary)
                 .sorted(Comparator.comparing((ScriptProjectSummary item) -> item.updatedAt, Comparator.nullsLast(Instant::compareTo)).reversed())
                 .toList();

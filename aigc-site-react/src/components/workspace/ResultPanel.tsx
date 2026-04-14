@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { SkeletonCard } from '@/components/common/SkeletonCard'
 import { useToast } from '@/context/ToastContext'
+import { resolveApiMediaUrl } from '@/api'
 import { useGenerationStore } from '@/stores/generationStore'
 import { ImageResultCard } from './ImageResultCard'
 import { TextResultCard } from './TextResultCard'
@@ -128,9 +129,12 @@ export function ResultPanel() {
               <section className="group">
                 <p className="group-title">图片结果</p>
                 <div className="gallery">
-                  {task.imageResults.map((url) => (
-                    <ImageResultCard key={url} url={url} onPreview={() => setPreviewImage(url)} onDownload={() => downloadImage(url)} />
-                  ))}
+                  {task.imageResults.map((url) => {
+                    const src = resolveApiMediaUrl(url)
+                    return (
+                      <ImageResultCard key={url} url={src} onPreview={() => setPreviewImage(src)} onDownload={() => downloadImage(src)} />
+                    )
+                  })}
                 </div>
               </section>
             ) : null}
@@ -139,16 +143,19 @@ export function ResultPanel() {
               <section className="group">
                 <p className="group-title">视频结果</p>
                 <div className="list">
-                  {task.videoResults.map((url) => (
-                    <VideoResultCard
-                      key={url}
-                      url={url}
-                      onPreview={() => openVideoPreview(url)}
-                      onDownload={() => void downloadVideo(url)}
-                      onCopyLink={() => void copyLink(url)}
-                      onOpen={() => openVideo(url)}
-                    />
-                  ))}
+                  {task.videoResults.map((url) => {
+                    const src = resolveApiMediaUrl(url)
+                    return (
+                      <VideoResultCard
+                        key={url}
+                        url={src}
+                        onPreview={() => openVideoPreview(src)}
+                        onDownload={() => void downloadVideo(src)}
+                        onCopyLink={() => void copyLink(src)}
+                        onOpen={() => openVideo(src)}
+                      />
+                    )
+                  })}
                 </div>
               </section>
             ) : null}

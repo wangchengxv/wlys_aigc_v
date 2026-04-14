@@ -1,6 +1,7 @@
 package com.example.aigc.repository.jpa;
 
 import com.example.aigc.entity.ExtractedAsset;
+import com.example.aigc.entity.CanvasGraph;
 import com.example.aigc.entity.GenerationTask;
 import com.example.aigc.entity.KeyframeRecord;
 import com.example.aigc.entity.PipelineRun;
@@ -109,3 +110,12 @@ interface SpringDataPipelineRunRepository extends JpaRepository<PipelineRun, Str
 
     void deleteByProjectId(String projectId);
 }
+
+interface SpringDataCanvasGraphRepository extends JpaRepository<CanvasGraph, String> {
+    List<CanvasGraph> findAllByOwnerIdOrderByUpdatedAtDesc(String ownerId);
+
+    Optional<CanvasGraph> findByIdAndOwnerId(String id, String ownerId);
+
+    void deleteByIdAndOwnerId(String id, String ownerId);
+}
+

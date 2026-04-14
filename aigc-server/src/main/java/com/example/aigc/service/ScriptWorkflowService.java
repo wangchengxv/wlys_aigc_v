@@ -15,6 +15,9 @@ import com.example.aigc.dto.StoryboardRewriteRequest;
 import com.example.aigc.dto.ThreeViewResponse;
 import com.example.aigc.dto.TurnaroundImageResponse;
 import com.example.aigc.dto.TurnaroundPlanResponse;
+import com.example.aigc.dto.PromptVersion;
+import com.example.aigc.dto.RollbackPromptRequest;
+import com.example.aigc.dto.UpdateKeyframePromptRequest;
 import com.example.aigc.dto.UpdateShotRequest;
 import com.example.aigc.dto.UpdateAssetRequest;
 import com.example.aigc.dto.UpdateScriptRequest;
@@ -30,12 +33,14 @@ import com.example.aigc.entity.PipelineRun;
 import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.entity.StoryboardShot;
+import com.example.aigc.enums.AssetHistoryType;
 import com.example.aigc.enums.AssetStatus;
 import com.example.aigc.enums.AssetType;
 import com.example.aigc.enums.DocumentVersionType;
 import com.example.aigc.enums.PipelineStatus;
 import com.example.aigc.enums.PipelineType;
 import com.example.aigc.enums.ProjectStatus;
+import com.example.aigc.enums.PromptVersionSource;
 import com.example.aigc.enums.RevisionKind;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.model.VideoStylePresetRegistry;
@@ -68,11 +73,13 @@ public class ScriptWorkflowService {
 
     private final ScriptProjectService scriptProjectService;
     private final PromptTemplateService promptTemplateService;
+    private final PromptVersionService promptVersionService;
     private final AiCapabilityRoutingService aiCapabilityRoutingService;
     private final ProviderHttpGateway providerHttpGateway;
     private final LocalAssetFileService localAssetFileService;
     private final ObjectMapper objectMapper;
     private final VideoStylePresetRegistry videoStylePresetRegistry;
+    private final AssetHistoryService assetHistoryService;
 
     private static final int STORYBOARD_PANEL_COUNT = 9;
     private static final String FIRST_FRAME_MODE_NONE = "NONE";
@@ -82,19 +89,23 @@ public class ScriptWorkflowService {
     public ScriptWorkflowService(
             ScriptProjectService scriptProjectService,
             PromptTemplateService promptTemplateService,
+            PromptVersionService promptVersionService,
             AiCapabilityRoutingService aiCapabilityRoutingService,
             ProviderHttpGateway providerHttpGateway,
             LocalAssetFileService localAssetFileService,
             ObjectMapper objectMapper,
-            VideoStylePresetRegistry videoStylePresetRegistry
+            VideoStylePresetRegistry videoStylePresetRegistry,
+            AssetHistoryService assetHistoryService
     ) {
         this.scriptProjectService = scriptProjectService;
         this.promptTemplateService = promptTemplateService;
+        this.promptVersionService = promptVersionService;
         this.aiCapabilityRoutingService = aiCapabilityRoutingService;
         this.providerHttpGateway = providerHttpGateway;
         this.localAssetFileService = localAssetFileService;
         this.objectMapper = objectMapper;
         this.videoStylePresetRegistry = videoStylePresetRegistry;
+        this.assetHistoryService = assetHistoryService;
     }
 
     public ScriptDocumentPayload refineScript(String projectId) {
@@ -222,12 +233,12 @@ public class ScriptWorkflowService {
             throw new BizException(400, reason);
         }
 
-        String systemPrompt = promptTemplateService.render(
+        String systemPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/script/rewrite-system.md",
                 Map.of("language", language),
                 "你是一位专业剧本顾问，请在保留核心剧情与角色设定的前提下完成高质量改写。"
         );
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/script/rewrite-user.md",
                 Map.of(
                         "language", language,
@@ -319,7 +330,7 @@ public class ScriptWorkflowService {
                 Map.of()
         );
         String maxTotalCharsNote = "";
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/script/append-user.md",
                 Map.of(
                         "language", language,
@@ -385,12 +396,12 @@ public class ScriptWorkflowService {
                     : "未命中已配置的文本模型：" + effectiveTextModelOpt;
             throw new BizException(400, reason);
         }
-        String systemPrompt = promptTemplateService.render(
+        String systemPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 systemPath,
                 Map.of("language", stringValue(aggregate.project.language, "中文")),
                 "系统提示"
         );
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 userPath,
                 Map.of(
                         "projectName", stringValue(aggregate.project.name, "未命名项目"),
@@ -647,6 +658,12 @@ public class ScriptWorkflowService {
         if (request.metadata() != null) {
             asset.metadata = new LinkedHashMap<>(request.metadata());
         }
+        if (request.visualPrompt() != null) {
+            String next = request.visualPrompt().trim();
+            asset.promptVersions = promptVersionService.updateWithVersion(
+                    asset.visualPrompt, next, asset.promptVersions, PromptVersionSource.MANUAL_EDIT, null);
+            asset.visualPrompt = next.isEmpty() ? null : next;
+        }
         asset.updatedAt = Instant.now();
         scriptProjectService.save(aggregate);
         return asset;
@@ -662,6 +679,19 @@ public class ScriptWorkflowService {
         scriptProjectService.save(aggregate);
 
         try {
+            for (KeyframeRecord kf : new ArrayList<>(aggregate.keyframes)) {
+                if (Objects.equals(kf.assetId, assetId) && kf.imageFileId != null && !kf.imageFileId.isBlank()) {
+                    assetHistoryService.appendSnapshot(
+                            projectId,
+                            AssetHistoryType.KEYFRAME,
+                            kf.keyframeId,
+                            kf.imageFileId,
+                            kf.promptText,
+                            kf.modelName,
+                            null
+                    );
+                }
+            }
             List<KeyframeRecord> created = new ArrayList<>();
             String generationBatchId = nextId("keyframe-batch");
             for (int index = 1; index <= 2; index++) {
@@ -674,6 +704,8 @@ public class ScriptWorkflowService {
                 record.projectId = projectId;
                 record.assetId = asset.assetId;
                 record.promptText = prompt;
+                record.promptVersions = promptVersionService.updateWithVersion(
+                        null, prompt, record.promptVersions, PromptVersionSource.AI_GENERATED, null);
                 record.negativePrompt = "blurry, distorted, watermark, low quality";
                 record.imageFileId = imageFile.fileId;
                 record.selected = false;
@@ -729,6 +761,72 @@ public class ScriptWorkflowService {
         return generateKeyframes(projectId, record.assetId);
     }
 
+    public KeyframeRecord updateKeyframePrompt(String projectId, String keyframeId, UpdateKeyframePromptRequest request) {
+        if (request == null || request.promptText() == null) {
+            throw new BizException(400, "promptText 不能为空");
+        }
+        ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
+        KeyframeRecord record = findKeyframe(aggregate, keyframeId);
+        String next = request.promptText().trim();
+        record.promptVersions = promptVersionService.updateWithVersion(
+                record.promptText, next, record.promptVersions, PromptVersionSource.MANUAL_EDIT, null);
+        record.promptText = next;
+        record.updatedAt = Instant.now();
+        scriptProjectService.save(aggregate);
+        return record;
+    }
+
+    public ExtractedAsset rollbackAssetVisualPrompt(String projectId, String assetId, RollbackPromptRequest request) {
+        if (request == null || request.versionId() == null || request.versionId().isBlank()) {
+            throw new BizException(400, "versionId 不能为空");
+        }
+        ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
+        ExtractedAsset asset = findAsset(aggregate, assetId);
+        PromptVersion target = promptVersionService.findVersion(asset.promptVersions, request.versionId());
+        if (target == null) {
+            throw new BizException(400, "未找到指定版本");
+        }
+        asset.promptVersions = promptVersionService.rollbackAppend(asset.visualPrompt, asset.promptVersions, request.versionId());
+        asset.visualPrompt = target.prompt();
+        asset.updatedAt = Instant.now();
+        scriptProjectService.save(aggregate);
+        return asset;
+    }
+
+    public StoryboardShot rollbackShotVisualPrompt(String projectId, String shotId, RollbackPromptRequest request) {
+        if (request == null || request.versionId() == null || request.versionId().isBlank()) {
+            throw new BizException(400, "versionId 不能为空");
+        }
+        ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
+        StoryboardShot shot = findShot(aggregate, shotId);
+        PromptVersion target = promptVersionService.findVersion(shot.promptVersions, request.versionId());
+        if (target == null) {
+            throw new BizException(400, "未找到指定版本");
+        }
+        shot.promptVersions = promptVersionService.rollbackAppend(shot.visualPrompt, shot.promptVersions, request.versionId());
+        shot.visualPrompt = target.prompt();
+        shot.updatedAt = Instant.now();
+        scriptProjectService.save(aggregate);
+        return shot;
+    }
+
+    public KeyframeRecord rollbackKeyframePrompt(String projectId, String keyframeId, RollbackPromptRequest request) {
+        if (request == null || request.versionId() == null || request.versionId().isBlank()) {
+            throw new BizException(400, "versionId 不能为空");
+        }
+        ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
+        KeyframeRecord record = findKeyframe(aggregate, keyframeId);
+        PromptVersion target = promptVersionService.findVersion(record.promptVersions, request.versionId());
+        if (target == null) {
+            throw new BizException(400, "未找到指定版本");
+        }
+        record.promptVersions = promptVersionService.rollbackAppend(record.promptText, record.promptVersions, request.versionId());
+        record.promptText = target.prompt();
+        record.updatedAt = Instant.now();
+        scriptProjectService.save(aggregate);
+        return record;
+    }
+
     // -------------------------------------------------------------------------
     // Visual prompt system B-1 ~ B-9
     // -------------------------------------------------------------------------
@@ -749,12 +847,12 @@ public class ScriptWorkflowService {
         String characterList = buildCharacterLinesForArtDirection(structuredScript);
         String sceneList = buildSceneLinesForArtDirection(structuredScript);
 
-        String systemPrompt = promptTemplateService.render(
+        String systemPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/art-direction-system.md",
                 Map.of(),
                 "You are a world-class Art Director."
         );
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/art-direction-user.md",
                 Map.of(
                         "title", title,
@@ -828,7 +926,7 @@ public class ScriptWorkflowService {
         batchVars.put("stylePrompt", stringValue(aggregate.project.aspectRatio, "16:9") + " 画幅");
         batchVars.put("characterList", characterList);
         batchVars.put("language", stringValue(aggregate.project.language, "中文"));
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/batch-character-user.md",
                 batchVars,
                 ""
@@ -850,6 +948,8 @@ public class ScriptWorkflowService {
             String vp = stringValue(m.get("visualPrompt"), "");
             ExtractedAsset asset = findCharacterAssetBySourceOrId(aggregate, sourceId, characters);
             if (asset != null && !vp.isBlank()) {
+                asset.promptVersions = promptVersionService.updateWithVersion(
+                        asset.visualPrompt, vp, asset.promptVersions, PromptVersionSource.AI_GENERATED, null);
                 asset.visualPrompt = vp;
                 asset.updatedAt = Instant.now();
                 items.add(new VisualPromptResponse(asset.assetId, vp));
@@ -875,7 +975,7 @@ public class ScriptWorkflowService {
         String systemPrompt = "You output ONLY the final prompt text requested. No labels, no quotes, no markdown.";
         String userPrompt;
         switch (asset.assetType) {
-            case CHARACTER -> userPrompt = promptTemplateService.render(
+            case CHARACTER -> userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                     "prompts/visual/single-character-user.md",
                     Map.of(
                             "artDirectionBlock", artBlock,
@@ -890,7 +990,7 @@ public class ScriptWorkflowService {
                     ),
                     ""
             );
-            case BACKGROUND -> userPrompt = promptTemplateService.render(
+            case BACKGROUND -> userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                     "prompts/visual/single-scene-user.md",
                     Map.of(
                             "artDirectionBlock", artBlock,
@@ -904,7 +1004,7 @@ public class ScriptWorkflowService {
                     ),
                     ""
             );
-            case PROP -> userPrompt = promptTemplateService.render(
+            case PROP -> userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                     "prompts/visual/prop-user.md",
                     Map.of(
                             "artDirectionBlock", artBlock,
@@ -924,6 +1024,8 @@ public class ScriptWorkflowService {
         if (text.isBlank()) {
             throw new BizException(502, "模型未返回可用视觉提示词");
         }
+        asset.promptVersions = promptVersionService.updateWithVersion(
+                asset.visualPrompt, text, asset.promptVersions, PromptVersionSource.AI_GENERATED, null);
         asset.visualPrompt = text;
         asset.updatedAt = Instant.now();
         scriptProjectService.save(aggregate);
@@ -940,7 +1042,7 @@ public class ScriptWorkflowService {
             throw new BizException(400, "请先生成角色视觉提示词（B-3）");
         }
         String artBlock = buildArtDirectionAnchorBlock(aggregate);
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/turnaround-plan-user.md",
                 Map.of(
                         "artDirectionBlock", artBlock,
@@ -1018,11 +1120,22 @@ public class ScriptWorkflowService {
         turnImageVars.put("description7", descriptions[7]);
         turnImageVars.put("description8", descriptions[8]);
         turnImageVars.put("artDirectionSuffix", artSuffix);
-        String imagePrompt = promptTemplateService.render(
+        String imagePrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/turnaround-image-user.md",
                 turnImageVars,
                 ""
         );
+        if (asset.turnaroundImageFileId != null && !asset.turnaroundImageFileId.isBlank()) {
+            assetHistoryService.appendSnapshot(
+                    projectId,
+                    AssetHistoryType.TURNAROUND,
+                    asset.assetId,
+                    asset.turnaroundImageFileId,
+                    imagePrompt,
+                    null,
+                    null
+            );
+        }
         String basePath = "turnaround/" + asset.assetId + "/character-sheet";
         StoredFileRecord file = generateStoredImage(aggregate, WorkflowModelKey.TURNAROUND_IMAGE, imagePrompt, basePath + ".png", asset.name);
         scriptProjectService.upsertFile(aggregate, file);
@@ -1039,8 +1152,8 @@ public class ScriptWorkflowService {
             throw new BizException(400, "请先生成资产视觉提示词");
         }
         Map<String, Object> vars = buildStoryboardCommonVars(aggregate, asset, STORYBOARD_PANEL_COUNT);
-        String systemPrompt = promptTemplateService.render("prompts/visual/storyboard-split-system.md", vars, "");
-        String userPrompt = promptTemplateService.render("prompts/visual/storyboard-split-user.md", vars, "");
+        String systemPrompt = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-split-system.md", vars, "");
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-split-user.md", vars, "");
         String raw = invokeTextModelOrThrow(aggregate, WorkflowModelKey.STORYBOARD_PLAN, systemPrompt, userPrompt);
         String json = stripJsonFence(raw);
         validateStoryboardPanelsJson(json, STORYBOARD_PANEL_COUNT);
@@ -1080,7 +1193,7 @@ public class ScriptWorkflowService {
         vars.put("expectedCount", STORYBOARD_PANEL_COUNT);
         vars.put("expectedCountMinusOne", STORYBOARD_PANEL_COUNT - 1);
         vars.put("requiredShotSizeKinds", 3);
-        String userPrompt = promptTemplateService.render("prompts/visual/storyboard-rewrite-user.md", vars, "");
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-rewrite-user.md", vars, "");
         String raw = invokeTextModelOrThrow(aggregate, WorkflowModelKey.STORYBOARD_PLAN, "Output ONLY valid JSON as specified.", userPrompt);
         String json = stripJsonFence(raw);
         validateStoryboardPanelsJson(json, STORYBOARD_PANEL_COUNT);
@@ -1099,9 +1212,9 @@ public class ScriptWorkflowService {
         }
         List<Map<String, Object>> panels = parseStoryboardPanels(asset.storyboardPlanJson, STORYBOARD_PANEL_COUNT);
         Map<String, Object> vars = buildStoryboardCommonVars(aggregate, asset, STORYBOARD_PANEL_COUNT);
-        String prefix = promptTemplateService.render("prompts/visual/storyboard-image-prefix.md", vars, "");
-        String suffix = promptTemplateService.render("prompts/visual/storyboard-image-suffix.md", vars, "");
-        String noText = promptTemplateService.render("prompts/visual/storyboard-image-no-text.md", vars, "");
+        String prefix = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-image-prefix.md", vars, "");
+        String suffix = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-image-suffix.md", vars, "");
+        String noText = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-image-no-text.md", vars, "");
         StringBuilder panelPrompt = new StringBuilder();
         for (int i = 0; i < STORYBOARD_PANEL_COUNT; i++) {
             Map<String, Object> panel = i < panels.size() ? panels.get(i) : Map.of();
@@ -1111,9 +1224,20 @@ public class ScriptWorkflowService {
             panelVars.put("shotSize", stringValue(panel.get("shotSize"), "中景"));
             panelVars.put("cameraAngle", stringValue(panel.get("cameraAngle"), "平视"));
             panelVars.put("description", stringValue(panel.get("description"), "Cinematic frame with coherent action continuity."));
-            panelPrompt.append(promptTemplateService.render("prompts/visual/storyboard-image-panel.md", panelVars, ""));
+            panelPrompt.append(promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-image-panel.md", panelVars, ""));
         }
         String fullPrompt = (prefix + "\n" + panelPrompt + "\n" + suffix + "\n\n" + noText).trim();
+        if (asset.storyboardImageFileId != null && !asset.storyboardImageFileId.isBlank()) {
+            assetHistoryService.appendSnapshot(
+                    projectId,
+                    AssetHistoryType.STORYBOARD,
+                    asset.assetId,
+                    asset.storyboardImageFileId,
+                    fullPrompt,
+                    null,
+                    null
+            );
+        }
         StoredFileRecord file = generateStoredImage(
                 aggregate,
                 WorkflowModelKey.STORYBOARD_IMAGE,
@@ -1231,7 +1355,18 @@ public class ScriptWorkflowService {
         vars.put("name", stringValue(asset.name, "资产"));
         vars.put(summaryKey, summary);
         vars.put("artDirectionSuffix", artSuffix);
-        String imagePrompt = promptTemplateService.render(templatePath, vars, "");
+        String imagePrompt = promptTemplateService.renderForProject(aggregate.project, templatePath, vars, "");
+        if (asset.threeViewImageFileId != null && !asset.threeViewImageFileId.isBlank()) {
+            assetHistoryService.appendSnapshot(
+                    projectId,
+                    AssetHistoryType.THREE_VIEW,
+                    asset.assetId,
+                    asset.threeViewImageFileId,
+                    imagePrompt,
+                    null,
+                    null
+            );
+        }
         String basePath = "three-view/" + asset.assetId + "/sheet";
         StoredFileRecord file = generateStoredImage(aggregate, WorkflowModelKey.THREE_VIEW_IMAGE, imagePrompt, basePath + ".png", asset.name);
         scriptProjectService.upsertFile(aggregate, file);
@@ -1279,7 +1414,7 @@ public class ScriptWorkflowService {
         groupVars.put("n", String.valueOf(selected.size()));
         groupVars.put("language", stringValue(aggregate.project.language, "中文"));
         groupVars.put("stylePrompt", stringValue(aggregate.project.aspectRatio, "16:9") + " ensemble");
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/group-scene-user.md",
                 groupVars,
                 ""
@@ -1345,7 +1480,7 @@ public class ScriptWorkflowService {
         shotVars.put("atmosphere", sceneCtx.getOrDefault("atmosphere", ""));
         shotVars.put("language", stringValue(aggregate.project.language, "中文"));
         shotVars.put("stylePrompt", stringValue(aggregate.project.aspectRatio, "16:9"));
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/visual/shot-storyboard-user.md",
                 shotVars,
                 ""
@@ -1359,6 +1494,8 @@ public class ScriptWorkflowService {
         if (text.isBlank()) {
             throw new BizException(502, "分镜提示词生成失败");
         }
+        shot.promptVersions = promptVersionService.updateWithVersion(
+                shot.visualPrompt, text, shot.promptVersions, PromptVersionSource.AI_GENERATED, null);
         shot.visualPrompt = text;
         shot.updatedAt = Instant.now();
         scriptProjectService.save(aggregate);
@@ -1382,6 +1519,12 @@ public class ScriptWorkflowService {
         }
         if (request.targetDurationSec() != null) {
             shot.targetDurationSec = request.targetDurationSec();
+        }
+        if (request.visualPrompt() != null) {
+            String next = request.visualPrompt().trim();
+            shot.promptVersions = promptVersionService.updateWithVersion(
+                    shot.visualPrompt, next, shot.promptVersions, PromptVersionSource.MANUAL_EDIT, null);
+            shot.visualPrompt = next.isEmpty() ? null : next;
         }
         shot.updatedAt = Instant.now();
         scriptProjectService.save(aggregate);
@@ -1576,7 +1719,7 @@ public class ScriptWorkflowService {
             throw new BizException(400, reason);
         }
 
-        String systemPrompt = promptTemplateService.render(
+        String systemPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 "prompts/script/refine-system.md",
                 Map.of("language", stringValue(aggregate.project.language, "中文")),
                 "你是一名专业的影视编剧与分镜策划师，请把用户原始剧本整理为适合视频生产的结构化 JSON。"
@@ -1611,7 +1754,7 @@ public class ScriptWorkflowService {
                     原始剧本：
                     {{originalScript}}
                     """;
-        String userPrompt = promptTemplateService.render(
+        String userPrompt = promptTemplateService.renderForProject(aggregate.project, 
                 userPath,
                 userVars,
                 fallbackUserPrompt
@@ -2221,7 +2364,7 @@ public class ScriptWorkflowService {
         String visualBody = (asset.visualPrompt != null && !asset.visualPrompt.isBlank())
                 ? asset.visualPrompt
                 : "";
-        return promptTemplateService.render(
+        return promptTemplateService.renderForProject(aggregate.project, 
                 templatePath,
                 Map.of(
                         "consistencyPrefix", consistencyPrefix,
@@ -2720,7 +2863,7 @@ public class ScriptWorkflowService {
             vars.put("panelsJson", panelsJson);
             vars.put("expectedCount", expectedCount);
             vars.put("expectedCountMinusOne", expectedCount - 1);
-            String userPrompt = promptTemplateService.render("prompts/visual/storyboard-translate-user.md", vars, "");
+            String userPrompt = promptTemplateService.renderForProject(aggregate.project, "prompts/visual/storyboard-translate-user.md", vars, "");
             String raw = invokeTextModelOrThrow(aggregate, WorkflowModelKey.STORYBOARD_PLAN, "Output ONLY valid JSON as specified.", userPrompt);
             String json = stripJsonFence(raw);
             Map<String, Object> root = parseJsonObject(json);
@@ -2764,6 +2907,21 @@ public class ScriptWorkflowService {
         }
         if (asset.storyboardImageFileId == null || asset.storyboardImageFileId.isBlank()) {
             throw new BizException(400, "请先生成九宫格分镜图");
+        }
+        for (StoredFileRecord existing : new ArrayList<>(aggregate.files)) {
+            if (existing != null && existing.relativePath != null
+                    && existing.relativePath.replace('\\', '/').endsWith("crop/panel-" + panelIndex + ".png")) {
+                assetHistoryService.appendSnapshot(
+                        aggregate.project.projectId,
+                        AssetHistoryType.STORYBOARD_CROP,
+                        asset.assetId + ":" + panelIndex,
+                        existing.fileId,
+                        null,
+                        null,
+                        null
+                );
+                break;
+            }
         }
         StoredFileRecord source = scriptProjectService.findFile(aggregate, asset.storyboardImageFileId);
         if (source == null) {

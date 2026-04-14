@@ -1,11 +1,15 @@
 package com.example.aigc.controller;
 
 import com.example.aigc.dto.ApiResponse;
+import com.example.aigc.dto.RollbackPromptRequest;
+import com.example.aigc.dto.UpdateKeyframePromptRequest;
 import com.example.aigc.entity.KeyframeRecord;
 import com.example.aigc.service.ScriptWorkflowService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -48,5 +52,23 @@ public class KeyframeController {
             @PathVariable String keyframeId
     ) {
         return ApiResponse.ok(scriptWorkflowService.regenerateKeyframe(projectId, keyframeId));
+    }
+
+    @PutMapping("/keyframes/{keyframeId}/prompt")
+    public ApiResponse<KeyframeRecord> updatePrompt(
+            @PathVariable String projectId,
+            @PathVariable String keyframeId,
+            @RequestBody UpdateKeyframePromptRequest request
+    ) {
+        return ApiResponse.ok(scriptWorkflowService.updateKeyframePrompt(projectId, keyframeId, request));
+    }
+
+    @PostMapping("/keyframes/{keyframeId}/prompt/rollback")
+    public ApiResponse<KeyframeRecord> rollbackPrompt(
+            @PathVariable String projectId,
+            @PathVariable String keyframeId,
+            @RequestBody RollbackPromptRequest request
+    ) {
+        return ApiResponse.ok(scriptWorkflowService.rollbackKeyframePrompt(projectId, keyframeId, request));
     }
 }

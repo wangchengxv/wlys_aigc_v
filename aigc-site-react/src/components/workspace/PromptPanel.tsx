@@ -20,11 +20,30 @@ const textLengthOptions = [
 /** 与后端 GenerationServiceImpl.MAX_VIDEO_MERGED_PROMPT_CHARS 一致 */
 const MAX_VIDEO_MERGED_PROMPT_CHARS = 8000
 
-type Props = {
-  onGenerated: () => void
+/** 与后端 isViduWorkspaceModel / Moark 对齐：Vidu 用模型名前缀 `vidu`，避免子串误匹配 */
+function workspaceVideoNeedsFirstFrameImage(videoModel: string): boolean {
+  const m = videoModel.trim().toLowerCase()
+  if (!m) return false
+  if (m.startsWith('vidu')) return true
+  if (m.includes('wan') && m.includes('i2v')) return true
+  if (m.includes('moark')) return true
+  return false
 }
 
-export function PromptPanel({ onGenerated }: Props) {
+function isValidWorkspaceVideoRef(ref: string): boolean {
+  const t = ref.trim()
+  if (!t) return false
+  if (t.startsWith('http://') || t.startsWith('https://')) return true
+  return /^data:image\//i.test(t) && t.includes('base64')
+}
+
+type Props = {
+  onGenerated: () => void
+  /** 由路由（如 /tools/image）注入的初始模式 */
+  defaultMode?: GenerateMode
+}
+
+export function PromptPanel({ onGenerated, defaultMode }: Props) {
   const store = useGenerationStore()
   const visualStyleMode = useGlobalSettingsStore((s) => s.visualStyleMode)
   const visualStylePresetId = useGlobalSettingsStore((s) => s.visualStylePresetId)
@@ -32,7 +51,7 @@ export function PromptPanel({ onGenerated }: Props) {
   const visualStyleLongTextMode = useGlobalSettingsStore((s) => s.visualStyleLongTextMode)
   const [prompt, setPrompt] = useState('')
   const [styleSelection, setStyleSelection] = useState<string>(STYLE_GLOBAL)
-  const [mode, setMode] = useState<GenerateMode>('both')
+  const [mode, setMode] = useState<GenerateMode>(() => defaultMode ?? 'both')
   const [imageSize, setImageSize] = useState('1024x1024')
   const [textLength, setTextLength] = useState<'short' | 'medium' | 'long'>('medium')
   const [count, setCount] = useState(1)
@@ -82,6 +101,12 @@ export function PromptPanel({ onGenerated }: Props) {
   }, [styleSelection, globalStyleSlice])
 
   const globalStyleLabel = useMemo(() => styleSummaryShort(globalStyleSlice), [globalStyleSlice])
+
+  useEffect(() => {
+    if (defaultMode !== undefined) {
+      setMode(defaultMode)
+    }
+  }, [defaultMode])
 
   useEffect(() => {
     let cancelled = false
@@ -162,6 +187,10 @@ export function PromptPanel({ onGenerated }: Props) {
     }
     if (needVid && !finalVideoModel) {
       setError('请输入视频模型ID')
+      return
+    }
+    if (needVid && workspaceVideoNeedsFirstFrameImage(finalVideoModel) && !isValidWorkspaceVideoRef(videoReferenceImageUrl)) {
+      setError('图生视频需填写参考图：可访问的 http(s) 图片地址，或 data:image/...;base64,...（Moark / Vidu）')
       return
     }
 
@@ -398,8 +427,12 @@ export function PromptPanel({ onGenerated }: Props) {
         <AppInput
           value={videoReferenceImageUrl}
           onChange={(v) => setVideoReferenceImageUrl(String(v))}
-          label="参考图 URL（Moark 图生视频必填）"
-          placeholder="https://… 可访问的 JPG/PNG 图片地址"
+          label={
+            workspaceVideoNeedsFirstFrameImage(finalVideoModel)
+              ? '参考图（图生视频必填：Moark / Vidu）'
+              : '参考图 URL（方舟文生视频通常可不填）'
+          }
+          placeholder="https://… 可访问图片；或 data:image/png;base64,...（Vidu 支持）"
         />
       ) : null}
 

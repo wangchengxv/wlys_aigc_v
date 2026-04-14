@@ -1,6 +1,7 @@
 package com.example.aigc.controller;
 
 import com.example.aigc.dto.ApiResponse;
+import com.example.aigc.dto.RollbackPromptRequest;
 import com.example.aigc.dto.UpdateAssetRequest;
 import com.example.aigc.entity.ExtractedAsset;
 import com.example.aigc.enums.AssetType;
@@ -52,5 +53,14 @@ public class ScriptAssetController {
             @RequestBody UpdateAssetRequest request
     ) {
         return ApiResponse.ok(scriptWorkflowService.updateAsset(projectId, assetId, request));
+    }
+
+    @PostMapping("/{assetId}/visual-prompt/rollback")
+    public ApiResponse<ExtractedAsset> rollbackVisualPrompt(
+            @PathVariable String projectId,
+            @PathVariable String assetId,
+            @RequestBody RollbackPromptRequest request
+    ) {
+        return ApiResponse.ok(scriptWorkflowService.rollbackAssetVisualPrompt(projectId, assetId, request));
     }
 }

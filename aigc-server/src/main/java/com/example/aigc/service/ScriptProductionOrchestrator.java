@@ -9,6 +9,7 @@ import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.entity.StoryboardShot;
 import com.example.aigc.entity.VideoSegmentTask;
+import com.example.aigc.enums.AssetHistoryType;
 import com.example.aigc.enums.PipelineStatus;
 import com.example.aigc.enums.PipelineType;
 import com.example.aigc.enums.ProjectStatus;
@@ -45,6 +46,7 @@ public class ScriptProductionOrchestrator {
     private final PipelineVideoProperties pipelineVideoProperties;
     private final Executor videoPipelineExecutor;
     private final VideoStylePresetRegistry videoStylePresetRegistry;
+    private final AssetHistoryService assetHistoryService;
     private final ConcurrentHashMap<String, Object> projectLocks = new ConcurrentHashMap<>();
 
     public ScriptProductionOrchestrator(
@@ -55,7 +57,8 @@ public class ScriptProductionOrchestrator {
             LocalAssetFileService localAssetFileService,
             PipelineVideoProperties pipelineVideoProperties,
             @Qualifier("videoPipelineExecutor") Executor videoPipelineExecutor,
-            VideoStylePresetRegistry videoStylePresetRegistry
+            VideoStylePresetRegistry videoStylePresetRegistry,
+            AssetHistoryService assetHistoryService
     ) {
         this.scriptProjectService = scriptProjectService;
         this.promptTemplateService = promptTemplateService;
@@ -65,6 +68,7 @@ public class ScriptProductionOrchestrator {
         this.pipelineVideoProperties = pipelineVideoProperties;
         this.videoPipelineExecutor = videoPipelineExecutor;
         this.videoStylePresetRegistry = videoStylePresetRegistry;
+        this.assetHistoryService = assetHistoryService;
     }
 
     public PipelineStatusData startVideoGeneration(String projectId) {
@@ -126,6 +130,17 @@ public class ScriptProductionOrchestrator {
             int nextRetry = task.retryCount == null ? 1 : task.retryCount + 1;
             if (nextRetry > Math.max(1, pipelineVideoProperties.getMaxRetries())) {
                 throw new BizException(400, "该任务已达到最大重试次数");
+            }
+            if (task.resultVideoFileId != null && !task.resultVideoFileId.isBlank()) {
+                assetHistoryService.appendSnapshot(
+                        projectId,
+                        AssetHistoryType.VIDEO,
+                        task.segmentTaskId,
+                        task.resultVideoFileId,
+                        null,
+                        task.modelName,
+                        null
+                );
             }
             task.retryCount = nextRetry;
             task.status = SegmentTaskStatus.QUEUED;
@@ -203,6 +218,17 @@ public class ScriptProductionOrchestrator {
             synchronized (lock(projectId)) {
                 ScriptProjectAggregate latest = scriptProjectService.require(projectId);
                 VideoSegmentTask task = findTask(latest, segmentTaskId);
+                if (task.resultVideoFileId != null && !task.resultVideoFileId.isBlank()) {
+                    assetHistoryService.appendSnapshot(
+                            projectId,
+                            AssetHistoryType.VIDEO,
+                            task.segmentTaskId,
+                            task.resultVideoFileId,
+                            null,
+                            task.modelName,
+                            null
+                    );
+                }
                 scriptProjectService.upsertFile(latest, requestFile);
                 scriptProjectService.upsertFile(latest, resultVideo);
                 task.requestPayloadFileId = requestFile.fileId;
@@ -259,7 +285,8 @@ public class ScriptProductionOrchestrator {
         promptVars.put("assetSummary", relatedAssets.stream().map(asset -> asset.name + "：" + asset.description).reduce((left, right) -> left + "\n" + right).orElse("无"));
         promptVars.put("keyframeSummary", relatedKeyframes.stream().map(item -> item.promptText).reduce((left, right) -> left + "\n" + right).orElse("无"));
         promptVars.put("firstFrameGuidance", firstFrameGuidance);
-        String prompt = promptTemplateService.render(
+        String prompt = promptTemplateService.renderForProject(
+                aggregate.project,
                 "prompts/storyboard/build-video-segment.md",
                 promptVars,
                 """

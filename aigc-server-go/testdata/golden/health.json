@@ -1,0 +1,9 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "ok": true,
+    "service": "aigc-server",
+    "version": "v1"
+  }
+}

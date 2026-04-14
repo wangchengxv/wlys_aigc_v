@@ -2,7 +2,9 @@ package com.example.aigc.entity;
 
 import com.example.aigc.enums.AssetStatus;
 import com.example.aigc.enums.AssetType;
+import com.example.aigc.dto.PromptVersion;
 import com.example.aigc.repository.jpa.ObjectMapJsonConverter;
+import com.example.aigc.repository.jpa.PromptVersionListJsonConverter;
 import com.example.aigc.repository.jpa.StringListJsonConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -41,6 +43,9 @@ public class ExtractedAsset {
     public String promptDraft;
     @Column(name = "visual_prompt", columnDefinition = "TEXT")
     public String visualPrompt;
+    @Convert(converter = PromptVersionListJsonConverter.class)
+    @Column(name = "prompt_versions_json", columnDefinition = "LONGTEXT")
+    public List<PromptVersion> promptVersions = new ArrayList<>();
     @Column(name = "turnaround_plan_json", columnDefinition = "LONGTEXT")
     public String turnaroundPlanJson;
     @Column(name = "turnaround_image_file_id")

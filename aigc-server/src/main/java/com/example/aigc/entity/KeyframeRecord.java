@@ -1,11 +1,16 @@
 package com.example.aigc.entity;
 
+import com.example.aigc.dto.PromptVersion;
+import com.example.aigc.repository.jpa.PromptVersionListJsonConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "keyframe_record")
@@ -21,6 +26,9 @@ public class KeyframeRecord {
     public String shotId;
     @Column(name = "prompt_text", columnDefinition = "TEXT")
     public String promptText;
+    @Convert(converter = PromptVersionListJsonConverter.class)
+    @Column(name = "prompt_versions_json", columnDefinition = "LONGTEXT")
+    public List<PromptVersion> promptVersions = new ArrayList<>();
     @Column(name = "negative_prompt", columnDefinition = "TEXT")
     public String negativePrompt;
     @Column(name = "image_file_id")

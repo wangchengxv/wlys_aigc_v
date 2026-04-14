@@ -4,7 +4,8 @@ public record UpdateShotRequest(
         String shotType,
         String cameraMove,
         String emotion,
-        Integer targetDurationSec
+        Integer targetDurationSec,
+        String visualPrompt
 ) {
 }
 

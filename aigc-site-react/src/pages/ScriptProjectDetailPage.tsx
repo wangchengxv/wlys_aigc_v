@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { PipelineProgressBar } from '@/components/script/PipelineProgressBar'
+import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
 
@@ -82,6 +83,9 @@ export function ScriptProjectDetailPage() {
 
   const p = currentProject.project
   return (
+    <div className="script-project-workflow-layout">
+      <ScriptProjectWorkflowNav projectId={projectId} />
+      <div className="script-project-workflow-layout__main">
     <section className="script-detail-page">
       <div className="hero panel glass">
         <div>
@@ -97,7 +101,10 @@ export function ScriptProjectDetailPage() {
             资产与关键帧
           </Link>
           <Link className="nav-btn" to={`/script-projects/${projectId}/video`}>
-            视频生成
+            镜头拆分与视频生成
+          </Link>
+          <Link className="nav-btn" to={`/script-projects/${projectId}/export`}>
+            成片与导出
           </Link>
           <div style={{ width: 'min(360px, 100%)' }}>
             <AppInput
@@ -156,5 +163,7 @@ export function ScriptProjectDetailPage() {
 
       <PipelineProgressBar pipeline={pipelineStatus} />
     </section>
+      </div>
+    </div>
   )
 }

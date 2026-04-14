@@ -1,0 +1,201 @@
+# 图生视频
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+info:
+  title: ''
+  description: ''
+  version: 1.0.0
+paths:
+  /vidu/ent/v2/img2video:
+    post:
+      summary: 图生视频
+      deprecated: false
+      description: >-
+        具体参数请参照本地整理文档 services/router-svc/docs/vidu/video-img2video.md
+        以及官方文档：https://platform.vidu.cn/docs/image-to-video
+      operationId: post__vidu_ent_v2_img2video
+      tags:
+        - 使用指南/API文档/视频模型/vidu
+      parameters:
+        - name: Content-Type
+          in: header
+          description: ''
+          required: false
+          example: ''
+          schema:
+            type: string
+            examples:
+              - application/json
+        - name: Authorization
+          in: header
+          description: 创建API密钥地址：https://www.onelinkai.cloud/console/APIKey
+          required: false
+          example: ''
+          schema:
+            type: string
+            examples:
+              - Bearer {{YOUR_API_KEY}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - model
+                - images
+              properties:
+                model:
+                  type: string
+                  description: >-
+                    模型名称。可选值：viduq3-turbo、viduq3-pro、viduq2-pro-fast、viduq2-pro、viduq2-turbo、viduq1、viduq1-classic、vidu2.0。
+                images:
+                  type: array
+                  description: 首帧图像。仅支持输入 1 张图，支持 Base64 或可访问 URL。
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 1
+                prompt:
+                  type: string
+                  description: 文本提示词，长度不超过 5000 个字符。
+                audio:
+                  type: boolean
+                  description: 是否使用音视频直出能力。q3-pro 或 q3-turbo 默认为 true。
+                audio_type:
+                  type: string
+                  description: 音频类型。audio 为 true 时可选：all、speech_only、sound_effect_only。
+                voice_id:
+                  type: string
+                  description: 音色 ID。q3 系列模型不生效。
+                is_rec:
+                  type: boolean
+                  description: 是否使用推荐提示词。启用后每个任务额外消耗 10 积分。
+                bgm:
+                  type: boolean
+                  description: 是否添加背景音乐。q3 模型中不生效。
+                duration:
+                  type: integer
+                  description: 视频时长，默认值和可选范围受模型限制。
+                seed:
+                  type: integer
+                  description: 随机种子，不传或传 0 时使用随机值。
+                resolution:
+                  type: string
+                  description: 分辨率，默认值和可选范围受模型与时长限制。
+                movement_amplitude:
+                  type: string
+                  description: 运动幅度，可选：auto、small、medium、large。q2、q3 系列模型不生效。
+                payload:
+                  type: string
+                  description: 透传参数，最多 1048576 个字符。
+                off_peak:
+                  type: boolean
+                  description: 是否错峰生成。除 q3 外的其他音视频直出功能不支持错峰模式。
+                watermark:
+                  type: boolean
+                  description: 是否添加水印。
+                wm_position:
+                  type: integer
+                  description: 水印位置。1 左上，2 右上，3 右下，4 左下。默认 3。
+                wm_url:
+                  type: string
+                  description: 水印图片 URL。
+                meta_data:
+                  type: string
+                  description: 元数据标识，JSON 格式字符串，透传字段。
+                callback_url:
+                  type: string
+                  description: 任务状态变化时的回调地址，POST 回调。
+              x-apifox-orders:
+                - model
+                - images
+                - prompt
+                - audio
+                - audio_type
+                - voice_id
+                - is_rec
+                - bgm
+                - duration
+                - seed
+                - resolution
+                - movement_amplitude
+                - payload
+                - off_peak
+                - watermark
+                - wm_position
+                - wm_url
+                - meta_data
+                - callback_url
+            example:
+              model: viduq2-pro
+              images:
+                - https://example.com/first-frame.png
+              prompt: The astronaut waved and the camera moved up.
+              duration: 5
+              seed: 0
+              resolution: 720p
+              movement_amplitude: auto
+              off_peak: false
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  state:
+                    type: string
+                    description: created、queueing、processing、success、failed
+                  model:
+                    type: string
+                  images:
+                    type: array
+                    items:
+                      type: string
+                  prompt:
+                    type: string
+                  duration:
+                    type: integer
+                  seed:
+                    type: integer
+                  resolution:
+                    type: string
+                  payload:
+                    type: string
+                  off_peak:
+                    type: boolean
+                  credits:
+                    type: integer
+                  created_at:
+                    type: string
+                x-apifox-orders:
+                  - task_id
+                  - state
+                  - model
+                  - images
+                  - prompt
+                  - duration
+                  - seed
+                  - resolution
+                  - payload
+                  - off_peak
+                  - credits
+                  - created_at
+          headers: {}
+          x-apifox-name: 成功
+      security: []
+      x-apifox-folder: 使用指南/API文档/视频模型/vidu
+      x-apifox-status: released
+      x-run-in-apifox: https://app.apifox.com/web/project/7636306/apis/api-440769864-run
+components:
+  schemas: {}
+  securitySchemes: {}
+servers: []
+security: []
+
+```
