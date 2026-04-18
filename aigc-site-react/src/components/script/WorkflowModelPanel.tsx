@@ -13,9 +13,9 @@ import { WorkflowModelKey } from '@/types'
 
 // ─── Label maps ──────────────────────────────────────────────────────────────
 
-type PageScope = 'preview' | 'assets' | 'video'
+type PageScope = 'preview' | 'assets' | 'video' | 'dubbing'
 
-const SCOPE_KEYS: Record<PageScope, { key: string; label: string; capability: 'text' | 'image' | 'video' }[]> = {
+const SCOPE_KEYS: Record<PageScope, { key: string; label: string; capability: 'text' | 'image' | 'video' | 'tts' }[]> = {
   preview: [
     { key: WorkflowModelKey.SCRIPT_REFINE,         label: '智能完善',   capability: 'text' },
     { key: WorkflowModelKey.SCRIPT_APPEND,         label: 'AI 续写',    capability: 'text' },
@@ -39,9 +39,12 @@ const SCOPE_KEYS: Record<PageScope, { key: string; label: string; capability: 't
     { key: WorkflowModelKey.SHOT_VISUAL_PROMPT,    label: '分镜提示词', capability: 'text' },
     { key: WorkflowModelKey.VIDEO_GENERATION,      label: '视频生成',   capability: 'video' },
   ],
+  dubbing: [
+    { key: WorkflowModelKey.TTS_DUBBING,           label: '配音生成',   capability: 'tts' },
+  ],
 }
 
-const CAP_LABEL: Record<string, string> = { text: '文本', image: '图像', video: '视频' }
+const CAP_LABEL: Record<string, string> = { text: '文本', image: '图像', video: '视频', tts: '配音' }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,10 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
   const [defaultText,  setDefaultText]  = useState('')
   const [defaultImage, setDefaultImage] = useState('')
   const [defaultVideo, setDefaultVideo] = useState('')
+  const [defaultTts, setDefaultTts] = useState('')
+  const [dubbingVoice, setDubbingVoice] = useState('')
+  const [dubbingLanguage, setDubbingLanguage] = useState('')
+  const [dubbingSpeed, setDubbingSpeed] = useState('1')
   const loaded = useRef(false)
 
   // 首次展开时加载
@@ -84,6 +91,10 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
     setDefaultText(settings.defaultTextModel ?? '')
     setDefaultImage(settings.defaultImageModel ?? '')
     setDefaultVideo(settings.defaultVideoModel ?? '')
+    setDefaultTts(settings.defaultTtsModel ?? '')
+    setDubbingVoice(settings.dubbingVoice ?? '')
+    setDubbingLanguage(settings.dubbingLanguage ?? '')
+    setDubbingSpeed(settings.dubbingSpeed != null ? String(settings.dubbingSpeed) : '1')
     setDraft(settings.overrides ?? {})
   }, [settings])
 
@@ -99,6 +110,14 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
     )
   }
 
+  function parseDubbingSpeed(value: string) {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 1
+    }
+    return parsed
+  }
+
   async function handleSave() {
     // 去掉空字符串覆盖（等同清除）
     const cleanOverrides: Record<string, string> = {}
@@ -110,6 +129,10 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
         defaultTextModel:  defaultText.trim()  || null,
         defaultImageModel: defaultImage.trim() || null,
         defaultVideoModel: defaultVideo.trim() || null,
+        defaultTtsModel: defaultTts.trim() || null,
+        dubbingVoice: dubbingVoice.trim() || null,
+        dubbingLanguage: dubbingLanguage.trim() || null,
+        dubbingSpeed: parseDubbingSpeed(dubbingSpeed),
         overrides: cleanOverrides,
       })
       showToast('模型设置已保存', 'success')
@@ -146,10 +169,22 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
               {/* 项目默认模型区域 */}
               <div className="wf-model-panel__section">
                 <div className="wf-model-panel__section-title">项目默认模型</div>
-                {(['text', 'image', 'video'] as const).map((cap) => {
+                {(['text', 'image', 'video', 'tts'] as const).map((cap) => {
                   const list = modelsFor(cap)
-                  const val = cap === 'text' ? defaultText : cap === 'image' ? defaultImage : defaultVideo
-                  const setter = cap === 'text' ? setDefaultText : cap === 'image' ? setDefaultImage : setDefaultVideo
+                  const val = cap === 'text'
+                    ? defaultText
+                    : cap === 'image'
+                      ? defaultImage
+                      : cap === 'video'
+                        ? defaultVideo
+                        : defaultTts
+                  const setter = cap === 'text'
+                    ? setDefaultText
+                    : cap === 'image'
+                      ? setDefaultImage
+                      : cap === 'video'
+                        ? setDefaultVideo
+                        : setDefaultTts
                   return (
                     <div key={cap} className="wf-model-panel__row">
                       <span className="wf-model-panel__row-label">{CAP_LABEL[cap]}模型</span>
@@ -172,6 +207,41 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
                     </div>
                   )
                 })}
+                {scope === 'dubbing' ? (
+                  <>
+                    <div className="wf-model-panel__row">
+                      <span className="wf-model-panel__row-label">默认音色</span>
+                      <input
+                        className="wf-model-panel__select"
+                        value={dubbingVoice}
+                        onChange={(e) => setDubbingVoice(e.target.value)}
+                        placeholder="例如：通用女声"
+                      />
+                    </div>
+                    <div className="wf-model-panel__row">
+                      <span className="wf-model-panel__row-label">配音语言</span>
+                      <input
+                        className="wf-model-panel__select"
+                        value={dubbingLanguage}
+                        onChange={(e) => setDubbingLanguage(e.target.value)}
+                        placeholder="例如：中文"
+                      />
+                    </div>
+                    <div className="wf-model-panel__row">
+                      <span className="wf-model-panel__row-label">语速</span>
+                      <input
+                        className="wf-model-panel__select"
+                        type="number"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={dubbingSpeed}
+                        onChange={(e) => setDubbingSpeed(e.target.value)}
+                        placeholder="1.0"
+                      />
+                    </div>
+                  </>
+                ) : null}
               </div>
 
               {/* 本页功能覆盖区域 */}

@@ -21,6 +21,7 @@ import java.util.Optional;
 @Primary
 public class JpaScriptProjectRepository implements ScriptProjectRepository {
     private final SpringDataScriptProjectRepository projectRepository;
+    private final SpringDataContentReviewRecordRepository contentReviewRecordRepository;
     private final SpringDataScriptRevisionRepository revisionRepository;
     private final SpringDataScriptDocumentVersionRepository documentRepository;
     private final SpringDataStoredFileRecordRepository fileRepository;
@@ -28,10 +29,17 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
     private final SpringDataKeyframeRecordRepository keyframeRepository;
     private final SpringDataStoryboardShotRepository shotRepository;
     private final SpringDataVideoSegmentTaskRepository videoTaskRepository;
+    private final SpringDataDubbingTaskRepository dubbingTaskRepository;
+    private final SpringDataLipSyncTaskRepository lipSyncTaskRepository;
+    private final SpringDataVideoEditDraftRepository videoEditDraftRepository;
+    private final SpringDataVideoEditRenderTaskRepository videoEditRenderTaskRepository;
+    private final SpringDataFinalCompositionTaskRepository finalCompositionTaskRepository;
+    private final SpringDataExportPackageTaskRepository exportPackageTaskRepository;
     private final SpringDataPipelineRunRepository pipelineRunRepository;
 
     public JpaScriptProjectRepository(
             SpringDataScriptProjectRepository projectRepository,
+            SpringDataContentReviewRecordRepository contentReviewRecordRepository,
             SpringDataScriptRevisionRepository revisionRepository,
             SpringDataScriptDocumentVersionRepository documentRepository,
             SpringDataStoredFileRecordRepository fileRepository,
@@ -39,9 +47,16 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
             SpringDataKeyframeRecordRepository keyframeRepository,
             SpringDataStoryboardShotRepository shotRepository,
             SpringDataVideoSegmentTaskRepository videoTaskRepository,
+            SpringDataDubbingTaskRepository dubbingTaskRepository,
+            SpringDataLipSyncTaskRepository lipSyncTaskRepository,
+            SpringDataVideoEditDraftRepository videoEditDraftRepository,
+            SpringDataVideoEditRenderTaskRepository videoEditRenderTaskRepository,
+            SpringDataFinalCompositionTaskRepository finalCompositionTaskRepository,
+            SpringDataExportPackageTaskRepository exportPackageTaskRepository,
             SpringDataPipelineRunRepository pipelineRunRepository
     ) {
         this.projectRepository = projectRepository;
+        this.contentReviewRecordRepository = contentReviewRecordRepository;
         this.revisionRepository = revisionRepository;
         this.documentRepository = documentRepository;
         this.fileRepository = fileRepository;
@@ -49,6 +64,12 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         this.keyframeRepository = keyframeRepository;
         this.shotRepository = shotRepository;
         this.videoTaskRepository = videoTaskRepository;
+        this.dubbingTaskRepository = dubbingTaskRepository;
+        this.lipSyncTaskRepository = lipSyncTaskRepository;
+        this.videoEditDraftRepository = videoEditDraftRepository;
+        this.videoEditRenderTaskRepository = videoEditRenderTaskRepository;
+        this.finalCompositionTaskRepository = finalCompositionTaskRepository;
+        this.exportPackageTaskRepository = exportPackageTaskRepository;
         this.pipelineRunRepository = pipelineRunRepository;
     }
 
@@ -58,6 +79,7 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         projectRepository.save(aggregate.project);
         String projectId = aggregate.project.projectId;
 
+        contentReviewRecordRepository.deleteByProjectId(projectId);
         revisionRepository.deleteByProjectId(projectId);
         documentRepository.deleteByProjectId(projectId);
         fileRepository.deleteByProjectId(projectId);
@@ -65,8 +87,16 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         keyframeRepository.deleteByProjectId(projectId);
         shotRepository.deleteByProjectId(projectId);
         videoTaskRepository.deleteByProjectId(projectId);
+        dubbingTaskRepository.deleteByProjectId(projectId);
+        lipSyncTaskRepository.deleteByProjectId(projectId);
+        videoEditDraftRepository.deleteById(projectId);
+        videoEditRenderTaskRepository.deleteByProjectId(projectId);
+        finalCompositionTaskRepository.deleteByProjectId(projectId);
+        exportPackageTaskRepository.deleteByProjectId(projectId);
         pipelineRunRepository.deleteByProjectId(projectId);
 
+        aggregate.contentReviewRecords.forEach(item -> item.projectId = projectId);
+        contentReviewRecordRepository.saveAll(aggregate.contentReviewRecords);
         aggregate.revisions.forEach(item -> item.projectId = projectId);
         revisionRepository.saveAll(aggregate.revisions);
         documentRepository.saveAll(aggregate.documents);
@@ -75,6 +105,15 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         keyframeRepository.saveAll(aggregate.keyframes);
         shotRepository.saveAll(aggregate.shots);
         videoTaskRepository.saveAll(aggregate.videoTasks);
+        dubbingTaskRepository.saveAll(aggregate.dubbingTasks);
+        lipSyncTaskRepository.saveAll(aggregate.lipSyncTasks);
+        if (aggregate.videoEditDraft != null) {
+            aggregate.videoEditDraft.projectId = projectId;
+            videoEditDraftRepository.save(aggregate.videoEditDraft);
+        }
+        videoEditRenderTaskRepository.saveAll(aggregate.videoEditRenderTasks);
+        finalCompositionTaskRepository.saveAll(aggregate.finalCompositionTasks);
+        exportPackageTaskRepository.saveAll(aggregate.exportPackageTasks);
         pipelineRunRepository.saveAll(aggregate.pipelineRuns);
         return aggregate;
     }
@@ -87,6 +126,7 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         }
         ScriptProjectAggregate aggregate = new ScriptProjectAggregate();
         aggregate.project = projectOptional.get();
+        aggregate.contentReviewRecords = new ArrayList<>(contentReviewRecordRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId));
         aggregate.revisions = new ArrayList<>(revisionRepository.findAllByProjectId(projectId));
         aggregate.documents = new ArrayList<>(documentRepository.findAllByProjectId(projectId));
         aggregate.files = new ArrayList<>(fileRepository.findAllByProjectId(projectId));
@@ -94,6 +134,12 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
         aggregate.keyframes = new ArrayList<>(keyframeRepository.findAllByProjectId(projectId));
         aggregate.shots = new ArrayList<>(shotRepository.findAllByProjectId(projectId));
         aggregate.videoTasks = new ArrayList<>(videoTaskRepository.findAllByProjectId(projectId));
+        aggregate.dubbingTasks = new ArrayList<>(dubbingTaskRepository.findAllByProjectId(projectId));
+        aggregate.lipSyncTasks = new ArrayList<>(lipSyncTaskRepository.findAllByProjectId(projectId));
+        aggregate.videoEditDraft = videoEditDraftRepository.findById(projectId).orElse(null);
+        aggregate.videoEditRenderTasks = new ArrayList<>(videoEditRenderTaskRepository.findAllByProjectId(projectId));
+        aggregate.finalCompositionTasks = new ArrayList<>(finalCompositionTaskRepository.findAllByProjectId(projectId));
+        aggregate.exportPackageTasks = new ArrayList<>(exportPackageTaskRepository.findAllByProjectId(projectId));
         aggregate.pipelineRuns = new ArrayList<>(pipelineRunRepository.findAllByProjectId(projectId));
         return Optional.of(aggregate);
     }
@@ -124,12 +170,20 @@ public class JpaScriptProjectRepository implements ScriptProjectRepository {
     private ScriptProjectSummary toSummary(ScriptProject project) {
         ScriptProjectSummary summary = new ScriptProjectSummary();
         summary.projectId = project.projectId;
+        summary.ownerId = project.ownerId;
+        summary.ownerName = project.ownerName;
+        summary.orgUnitId = project.orgUnitId;
+        summary.courseId = project.courseId;
         summary.name = project.name;
         summary.status = project.status;
         summary.scriptSummary = project.scriptSummary;
         summary.visualStyle = project.visualStyle;
+        summary.styleTemplateId = project.styleTemplateId;
         summary.aspectRatio = project.aspectRatio;
         summary.targetDuration = project.targetDuration;
+        summary.contentReviewStatus = project.contentReviewStatus;
+        summary.reviewResubmitCount = project.reviewResubmitCount;
+        summary.latestReviewComment = project.latestReviewComment;
         summary.coverFileId = resolveCoverFileId(project.projectId);
         summary.assetCount = (int) assetRepository.countByProjectId(project.projectId);
         summary.keyframeCount = (int) keyframeRepository.countByProjectId(project.projectId);

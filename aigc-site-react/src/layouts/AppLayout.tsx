@@ -1,44 +1,124 @@
-import { useEffect, useState } from 'react'
-import { Outlet, useMatches } from 'react-router-dom'
-import { AppButton } from '@/components/common/AppButton'
-import { TopNav } from '@/components/layout/TopNav'
+import { useCallback, useEffect, useState } from 'react'
+import { Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom'
+import { LoginModal } from '@/components/common/LoginModal'
+import { PageToolbar } from '@/components/common/PageToolbar'
+import { AppShellNav } from '@/components/layout/AppShellNav'
 import type { RouteHandle } from '@/routes/types'
+import { useAuthStore } from '@/stores/authStore'
+import { useStyleTemplateStore } from '@/stores/styleTemplateStore'
 
-const DEFAULT_META: RouteHandle = { title: 'AIGC 图文生成平台', eyebrow: 'Studio' }
+const DEFAULT_META: RouteHandle = {
+  title: '高校 AIGC 实训平台',
+  eyebrow: '工作区',
+  section: '工作台',
+}
+
+function roleText(role?: string | null) {
+  switch (role) {
+    case 'ADMIN':
+      return '管理员'
+    case 'TEACHER':
+      return '教师'
+    case 'STUDENT':
+      return '学生'
+    default:
+      return '访客'
+  }
+}
 
 export function AppLayout() {
+  const location = useLocation()
   const matches = useMatches()
+  const navigate = useNavigate()
+  const [navOpen, setNavOpen] = useState(false)
+  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const last = matches[matches.length - 1]
   const handle = (last?.handle as RouteHandle | undefined) ?? DEFAULT_META
-  const [navOpen, setNavOpen] = useState(false)
-  const [showBackTop, setShowBackTop] = useState(false)
+  const initAuth = useAuthStore((s) => s.init)
+  const user = useAuthStore((s) => s.user)
+  const signOut = useAuthStore((s) => s.signOut)
+  const loadTemplates = useStyleTemplateStore((s) => s.loadTemplates)
+
+  const updateLoginSearch = useCallback((open: boolean) => {
+    const searchParams = new URLSearchParams(location.search)
+    if (open) {
+      searchParams.set('login', '1')
+    } else {
+      searchParams.delete('login')
+    }
+    navigate(
+      {
+        pathname: location.pathname,
+        search: searchParams.toString() ? `?${searchParams.toString()}` : '',
+      },
+      { replace: true },
+    )
+  }, [location.pathname, location.search, navigate])
+
+  function closeLoginModal() {
+    setLoginModalOpen(false)
+    if (new URLSearchParams(location.search).get('login') === '1') {
+      updateLoginSearch(false)
+    }
+  }
 
   useEffect(() => {
-    const onScroll = () => setShowBackTop(window.scrollY > 380)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+    void initAuth()
+  }, [initAuth])
+
+  useEffect(() => {
+    void loadTemplates()
+  }, [loadTemplates])
+
+  useEffect(() => {
+    const shouldOpenLogin = new URLSearchParams(location.search).get('login') === '1'
+    if (user) {
+      if (loginModalOpen) setLoginModalOpen(false)
+      if (shouldOpenLogin) updateLoginSearch(false)
+      return
+    }
+    if (shouldOpenLogin) {
+      setLoginModalOpen(true)
+    }
+  }, [location.search, loginModalOpen, updateLoginSearch, user])
+
+  useEffect(() => {
+    setNavOpen(false)
+  }, [location.pathname])
+
+  function handleSignOut() {
+    void signOut().then(() => navigate('/login'))
+  }
 
   return (
-    <div className="app-layout">
-      <TopNav navOpen={navOpen} setNavOpen={setNavOpen} />
+    <div className="app-shell">
+      <button
+        type="button"
+        className={`app-shell__mask${navOpen ? ' is-visible' : ''}`}
+        aria-label="关闭导航"
+        onClick={() => setNavOpen(false)}
+      />
+      <AppShellNav open={navOpen} onClose={() => setNavOpen(false)} onSignOut={handleSignOut} />
 
-      <main className="page-container">
-        <header className="page-head">
-          <p className="page-eyebrow">{handle.eyebrow}</p>
-          <h1>{handle.title}</h1>
-        </header>
+      <div className="app-shell__main">
+        <main className="app-shell__content">
+          <PageToolbar
+            eyebrow={handle.eyebrow}
+            title={handle.title}
+            meta={
+              <>
+                <span className="page-toolbar__chip">{handle.section || handle.eyebrow}</span>
+                <span className="page-toolbar__chip">{roleText(user?.role)}</span>
+              </>
+            }
+          />
+          <div className="app-shell__outlet">
+            <Outlet />
+          </div>
+        </main>
+      </div>
 
-        <div className="page-outlet" key={last?.pathname}>
-          <Outlet />
-        </div>
-      </main>
-
-      {showBackTop ? (
-        <AppButton className="back-top" size="sm" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          返回顶部
-        </AppButton>
-      ) : null}
+      <LoginModal visible={!user && loginModalOpen} onClose={closeLoginModal} onSuccess={closeLoginModal} />
     </div>
   )
 }

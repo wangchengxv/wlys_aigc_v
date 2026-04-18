@@ -22,8 +22,11 @@ function inferCapabilities(provider?: string, modelName?: string): string[] {
   if (m.includes('seedream') || m.includes('image') || m.includes('flux') || m.includes('wanx') || m.includes('dall') || m.includes('sdxl')) {
     caps.push('image')
   }
-  if (m.includes('seedance') || m.includes('video') || m.includes('veo') || m.includes('sora')) {
+  if (m.includes('seedance') || m.includes('video') || m.includes('veo') || m.includes('sora') || m.startsWith('vidu')) {
     caps.push('video')
+  }
+  if (m.startsWith('kling-')) {
+    return caps
   }
   if (caps.length === 0 && p && p !== 'ark') {
     caps.push('text')
@@ -195,6 +198,7 @@ export function ModelForm({ visible, editing, connections, presetConnectionId, o
               <option value="chat">chat</option>
               <option value="embedding">embedding</option>
               <option value="image">image</option>
+              <option value="video">video</option>
               <option value="rerank">rerank</option>
             </select>
           </label>

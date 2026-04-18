@@ -16,11 +16,20 @@ public class PresetModelRegistry {
         new PresetModel("onelinkai", "claude-sonnet-4-6", "https://api.onelinkai.cloud", "OneLinkAI Claude Sonnet 4.6", List.of("text")),
         new PresetModel("onelinkai", "gemini-2.5-pro", "https://api.onelinkai.cloud", "OneLinkAI Gemini 2.5 Pro", List.of("text")),
         new PresetModel("onelinkai", "wanx-v1", "https://api.onelinkai.cloud", "OneLinkAI Wanx v1", List.of("image")),
+        new PresetModel("onelinkai", "kling-v2-1", "https://api.onelinkai.cloud", "OneLinkAI Kling 图像生成 v2.1", List.of("image")),
+        new PresetModel("onelinkai", "kling-v2", "https://api.onelinkai.cloud", "OneLinkAI Kling 多图参考生图 v2", List.of("image")),
         new PresetModel("onelinkai", "MiniMax-M2.1", "https://api.onelinkai.cloud", "OneLinkAI MiniMax M2.1", List.of("video")),
+        new PresetModel("onelinkai", "kling-v2-6", "https://api.onelinkai.cloud", "OneLinkAI Kling 文生视频 v2.6", List.of("video")),
+        new PresetModel("onelinkai", "kling-v1", "https://api.onelinkai.cloud", "OneLinkAI Kling 图生视频 v1", List.of("video")),
         new PresetModel("onelinkai", "viduq3-turbo", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q3 Turbo", List.of("video")),
         new PresetModel("onelinkai", "viduq3-pro", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q3 Pro", List.of("video")),
+        new PresetModel("onelinkai", "viduq2-pro-fast", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro Fast", List.of("video")),
+        new PresetModel("onelinkai", "viduq2-pro", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro", List.of("video")),
+        new PresetModel("onelinkai", "viduq2-turbo", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Turbo", List.of("video")),
         new PresetModel("onelinkai", "viduq2", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2", List.of("video")),
         new PresetModel("onelinkai", "viduq1", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q1", List.of("video")),
+        new PresetModel("onelinkai", "viduq1-classic", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q1 Classic", List.of("video")),
+        new PresetModel("onelinkai", "vidu2.0", "https://api.onelinkai.cloud", "OneLinkAI Vidu 2.0", List.of("video")),
         new PresetModel("deepseek", "deepseek-chat", "https://api.deepseek.com", "DeepSeek Chat", List.of("text")),
         new PresetModel("deepseek", "deepseek-reasoner", "https://api.deepseek.com", "DeepSeek Reasoner", List.of("text")),
         new PresetModel("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com", "Claude Sonnet 4.6", List.of("text")),
@@ -38,7 +47,16 @@ public class PresetModelRegistry {
         new PresetModel("ark", "doubao-seed-2-0-pro-260215", "https://ark.cn-beijing.volces.com", "豆包文本 Seed 2.0 Pro", List.of("text")),
         new PresetModel("ark", "doubao-seedream-5-0-260128", "https://ark.cn-beijing.volces.com", "豆包图片 Seedream", List.of("image")),
         new PresetModel("ark", "doubao-seedance-1-5-pro-251215", "https://ark.cn-beijing.volces.com", "豆包视频 Seedance", List.of("video")),
-        new PresetModel("moark", "Wan2.1-I2V-14B-720P", "https://api.moark.com", "Moark Wan2.1 图生视频 720P", List.of("video"))
+        new PresetModel("moark", "Wan2.1-I2V-14B-720P", "https://api.moark.com", "Moark Wan2.1 图生视频 720P", List.of("video")),
+        new PresetModel("vidu", "viduq3-turbo", "https://api.vidu.cn", "Vidu Q3 Turbo", List.of("video")),
+        new PresetModel("vidu", "viduq3-pro", "https://api.vidu.cn", "Vidu Q3 Pro", List.of("video")),
+        new PresetModel("vidu", "viduq2-pro-fast", "https://api.vidu.cn", "Vidu Q2 Pro Fast", List.of("video")),
+        new PresetModel("vidu", "viduq2-pro", "https://api.vidu.cn", "Vidu Q2 Pro", List.of("video")),
+        new PresetModel("vidu", "viduq2-turbo", "https://api.vidu.cn", "Vidu Q2 Turbo", List.of("video")),
+        new PresetModel("vidu", "viduq2", "https://api.vidu.cn", "Vidu Q2", List.of("video")),
+        new PresetModel("vidu", "viduq1", "https://api.vidu.cn", "Vidu Q1", List.of("video")),
+        new PresetModel("vidu", "viduq1-classic", "https://api.vidu.cn", "Vidu Q1 Classic", List.of("video")),
+        new PresetModel("vidu", "vidu2.0", "https://api.vidu.cn", "Vidu 2.0", List.of("video"))
     );
 
     public List<PresetModel> getAll() {

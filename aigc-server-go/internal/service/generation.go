@@ -1,11 +1,21 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,8 +30,7 @@ import (
 	"github.com/example/aigc-server-go/internal/repo"
 )
 
-// viduOneLinkVideoProvider is used only for SubmitVideoTask/QueryVideoTask paths (Vidu via OneLink proxy).
-// Base URL and API key come from the user's onelinkai connection.
+// viduOneLinkVideoProvider keeps backward compatibility for historical OneLink + Vidu configs.
 var viduOneLinkVideoProvider = &catalog.Provider{
 	Key:             "vidu_onelink",
 	AuthMode:        catalog.AuthBearer,
@@ -127,7 +136,7 @@ func (g *Generation) Generate(owner string, req map[string]any) (map[string]any,
 		if len(vp) > maxVideoMergedPromptChars {
 			return nil, errs.New(400, "视频提示词过长（含全局风格与用户描述），请缩短后重试")
 		}
-		vidRes, task.VideoModel, task.VideoModelSource, task.VideoModelMatchedBy, task.VideoModelRejectReason, err = g.genVideos(vp, cnt, strVal(req["videoModel"]), strVal(req["videoReferenceImageUrl"]))
+		vidRes, task.VideoModel, task.VideoModelSource, task.VideoModelMatchedBy, task.VideoModelRejectReason, err = g.genVideos(vp, cnt, strVal(req["videoModel"]), strVal(req["videoReferenceImageUrl"]), extractVideoViduOptions(req))
 		if err != nil {
 			return nil, err
 		}
@@ -507,7 +516,368 @@ func parseImageURL(body map[string]any) string {
 	return ""
 }
 
-func (g *Generation) genVideos(prompt string, count int, requested, refURL string) ([]string, string, string, string, string, error) {
+// viduImg2VideoAllowedKeys matches Vidu img2video optional keys (excluding model/images/prompt).
+var viduImg2VideoAllowedKeys = map[string]struct{}{
+	"duration": {}, "seed": {}, "resolution": {}, "movement_amplitude": {},
+	"payload": {}, "off_peak": {}, "watermark": {}, "wm_position": {},
+	"wm_url": {}, "meta_data": {}, "callback_url": {},
+	"audio": {}, "audio_type": {}, "voice_id": {}, "is_rec": {}, "bgm": {},
+}
+
+const (
+	viduMaxDataImageBytes  = 10 * 1024 * 1024
+	viduMaxRemoteImageSize = 10 * 1024 * 1024
+)
+
+var viduAudioTypeAllowed = map[string]struct{}{
+	"all": {}, "speech_only": {}, "sound_effect_only": {},
+}
+
+func extractVideoViduOptions(req map[string]any) map[string]any {
+	raw, ok := req["videoViduOptions"]
+	if !ok || raw == nil {
+		return nil
+	}
+	var m map[string]any
+	switch v := raw.(type) {
+	case map[string]any:
+		m = v
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		if err := json.Unmarshal([]byte(s), &m); err != nil {
+			return nil
+		}
+	default:
+		b, err := json.Marshal(raw)
+		if err != nil {
+			return nil
+		}
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil
+		}
+	}
+	out := make(map[string]any)
+	for k, val := range m {
+		k = strings.TrimSpace(k)
+		if _, allowed := viduImg2VideoAllowedKeys[k]; !allowed {
+			continue
+		}
+		if val == nil {
+			continue
+		}
+		if s, ok := val.(string); ok && strings.TrimSpace(s) == "" {
+			continue
+		}
+		out[k] = val
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func mergeViduImg2VideoPayload(base map[string]any, extra map[string]any) {
+	if extra == nil {
+		return
+	}
+	for k, v := range extra {
+		if k == "model" || k == "images" || k == "prompt" {
+			continue
+		}
+		base[k] = v
+	}
+}
+
+func (g *Generation) buildViduPayload(rm *resolvedModel, prompt, imageRef string, extras map[string]any) (map[string]any, error) {
+	if err := g.validateViduImage(imageRef); err != nil {
+		return nil, err
+	}
+	payload := map[string]any{
+		"model":  rm.Model.ModelName,
+		"images": []any{imageRef},
+	}
+	if strings.TrimSpace(prompt) != "" {
+		payload["prompt"] = strings.TrimSpace(prompt)
+	}
+	mergeViduImg2VideoPayload(payload, extras)
+	if err := g.validateAndNormalizeViduOptions(payload, rm); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func (g *Generation) validateAndNormalizeViduOptions(payload map[string]any, rm *resolvedModel) error {
+	modelMeta := jsonutil.MapFromJSON(rm.Model.MetadataJSON)
+	modelName := rm.Model.ModelName
+	family := firstNonBlank(strVal(modelMeta["viduFamily"]), detectViduModelFamily(modelName), "q2")
+	matrix := defaultViduMatrix(family)
+	allowedDurations := ensureIntList(modelMeta["viduDurations"], matrix.durations)
+	allowedResolutions := ensureStringList(modelMeta["viduResolutions"], matrix.resolutions)
+	audioSupported := matrix.audioSupported
+	if v, ok := modelMeta["viduAudioSupported"].(bool); ok {
+		audioSupported = v
+	}
+
+	if raw := payload["duration"]; raw != nil {
+		d, ok := parseViduInt(raw)
+		if !ok {
+			return errs.New(400, "Vidu 参数 duration 必须为整数秒")
+		}
+		if !containsInt(allowedDurations, d) {
+			return errs.New(400, fmt.Sprintf("Vidu 模型族 %s 不支持 duration=%d，可选：%s", family, d, joinInts(allowedDurations)))
+		}
+		payload["duration"] = d
+	}
+	if raw := payload["resolution"]; raw != nil {
+		res := strings.TrimSpace(fmt.Sprint(raw))
+		if res != "" && !containsFold(allowedResolutions, res) {
+			return errs.New(400, fmt.Sprintf("Vidu 模型族 %s 不支持 resolution=%s，可选：%s", family, res, strings.Join(allowedResolutions, ", ")))
+		}
+		payload["resolution"] = res
+	}
+	audioEnabled := false
+	if raw, ok := payload["audio"]; ok {
+		b, ok := parseViduBool(raw)
+		if !ok {
+			return errs.New(400, "Vidu 参数 audio 必须为布尔值")
+		}
+		payload["audio"] = b
+		audioEnabled = b
+	}
+	if !audioSupported && audioEnabled {
+		return errs.New(400, fmt.Sprintf("Vidu 模型族 %s 不支持 audio=true", family))
+	}
+	if raw, ok := payload["audio_type"]; ok {
+		audioType := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+		if audioType != "" {
+			if _, allowed := viduAudioTypeAllowed[audioType]; !allowed {
+				return errs.New(400, "Vidu 参数 audio_type 仅支持 all/speech_only/sound_effect_only")
+			}
+			if !audioEnabled {
+				return errs.New(400, "audio=false 时不允许传 audio_type")
+			}
+			payload["audio_type"] = audioType
+		}
+	}
+	if raw, ok := payload["voice_id"]; ok {
+		voiceID := strings.TrimSpace(fmt.Sprint(raw))
+		if voiceID != "" && !audioEnabled {
+			return errs.New(400, "audio=false 时不允许传 voice_id")
+		}
+		payload["voice_id"] = voiceID
+	}
+	if raw, ok := payload["bgm"]; ok {
+		bgm, ok := parseViduBool(raw)
+		if !ok {
+			return errs.New(400, "Vidu 参数 bgm 必须为布尔值")
+		}
+		if bgm && !audioEnabled {
+			return errs.New(400, "audio=false 时不允许开启 bgm")
+		}
+		payload["bgm"] = bgm
+	}
+	if raw, ok := payload["wm_position"]; ok {
+		pos, ok := parseViduInt(raw)
+		if !ok || pos < 1 || pos > 4 {
+			return errs.New(400, "Vidu 参数 wm_position 必须在 1-4 之间")
+		}
+		payload["wm_position"] = pos
+	}
+	if raw, ok := payload["is_rec"]; ok {
+		isRec, ok := parseViduBool(raw)
+		if !ok {
+			return errs.New(400, "Vidu 参数 is_rec 必须为布尔值")
+		}
+		payload["is_rec"] = isRec
+		if isRec {
+			delete(payload, "prompt")
+			// Keep recommendation mode traceable via meta_data for later inspection.
+			payload["meta_data"] = mergeViduMetaData(payload["meta_data"], map[string]any{"rec_mode_enabled": true})
+		}
+	}
+	return nil
+}
+
+func mergeViduMetaData(raw any, patch map[string]any) string {
+	out := map[string]any{}
+	if raw != nil {
+		switch v := raw.(type) {
+		case map[string]any:
+			for k, val := range v {
+				out[k] = val
+			}
+		case string:
+			var parsed map[string]any
+			if err := json.Unmarshal([]byte(strings.TrimSpace(v)), &parsed); err == nil {
+				for k, val := range parsed {
+					out[k] = val
+				}
+			}
+		}
+	}
+	for k, val := range patch {
+		out[k] = val
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
+}
+
+func parseViduInt(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), float64(int(v)) == v
+	case float32:
+		return int(v), float32(int(v)) == v
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+func parseViduBool(raw any) (bool, bool) {
+	switch v := raw.(type) {
+	case bool:
+		return v, true
+	case string:
+		s := strings.ToLower(strings.TrimSpace(v))
+		if s == "true" {
+			return true, true
+		}
+		if s == "false" {
+			return false, true
+		}
+	}
+	return false, false
+}
+
+func containsInt(sl []int, target int) bool {
+	for _, v := range sl {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+func joinInts(sl []int) string {
+	if len(sl) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(sl))
+	for _, v := range sl {
+		parts = append(parts, strconv.Itoa(v))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func containsFold(sl []string, target string) bool {
+	for _, v := range sl {
+		if strings.EqualFold(strings.TrimSpace(v), strings.TrimSpace(target)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Generation) validateViduImage(ref string) error {
+	ref = strings.TrimSpace(ref)
+	if !isValidViduRefImage(ref) {
+		return errs.New(400, "Vidu images 仅支持 1 张 http(s) 图片地址或 data:image base64")
+	}
+	if strings.HasPrefix(strings.ToLower(ref), "data:image/") {
+		return validateViduDataImage(ref)
+	}
+	return g.validateViduRemoteImage(ref)
+}
+
+func validateViduDataImage(ref string) error {
+	parts := strings.SplitN(ref, ",", 2)
+	if len(parts) != 2 {
+		return errs.New(400, "Vidu data:image 格式错误")
+	}
+	header := strings.ToLower(parts[0])
+	if !strings.Contains(header, "image/jpeg") && !strings.Contains(header, "image/jpg") && !strings.Contains(header, "image/png") {
+		return errs.New(400, "Vidu 仅支持 JPEG/PNG 参考图")
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return errs.New(400, "Vidu 参考图 Base64 解码失败")
+	}
+	if len(data) == 0 || len(data) > viduMaxDataImageBytes {
+		return errs.New(400, "Vidu 参考图体积需在 0-10MB 之间")
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return errs.New(400, "Vidu 参考图无法解析，请使用 JPEG/PNG 图片")
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return errs.New(400, "Vidu 参考图尺寸无效")
+	}
+	r := float64(cfg.Width) / float64(cfg.Height)
+	if r < 0.4 || r > 2.5 {
+		return errs.New(400, "Vidu 参考图比例不受支持，请使用 0.4-2.5 之间的宽高比")
+	}
+	return nil
+}
+
+func (g *Generation) validateViduRemoteImage(imageURL string) error {
+	client := g.GW.HTTP
+	if client == nil {
+		client = http.DefaultClient
+	}
+	req, err := http.NewRequest(http.MethodGet, imageURL, nil)
+	if err != nil {
+		return errs.New(400, "Vidu 参考图地址不合法")
+	}
+	req.Header.Set("User-Agent", "aigc-server-go/vidu-validator")
+	resp, err := client.Do(req)
+	if err != nil {
+		return errs.New(400, "Vidu 参考图地址不可访问")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return errs.New(400, "Vidu 参考图地址不可访问")
+	}
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	if ct != "" && ct != "image/jpeg" && ct != "image/jpg" && ct != "image/png" {
+		return errs.New(400, "Vidu 仅支持 JPEG/PNG 参考图")
+	}
+	buf, err := io.ReadAll(io.LimitReader(resp.Body, viduMaxRemoteImageSize+1))
+	if err != nil {
+		return errs.New(400, "Vidu 参考图读取失败")
+	}
+	if len(buf) == 0 || len(buf) > viduMaxRemoteImageSize {
+		return errs.New(400, "Vidu 参考图体积需在 0-10MB 之间")
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(buf))
+	if err != nil {
+		return errs.New(400, "Vidu 参考图无法解析，请使用 JPEG/PNG 图片")
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 {
+		return errs.New(400, "Vidu 参考图尺寸无效")
+	}
+	r := float64(cfg.Width) / float64(cfg.Height)
+	if r < 0.4 || r > 2.5 {
+		return errs.New(400, "Vidu 参考图比例不受支持，请使用 0.4-2.5 之间的宽高比")
+	}
+	return nil
+}
+
+func (g *Generation) genVideos(prompt string, count int, requested, refURL string, viduOpts map[string]any) ([]string, string, string, string, string, error) {
 	rm := g.resolveModel("video", requested)
 	if rm != nil {
 		if strings.EqualFold(rm.Provider.Key, "ark") {
@@ -535,24 +905,46 @@ func (g *Generation) genVideos(prompt string, count int, requested, refURL strin
 			}
 			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
 		}
+		if strings.EqualFold(rm.Provider.Key, "vidu") {
+			if !isValidViduRefImage(refURL) {
+				return nil, "", "", "", "", errs.New(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）")
+			}
+			viduPayload, err := g.buildViduPayload(rm, prompt, strings.TrimSpace(refURL), viduOpts)
+			if err != nil {
+				return nil, "", "", "", "", err
+			}
+			var vids []string
+			for i := 0; i < count; i++ {
+				u, err := g.callViduVideo(rm.Provider, rm.Conn.BaseURL, rm.APIKey, rm.Meta, viduPayload)
+				if err != nil {
+					return nil, "", "", "", "", err
+				}
+				vids = append(vids, u...)
+			}
+			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
+		}
 		if strings.EqualFold(rm.Provider.Key, "onelinkai") {
 			if isViduWorkspaceModel(rm.Model.ModelName) {
 				if !isValidViduRefImage(refURL) {
 					return nil, "", "", "", "", errs.New(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）")
 				}
+				viduPayload, err := g.buildViduPayload(rm, prompt, strings.TrimSpace(refURL), viduOpts)
+				if err != nil {
+					return nil, "", "", "", "", err
+				}
 				var vids []string
 				for i := 0; i < count; i++ {
-					u, err := g.callViduOneLinkVideo(rm.Conn.BaseURL, rm.APIKey, rm.Meta, prompt, rm.Model.ModelName, strings.TrimSpace(refURL))
+					u, err := g.callViduVideo(viduOneLinkVideoProvider, rm.Conn.BaseURL, rm.APIKey, rm.Meta, viduPayload)
 					if err != nil {
 						return nil, "", "", "", "", err
 					}
-					vids = append(vids, u)
+					vids = append(vids, u...)
 				}
 				return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
 			}
 			return nil, "", "", "", "", errs.New(400, "当前 OneLink 视频模型仅支持 Vidu 图生视频（viduq* 等）；其它模型请使用方舟或等待后续接入")
 		}
-		return nil, "", "", "", "", errs.New(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark) 或 OneLink+Vidu 连接")
+		return nil, "", "", "", "", errs.New(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu) 或 OneLink+Vidu 连接")
 	}
 	if strings.TrimSpace(requested) != "" {
 		return nil, "", "", "", "", errs.New(400, "视频模型未在可用配置中")
@@ -650,32 +1042,28 @@ func isValidViduRefImage(ref string) bool {
 	return strings.HasPrefix(low, "data:image/") && strings.Contains(ref, "base64")
 }
 
-func (g *Generation) callViduOneLinkVideo(baseURL, apiKey string, meta map[string]any, prompt, modelName, imageRef string) (string, error) {
-	payload := map[string]any{
-		"model":  modelName,
-		"images": []any{imageRef},
-	}
-	if strings.TrimSpace(prompt) != "" {
-		payload["prompt"] = strings.TrimSpace(prompt)
-	}
-	submit, err := g.GW.SubmitVideoTask(context.Background(), viduOneLinkVideoProvider, baseURL, apiKey, meta, payload, 120*time.Second)
+func (g *Generation) callViduVideo(def *catalog.Provider, baseURL, apiKey string, meta map[string]any, payload map[string]any) ([]string, error) {
+	submit, err := g.GW.SubmitVideoTask(context.Background(), def, baseURL, apiKey, meta, payload, 120*time.Second)
 	if err != nil {
 		if pe, ok := err.(*gateway.ProviderError); ok {
-			return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+			return nil, errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
 		}
-		return "", err
+		return nil, err
 	}
-	if u := parseViduPrimaryVideoURL(submit); u != "" {
-		return u, nil
+	if urls := flattenViduVideoURLs(submit); len(urls) > 0 {
+		return urls, nil
+	}
+	if u := parseArkVideoURL(submit, false); u != "" {
+		return []string{u}, nil
 	}
 	tid := parseArkVideoTaskID(submit)
 	if tid == "" {
-		return "", errs.New(502, "Vidu 未返回 task_id 或视频地址")
+		return nil, errs.New(502, "Vidu 未返回 task_id 或视频地址")
 	}
-	return g.pollViduOneLink(baseURL, apiKey, meta, tid)
+	return g.pollViduTask(def, baseURL, apiKey, tid)
 }
 
-func (g *Generation) pollViduOneLink(baseURL, apiKey string, meta map[string]any, taskID string) (string, error) {
+func (g *Generation) pollViduTask(def *catalog.Provider, baseURL, apiKey string, taskID string) ([]string, error) {
 	max := g.Cfg.ArkVideoPollMaxAttempts
 	if max < 1 {
 		max = 40
@@ -685,28 +1073,28 @@ func (g *Generation) pollViduOneLink(baseURL, apiKey string, meta map[string]any
 		interval = 300
 	}
 	for attempt := 1; attempt <= max; attempt++ {
-		res, err := g.GW.QueryVideoTask(context.Background(), viduOneLinkVideoProvider, baseURL, apiKey, taskID, 30*time.Second)
+		res, err := g.GW.QueryVideoTask(context.Background(), def, baseURL, apiKey, taskID, 30*time.Second)
 		if err != nil {
 			if pe, ok := err.(*gateway.ProviderError); ok {
-				return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+				return nil, errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
 			}
-			return "", err
+			return nil, err
 		}
 		if errNode := res["error"]; errNode != nil && fmt.Sprint(errNode) != "false" && errNode != false {
-			return "", errs.New(502, parseArkTaskError(res))
+			return nil, errs.New(502, parseViduTaskError(res))
 		}
-		if u := parseViduPrimaryVideoURL(res); u != "" {
-			return u, nil
+		if urls := flattenViduVideoURLs(res); len(urls) > 0 {
+			return urls, nil
 		}
 		st := parseArkTaskStatus(res)
 		if isFailedStatus(st) {
-			return "", errs.New(502, "视频任务失败："+parseArkTaskError(res))
+			return nil, errs.New(502, "视频任务失败："+parseViduTaskError(res))
 		}
 		if attempt < max {
 			time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 	}
-	return "", errs.New(504, "视频生成超时，请稍后重试或缩短提示词")
+	return nil, errs.New(504, "视频生成超时，请稍后重试或缩短提示词")
 }
 
 func parseViduPrimaryVideoURL(body map[string]any) string {
@@ -721,6 +1109,83 @@ func parseViduPrimaryVideoURL(body map[string]any) string {
 		}
 	}
 	return parseArkVideoURL(body, false)
+}
+
+func parseViduVideoURLs(body map[string]any) (primary string, watermark string) {
+	if body == nil {
+		return "", ""
+	}
+	if c, ok := body["creations"].([]any); ok && len(c) > 0 {
+		if first, ok := c[0].(map[string]any); ok {
+			for k, v := range first {
+				key := strings.ToLower(strings.TrimSpace(k))
+				val := strings.TrimSpace(fmt.Sprint(v))
+				if !isHTTPURL(val) {
+					continue
+				}
+				isWatermarkKey := strings.Contains(key, "watermark") || strings.Contains(key, "wm_") || strings.Contains(key, "wmurl")
+				if isWatermarkKey {
+					if watermark == "" {
+						watermark = val
+					}
+					continue
+				}
+				isPrimaryKey := key == "url" || key == "video_url" || strings.Contains(key, "origin_video") || strings.Contains(key, "source_video")
+				if isPrimaryKey && primary == "" {
+					primary = val
+				}
+			}
+		}
+	}
+	if primary == "" {
+		primary = parseViduPrimaryVideoURL(body)
+	}
+	return primary, watermark
+}
+
+func flattenViduVideoURLs(body map[string]any) []string {
+	primary, watermark := parseViduVideoURLs(body)
+	var out []string
+	for _, u := range []string{primary, watermark} {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if len(out) > 0 && out[len(out)-1] == u {
+			continue
+		}
+		dup := false
+		for _, e := range out {
+			if e == u {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+func parseViduTaskError(body map[string]any) string {
+	if body == nil {
+		return "未知错误"
+	}
+	if c, ok := body["creations"].([]any); ok && len(c) > 0 {
+		if first, ok := c[0].(map[string]any); ok {
+			msg := firstNonBlank(
+				strVal(first["message"]),
+				strVal(first["error"]),
+				strVal(first["error_message"]),
+				strVal(first["reason"]),
+			)
+			if msg != "" {
+				return msg
+			}
+		}
+	}
+	return parseArkTaskError(body)
 }
 
 func (g *Generation) pollArkVideo(def *catalog.Provider, baseURL, apiKey, taskID string) (string, error) {

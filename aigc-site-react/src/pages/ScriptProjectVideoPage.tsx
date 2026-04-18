@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { PipelineProgressBar } from '@/components/script/PipelineProgressBar'
 import { VideoSegmentCard } from '@/components/script/VideoSegmentCard'
-import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
+import { ProjectSubpageShell } from '@/components/script/ProjectSubpageShell'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
@@ -158,29 +158,58 @@ export function ScriptProjectVideoPage() {
     return <EmptyState title="项目不存在" description="请返回列表重新选择项目。" />
   }
 
-  return (
-    <div className="script-project-workflow-layout">
-      <ScriptProjectWorkflowNav projectId={projectId} />
-      <div className="script-project-workflow-layout__main">
-    <section className="script-video-page">
-      <div className="toolbar panel glass">
-        <div>
-          <h2>镜头拆分与视频生成</h2>
-          <p className="muted">先拆分镜头；可在每条镜头上生成 B-9 分镜图像提示词。确认关键帧后可启动并发视频任务。</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <WorkflowModelPanel projectId={projectId} scope="video" allModels={allModels} />
-        </div>
-        <div className="actions">
-          <AppButton loading={shotLoading} onClick={() => void split()}>
-            拆分镜头
-          </AppButton>
-          <AppButton variant="primary" loading={videoLoading} onClick={() => void startVideo()}>
-            启动视频生成
-          </AppButton>
-        </div>
-      </div>
+  const project = currentProject.project
+  const videoReadyCount = videoTasks.filter((task) => task.status === 'SUCCESS' && !!task.resultVideoFileId).length
 
+  return (
+    <ProjectSubpageShell
+      projectId={projectId}
+      title="镜头拆分与视频生成"
+      description="把镜头拆分、B-9 分镜提示词、首帧引用和视频任务统一到一个工作区里，避免同类操作在多个页面重复出现。"
+      meta={
+        <>
+          <span className="soft-badge">{project.name}</span>
+          <span className={`soft-badge ${pipelineStatus?.videoReady ? 'is-success' : ''}`}>
+            {pipelineStatus?.videoReady ? '视频已就绪' : '视频待生成'}
+          </span>
+        </>
+      }
+      stats={[
+        { key: 'shots', label: '镜头总数', value: shots.length },
+        { key: 'assets', label: '可用分镜资产', value: storyboardAssets.length },
+        { key: 'ready', label: '已出片镜头', value: videoReadyCount },
+        { key: 'tasks', label: '视频任务', value: videoTasks.length },
+      ]}
+      toolbar={
+        <>
+          <div className="project-subpage-shell__toolbar-head">
+            <div className="project-subpage-shell__toolbar-copy">
+              <p className="eyebrow">Video Pipeline</p>
+              <h3>模型与主动作</h3>
+              <p className="muted">先拆分镜头，再补充分镜提示词与首帧引用，最后统一启动视频生成。</p>
+            </div>
+            <div className="project-subpage-shell__toolbar-side">
+              <WorkflowModelPanel projectId={projectId} scope="video" allModels={allModels} />
+            </div>
+          </div>
+          <div className="project-subpage-shell__toolbar-actions">
+            <AppButton loading={shotLoading} onClick={() => void split()}>
+              拆分镜头
+            </AppButton>
+            <AppButton variant="primary" loading={videoLoading} onClick={() => void startVideo()}>
+              启动视频生成
+            </AppButton>
+          </div>
+        </>
+      }
+      helpTitle="查看视频页说明"
+      help={
+        <>
+          <p>这页负责镜头级生产动作，配音、口型同步、成片和导出已经下沉到各自次级页中处理。</p>
+          <p>当前模式下不再单独展示额外流程说明，重点保留镜头任务卡和关键动作。</p>
+        </>
+      }
+    >
       <PipelineProgressBar pipeline={pipelineStatus} />
 
       {detailLoading ? (
@@ -212,8 +241,6 @@ export function ScriptProjectVideoPage() {
       ) : (
         <EmptyState title="还没有镜头" description="请先从完善剧本中拆分镜头，系统会为每个镜头生成独立的视频任务。" />
       )}
-    </section>
-      </div>
-    </div>
+    </ProjectSubpageShell>
   )
 }

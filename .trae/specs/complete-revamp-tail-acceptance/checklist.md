@@ -1,0 +1,8 @@
+- [x] `aigc-site-react/docs/revamp-acceptance-checklist.md` 已创建并包含路由、角色、视口、截图占位与通过状态
+- [x] `aigc-site-react/docs/revamp-delivery-notes.md` 已创建并包含改版范围、复用组件、去重入口与扩展建议
+- [x] 固定回归路由核查结果已记录，且结论清晰
+- [x] `npm run lint` 与 `npm run build` 结果已记录，未出现阻断错误
+- [x] 角色边界（ADMIN/TEACHER/STUDENT）与管理员页直接访问行为已记录
+- [x] 1440 / 1024 / 768 / 390 四档响应式表现已记录
+- [x] 项目次级页帮助说明形态已统一，或差异项已给出替代方案与说明
+- [x] 最终验收结论可直接用于交付评审与后续复验

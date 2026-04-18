@@ -8,7 +8,7 @@ import {
 import { AppButton } from '@/components/common/AppButton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
-import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
+import { ProjectSubpageShell } from '@/components/script/ProjectSubpageShell'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
 import type { PromptTemplateCatalogItem } from '@/types'
@@ -114,65 +114,78 @@ export function ScriptProjectPromptTemplatesPage() {
   }
 
   return (
-    <div className="script-project-workflow-layout">
-      <ScriptProjectWorkflowNav projectId={projectId} />
-      <div className="script-project-workflow-layout__main">
-        <section className="script-prompt-templates-page">
-          <div className="toolbar panel glass">
-            <div>
-              <h2>提示词模板（项目覆盖）</h2>
-              <p className="muted">修改后保存即可影响本项目内的 AI 调用；与资源文件默认一致时会自动清除覆盖项。</p>
-            </div>
+    <ProjectSubpageShell
+      projectId={projectId}
+      title="提示词模板（项目覆盖）"
+      description="按分类调整本项目专属模板，保存后仅影响当前项目调用；与默认一致时会自动清除覆盖项。"
+      stats={[
+        { key: 'catalog', label: '模板总数', value: catalog.length },
+        { key: 'groups', label: '模板分类', value: grouped.size },
+        { key: 'overrides', label: '覆盖项', value: Object.keys(overrides).length },
+      ]}
+      toolbar={
+        <div className="project-subpage-shell__toolbar-head">
+          <div className="project-subpage-shell__toolbar-copy">
+            <h3>编辑区</h3>
+            <p className="muted">模板编辑集中在同一页处理，避免来回切换资源文件与项目页。</p>
           </div>
-
-          {loading ? (
-            <LoadingSpinner />
-          ) : (
-            <div className="prompt-template-groups">
-              {Array.from(grouped.entries()).map(([cat, items]) => (
-                <div key={cat} className="panel glass prompt-template-group">
-                  <h3 className="eyebrow">{CAT_LABEL[cat] ?? cat}</h3>
-                  {items.map((item) => (
-                    <div key={item.path} className="prompt-template-item">
-                      <div className="prompt-template-item__head">
-                        <div>
-                          <h4>{item.title}</h4>
-                          <p className="muted small">{item.description}</p>
-                          <p className="muted mono small">{item.path}</p>
-                        </div>
-                        <div className="actions">
-                          <AppButton
-                            size="sm"
-                            variant="ghost"
-                            loading={savingPath === item.path}
-                            onClick={() => void restoreDefault(item.path)}
-                          >
-                            恢复默认
-                          </AppButton>
-                          <AppButton
-                            size="sm"
-                            variant="primary"
-                            loading={savingPath === item.path}
-                            onClick={() => void saveOne(item.path)}
-                          >
-                            保存
-                          </AppButton>
-                        </div>
-                      </div>
-                      <textarea
-                        className="ctrl prompt-template-item__body"
-                        rows={14}
-                        value={drafts[item.path] ?? ''}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [item.path]: e.target.value }))}
-                      />
+        </div>
+      }
+      helpTitle="查看提示词模板说明"
+      help={
+        <>
+          <p>修改后保存即可影响当前项目内的 AI 调用，不会修改全局默认模板文件。</p>
+          <p>当内容与默认模板一致时，系统会自动清除覆盖项，保持配置最小化。</p>
+        </>
+      }
+      className="script-prompt-templates-page"
+    >
+      {loading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="prompt-template-groups">
+          {Array.from(grouped.entries()).map(([cat, items]) => (
+            <div key={cat} className="panel glass prompt-template-group">
+              <h3 className="eyebrow">{CAT_LABEL[cat] ?? cat}</h3>
+              {items.map((item) => (
+                <div key={item.path} className="prompt-template-item">
+                  <div className="prompt-template-item__head">
+                    <div>
+                      <h4>{item.title}</h4>
+                      <p className="muted small">{item.description}</p>
+                      <p className="muted mono small">{item.path}</p>
                     </div>
-                  ))}
+                    <div className="actions">
+                      <AppButton
+                        size="sm"
+                        variant="ghost"
+                        loading={savingPath === item.path}
+                        onClick={() => void restoreDefault(item.path)}
+                      >
+                        恢复默认
+                      </AppButton>
+                      <AppButton
+                        size="sm"
+                        variant="primary"
+                        loading={savingPath === item.path}
+                        onClick={() => void saveOne(item.path)}
+                      >
+                        保存
+                      </AppButton>
+                    </div>
+                  </div>
+                  <textarea
+                    className="ctrl prompt-template-item__body"
+                    rows={14}
+                    value={drafts[item.path] ?? ''}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [item.path]: e.target.value }))}
+                  />
                 </div>
               ))}
             </div>
-          )}
-        </section>
-      </div>
-    </div>
+          ))}
+        </div>
+      )}
+    </ProjectSubpageShell>
   )
 }

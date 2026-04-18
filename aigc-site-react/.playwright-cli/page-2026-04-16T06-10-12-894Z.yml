@@ -1,0 +1,139 @@
+- generic [ref=e3]:
+  - complementary "应用导航" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 云
+      - generic [ref=e7]:
+        - strong [ref=e8]: AIGC实训台
+        - generic [ref=e9]: 访客工作区
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - generic [ref=e13]:
+          - link "首页" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "创作工作台" [ref=e15] [cursor=pointer]:
+            - /url: /workspace
+          - link "历史记录" [ref=e16] [cursor=pointer]:
+            - /url: /history
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: 教学管理
+        - link "课程中心" [ref=e20] [cursor=pointer]:
+          - /url: /courses
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: 项目生产
+        - generic [ref=e23]:
+          - link "项目库" [ref=e24] [cursor=pointer]:
+            - /url: /script-projects
+          - link "流程工作区" [ref=e25] [cursor=pointer]:
+            - /url: /workflow/script-story
+    - generic [ref=e26]:
+      - generic [ref=e27]: 访客模式
+      - strong [ref=e28]: 打开登录后解锁完整后台能力
+  - generic [ref=e29]:
+    - banner [ref=e30]:
+      - generic [ref=e32]:
+        - strong [ref=e33]: 工作区
+        - generic [ref=e34]: 概览
+      - generic [ref=e35]:
+        - generic [ref=e36]: 访客
+        - button "登录" [ref=e37] [cursor=pointer]
+    - main [ref=e38]:
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: Overview
+        - heading "平台首页" [level=1] [ref=e42]
+        - generic [ref=e43]:
+          - generic [ref=e44]: 概览
+          - generic [ref=e45]: 访客
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - generic [ref=e50]: 轻量入口模式
+            - heading "把教学、创作和交付收进一个清爽工作台" [level=2] [ref=e51]
+            - paragraph [ref=e52]: 
+          - generic [ref=e53]:
+            - link "进入创作工作台" [ref=e54] [cursor=pointer]:
+              - /url: /workspace
+            - link "打开课程中心" [ref=e55] [cursor=pointer]:
+              - /url: /courses
+            - button "登录后台" [ref=e56] [cursor=pointer]
+        - generic [ref=e57]:
+          - article [ref=e58]:
+            - generic [ref=e59]: 一级导航
+            - strong [ref=e60]: 5 组
+            - generic [ref=e61]: 工作台 / 教学 / 项目 / 资源 / 平台
+          - article [ref=e62]:
+            - generic [ref=e63]: 统一入口
+            - strong [ref=e64]: 1 个
+            - generic [ref=e65]: 图像与视频共用工作区
+          - article [ref=e66]:
+            - generic [ref=e67]: 角色模式
+            - strong [ref=e68]: GUEST
+            - generic [ref=e69]: 登录后显示完整能力
+        - generic [ref=e70]:
+          - link "开始创作 进入图像 / 视频统一工作台 创作" [ref=e71] [cursor=pointer]:
+            - /url: /workspace
+            - generic [ref=e72]:
+              - strong [ref=e73]: 开始创作
+              - generic [ref=e74]: 进入图像 / 视频统一工作台
+            - emphasis [ref=e75]: 创作
+          - link "课程中心 查看课程、作业和评分进度 教学" [ref=e76] [cursor=pointer]:
+            - /url: /courses
+            - generic [ref=e77]:
+              - strong [ref=e78]: 课程中心
+              - generic [ref=e79]: 查看课程、作业和评分进度
+            - emphasis [ref=e80]: 教学
+          - link "项目库 管理剧本、资产、视频与导出 项目" [ref=e81] [cursor=pointer]:
+            - /url: /script-projects
+            - generic [ref=e82]:
+              - strong [ref=e83]: 项目库
+              - generic [ref=e84]: 管理剧本、资产、视频与导出
+            - emphasis [ref=e85]: 项目
+          - link "历史记录 回看个人生成结果与下载记录 我的" [ref=e86] [cursor=pointer]:
+            - /url: /history
+            - generic [ref=e87]:
+              - strong [ref=e88]: 历史记录
+              - generic [ref=e89]: 回看个人生成结果与下载记录
+            - emphasis [ref=e90]: 我的
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - heading "功能分区" [level=3] [ref=e94]
+              - generic [ref=e95]: 按工作目标组织，不按系统配置堆叠
+            - generic [ref=e96]:
+              - link "教学管理区 课程、作业、提交与评分放在同一条链路里，减少来回跳页。" [ref=e97] [cursor=pointer]:
+                - /url: /courses
+                - generic [ref=e98]:
+                  - strong [ref=e99]: 教学管理区
+                  - generic [ref=e100]: 课程、作业、提交与评分放在同一条链路里，减少来回跳页。
+              - link "项目生产区 剧本、资产、视频、配音、成片和导出统一进项目工作区。" [ref=e101] [cursor=pointer]:
+                - /url: /script-projects
+                - generic [ref=e102]:
+                  - strong [ref=e103]: 项目生产区
+                  - generic [ref=e104]: 剧本、资产、视频、配音、成片和导出统一进项目工作区。
+              - link "个人创作区 从工作台、课程任务和历史记录组织个人创作节奏。" [ref=e105] [cursor=pointer]:
+                - /url: /history
+                - generic [ref=e106]:
+                  - strong [ref=e107]: 个人创作区
+                  - generic [ref=e108]: 从工作台、课程任务和历史记录组织个人创作节奏。
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - heading "推荐流程" [level=3] [ref=e111]
+              - generic [ref=e112]: 教学发起、项目生产、审核交付
+            - list [ref=e113]:
+              - listitem [ref=e114]:
+                - generic [ref=e115]: "1"
+                - generic [ref=e116]:
+                  - strong [ref=e117]: 建立课程或进入已有课程
+                  - paragraph [ref=e118]: 从课程中心承接教学任务、学生项目和评分动作。
+              - listitem [ref=e119]:
+                - generic [ref=e120]: "2"
+                - generic [ref=e121]:
+                  - strong [ref=e122]: 创建或进入项目
+                  - paragraph [ref=e123]: 在项目工作区推进剧本、镜头、视频、配音和导出。
+              - listitem [ref=e124]:
+                - generic [ref=e125]: "3"
+                - generic [ref=e126]:
+                  - strong [ref=e127]: 审核与交付
+                  - paragraph [ref=e128]: 在同一工作区检查成片状态、导出包和提交结果。
+        - group [ref=e129]:
+          - generic "查看入口说明" [ref=e130] [cursor=pointer]

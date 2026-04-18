@@ -10,5 +10,6 @@ public enum AssetHistoryType {
     THREE_VIEW,
     STORYBOARD_CROP,
     GROUP_SCENE,
-    VIDEO
+    VIDEO,
+    LIP_SYNC_VIDEO
 }

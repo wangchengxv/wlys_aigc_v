@@ -1,9 +1,33 @@
 import axios, { AxiosHeaders, isAxiosError } from 'axios'
+import { FALLBACK_STYLE_TEMPLATES } from '@/data/videoStylePresets'
+import {
+  normalizePipelineStatus,
+  normalizeScriptProjectAggregate,
+  normalizeVideoEditingDraftResponse,
+  normalizeVideoEditingRenderTask,
+  toVideoEditingPublishPayload,
+  toVideoEditingSaveDraftPayload,
+} from '@/lib/scriptProject/videoEditingContract'
 import type {
+  AssignmentCreateRequest,
+  AssignmentSubmission,
   ArtDirectionResponse,
+  AuditLogRecord,
   BatchModelsImportRequest,
   BatchVisualPromptResponse,
   ApplyStoryboardFirstFrameRequest,
+  AdminUser,
+  AdminUserBatchOperationResponse,
+  AdminUserBatchStatsResponse,
+  AdminUserCreateRequest,
+  AdminUserImportResult,
+  AdminUserImportTask,
+  AdminUserLockUpdateRequest,
+  AdminUserPasswordResetRequest,
+  AdminUserUpdateRequest,
+  CurrentUser,
+  TeachingAssignmentStatusUpdateRequest,
+  TeachingCourseArchiveRequest,
   AppendScriptPreviewRequest,
   AppendScriptPreviewResponse,
   AssetGenerationHistoryItem,
@@ -12,6 +36,10 @@ import type {
   ConnectionConfigCreateRequest,
   ConnectionConfigUpdateRequest,
   ConnectionTestResponse,
+  ContentReviewDecisionRequest,
+  ContentReviewStatusResponse,
+  ContentReviewSubmitRequest,
+  CourseCreateRequest,
   GenerateGroupSceneRequest,
   GroupSceneResponse,
   ExtractedAsset,
@@ -20,16 +48,28 @@ import type {
   HistoryQuery,
   ImageModelOptions,
   KeyframeRecord,
+  DubbingTask,
+  ExportPackageTask,
+  FinalCompositionTask,
+  LipSyncTask,
   ModelConfig,
   ModelConfigCreateRequest,
   ModelConfigUpdateRequest,
   ModelProbeResponse,
   PagedTasks,
   PipelineStatus,
+  LoginRequest,
+  LoginResponse,
   PromptTemplateCatalogItem,
+  PagedResult,
   PresetModelListResponse,
+  OrgUnit,
+  OrgUnitCreateRequest,
+  MediaResource,
+  OperationsDashboardResponse,
   ProviderCatalogListResponse,
   QuickConnectionRequest,
+  ReviewRecord,
   RewriteScriptApplyRequest,
   RewriteScriptPreviewRequest,
   RewriteScriptPreviewResponse,
@@ -45,6 +85,13 @@ import type {
   StoryboardPanelCropResponse,
   StoryboardPlanResponse,
   StoryboardRewriteRequest,
+  StyleTemplate,
+  StyleTemplateCreateRequest,
+  StyleTemplateUpdateRequest,
+  SubmissionCreateRequest,
+  SubmissionReviewRequest,
+  TeachingAssignment,
+  TeachingCourse,
   ThreeViewResponse,
   StoryboardShot,
   TurnaroundImageResponse,
@@ -53,6 +100,11 @@ import type {
   UpdateShotRequest,
   UpdateScriptRequest,
   VisualPromptResponse,
+  VideoEditingDraft,
+  VideoEditingPublishRequest,
+  VideoEditingRenderRequest,
+  VideoEditingSaveDraftRequest,
+  VideoEditingRenderTask,
   VideoSegmentTask,
   VideoModelOptions,
   WorkflowModelSettings,
@@ -62,10 +114,13 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const USE_MOCK = !API_BASE_URL
 const STORAGE_KEY = 'aigc_tasks_v1'
+const STYLE_TEMPLATE_MOCK_KEY = 'aigc_style_templates_v1'
+const AUTH_ACCESS_TOKEN_KEY = 'aigc_access_token'
 const DEFAULT_MODEL = 'doubao-seedream-5-0-260128'
 const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
-const ACCESS_TOKEN = import.meta.env.VITE_AIGC_ACCESS_TOKEN || 'dev-local-token'
 const CLIENT_USER_ID_KEY = 'aigc_client_user_id'
+const CLIENT_USER_NAME_KEY = 'aigc_client_user_name'
+const CLIENT_ORG_UNIT_ID_KEY = 'aigc_client_org_unit_id'
 
 interface ApiEnvelope<T> {
   code: number
@@ -188,14 +243,53 @@ function getOrCreateClientUserId() {
   return created
 }
 
+function getClientProfile() {
+  const userId = getOrCreateClientUserId()
+  const existingName = localStorage.getItem(CLIENT_USER_NAME_KEY)?.trim()
+  const existingOrg = localStorage.getItem(CLIENT_ORG_UNIT_ID_KEY)?.trim()
+  const userName = existingName || `创作者-${userId.slice(-4)}`
+  const orgUnitId = existingOrg || 'default-org'
+  if (!existingName) localStorage.setItem(CLIENT_USER_NAME_KEY, userName)
+  if (!existingOrg) localStorage.setItem(CLIENT_ORG_UNIT_ID_KEY, orgUnitId)
+  return { userId, userName, orgUnitId }
+}
+
+function courseHeaderConfig(courseId?: string | null) {
+  const normalized = courseId?.trim()
+  if (!normalized) {
+    return undefined
+  }
+  return {
+    headers: {
+      'x-course-id': normalized,
+    },
+  }
+}
+
+export function getStoredAccessToken() {
+  return localStorage.getItem(AUTH_ACCESS_TOKEN_KEY)?.trim() || ''
+}
+
+export function setStoredAccessToken(token: string | null) {
+  if (!token || !token.trim()) {
+    localStorage.removeItem(AUTH_ACCESS_TOKEN_KEY)
+    return
+  }
+  localStorage.setItem(AUTH_ACCESS_TOKEN_KEY, token.trim())
+}
+
+export function clearStoredAccessToken() {
+  localStorage.removeItem(AUTH_ACCESS_TOKEN_KEY)
+}
+
 http.interceptors.request.use((config) => {
   if (!USE_MOCK) {
-    const token = ACCESS_TOKEN.trim()
-    const userId = getOrCreateClientUserId()
+    const token = getStoredAccessToken()
     const headers = AxiosHeaders.from(config.headers ?? {})
-    headers.set('Authorization', `Bearer ${token}`)
-    headers.set('x-aigc-token', token)
-    headers.set('x-user-id', userId)
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+      headers.set('x-aigc-token', token)
+    }
     config.headers = headers
   }
   return config
@@ -218,6 +312,23 @@ function getMockTasks(): GenerateResponse[] {
 
 function saveMockTasks(tasks: GenerateResponse[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
+}
+
+function getMockStyleTemplates(): StyleTemplate[] {
+  const base = [...FALLBACK_STYLE_TEMPLATES]
+  const raw = localStorage.getItem(STYLE_TEMPLATE_MOCK_KEY)
+  if (!raw) return base
+  try {
+    const parsed = JSON.parse(raw) as StyleTemplate[]
+    return [...base, ...parsed]
+  } catch {
+    return base
+  }
+}
+
+function saveMockStyleTemplates(templates: StyleTemplate[]) {
+  const personalOnly = templates.filter((item) => item.scope !== 'SYSTEM')
+  localStorage.setItem(STYLE_TEMPLATE_MOCK_KEY, JSON.stringify(personalOnly))
 }
 
 function normalizeTask(task: GenerateResponse): GenerateResponse {
@@ -307,6 +418,7 @@ export async function getVideoModels(): Promise<VideoModelOptions> {
   return {
     defaultModel: DEFAULT_VIDEO_MODEL,
     options: [DEFAULT_VIDEO_MODEL],
+    details: [],
   }
 }
 
@@ -354,6 +466,242 @@ export async function healthCheck(): Promise<{ ok: boolean; mode: string }> {
   return { ok: true, mode: 'mock' }
 }
 
+function toMockCurrentUser(): CurrentUser {
+  const { userId, userName, orgUnitId } = getClientProfile()
+  return {
+    userId,
+    username: userId,
+    displayName: userName,
+    role: userId.startsWith('teacher') ? 'TEACHER' : userId.startsWith('admin') ? 'ADMIN' : 'STUDENT',
+    orgUnitId,
+    enabled: true,
+  }
+}
+
+export async function login(request: LoginRequest): Promise<LoginResponse> {
+  if (!USE_MOCK) {
+    const { data } = await http.post<ApiEnvelope<LoginResponse>>('/api/v1/auth/login', request)
+    const payload = unwrapApiData(data, '登录失败')
+    setStoredAccessToken(payload.accessToken)
+    return payload
+  }
+  const user = toMockCurrentUser()
+  return {
+    accessToken: 'mock-token',
+    tokenType: 'Bearer',
+    expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    user: {
+      ...user,
+      username: request.username,
+      displayName: request.username || user.displayName,
+    },
+  }
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  if (!USE_MOCK) {
+    const storedToken = getStoredAccessToken()
+    if (!storedToken) {
+      throw new Error('当前未登录')
+    }
+    const { data } = await http.get<ApiEnvelope<CurrentUser>>('/api/v1/auth/me')
+    return unwrapApiData(data, '获取当前用户失败')
+  }
+  return toMockCurrentUser()
+}
+
+export async function logout(): Promise<void> {
+  if (!USE_MOCK && getStoredAccessToken()) {
+    try {
+      await http.post<ApiEnvelope<null>>('/api/v1/auth/logout')
+    } catch {
+      /* ignore logout failure */
+    }
+  }
+  clearStoredAccessToken()
+}
+
+export async function getOrgUnits(): Promise<OrgUnit[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<OrgUnit[]>>('/api/v1/admin/directory/org-units')
+  return unwrapApiData(data, '获取组织目录失败')
+}
+
+export async function createOrgUnit(payload: OrgUnitCreateRequest): Promise<OrgUnit> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<OrgUnit>>('/api/v1/admin/directory/org-units', payload)
+  return unwrapApiData(data, '创建组织或班级失败')
+}
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  requireScriptApi()
+  const result = await getAdminUsersPaged({
+    page: 1,
+    pageSize: 200,
+  })
+  return result.list
+}
+
+export async function getAdminUsersPaged(params: {
+  page: number
+  pageSize: number
+  keyword?: string
+  role?: string
+  enabled?: boolean
+  locked?: boolean
+  orgUnitId?: string
+  classroomId?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}): Promise<PagedResult<AdminUser>> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<PagedResult<AdminUser>>>('/api/v1/admin/directory/users', {
+    params: {
+      page: params.page,
+      pageSize: params.pageSize,
+      keyword: params.keyword,
+      role: params.role,
+      enabled: params.enabled,
+      locked: params.locked,
+      orgUnitId: params.orgUnitId,
+      classroomId: params.classroomId,
+      sortBy: params.sortBy,
+      sortOrder: params.sortOrder,
+    },
+  })
+  return unwrapApiData(data, '获取用户目录失败')
+}
+
+export async function createAdminUser(payload: AdminUserCreateRequest): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AdminUser>>('/api/v1/admin/directory/users', payload)
+  return unwrapApiData(data, '创建用户失败')
+}
+
+export async function updateAdminUser(userId: string, payload: AdminUserUpdateRequest): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<AdminUser>>(`/api/v1/admin/directory/users/${encodeURIComponent(userId)}`, payload)
+  return unwrapApiData(data, '更新用户失败')
+}
+
+export async function updateAdminUserStatus(userId: string, enabled: boolean): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<AdminUser>>(`/api/v1/admin/directory/users/${encodeURIComponent(userId)}/status`, { enabled })
+  return unwrapApiData(data, '更新用户状态失败')
+}
+
+export async function updateAdminUserLock(userId: string, payload: AdminUserLockUpdateRequest): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<AdminUser>>(`/api/v1/admin/directory/users/${encodeURIComponent(userId)}/lock`, payload)
+  return unwrapApiData(data, '更新账号锁定状态失败')
+}
+
+export async function resetAdminUserPassword(userId: string, payload: AdminUserPasswordResetRequest): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<AdminUser>>(`/api/v1/admin/directory/users/${encodeURIComponent(userId)}/password`, payload)
+  return unwrapApiData(data, '重置密码失败')
+}
+
+export async function forceLogoutAdminUser(userId: string): Promise<AdminUser> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AdminUser>>(`/api/v1/admin/directory/users/${encodeURIComponent(userId)}/force-logout`)
+  return unwrapApiData(data, '强制下线失败')
+}
+
+export async function batchUpdateAdminUserStatus(userIds: string[], enabled: boolean): Promise<AdminUserBatchOperationResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AdminUserBatchOperationResponse>>('/api/v1/admin/directory/users/batch/status', {
+    userIds,
+    enabled,
+  })
+  return unwrapApiData(data, '批量更新账号状态失败')
+}
+
+export async function batchUpdateAdminUserLock(
+  userIds: string[],
+  locked: boolean,
+  reason?: string,
+): Promise<AdminUserBatchOperationResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AdminUserBatchOperationResponse>>('/api/v1/admin/directory/users/batch/lock', {
+    userIds,
+    locked,
+    reason,
+  })
+  return unwrapApiData(data, '批量更新账号锁定状态失败')
+}
+
+export async function downloadAdminUserImportTemplate(): Promise<Blob> {
+  requireScriptApi()
+  const response = await http.get('/api/v1/admin/directory/users/import/template', {
+    responseType: 'blob',
+  })
+  return response.data as Blob
+}
+
+export async function importAdminUsers(file: File): Promise<AdminUserImportResult> {
+  requireScriptApi()
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await http.post<ApiEnvelope<AdminUserImportResult>>('/api/v1/admin/directory/users/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapApiData(data, '导入账号失败')
+}
+
+export async function exportAdminUsers(params?: {
+  keyword?: string
+  role?: string
+  enabled?: boolean
+  locked?: boolean
+  orgUnitId?: string
+  classroomId?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}): Promise<Blob> {
+  requireScriptApi()
+  const response = await http.get('/api/v1/admin/directory/users/export', {
+    params,
+    responseType: 'blob',
+  })
+  return response.data as Blob
+}
+
+export async function getAdminUserImportTasks(params?: { page?: number; pageSize?: number }): Promise<PagedResult<AdminUserImportTask>> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<PagedResult<AdminUserImportTask>>>('/api/v1/admin/directory/users/import/tasks', {
+    params: {
+      page: params?.page ?? 1,
+      pageSize: params?.pageSize ?? 20,
+    },
+  })
+  return unwrapApiData(data, '获取导入任务失败')
+}
+
+export async function getAdminUserImportTask(taskId: string): Promise<AdminUserImportTask> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<AdminUserImportTask>>(`/api/v1/admin/directory/users/import/tasks/${encodeURIComponent(taskId)}`)
+  return unwrapApiData(data, '获取导入任务详情失败')
+}
+
+export async function getAdminUserBatchStats(limit = 20): Promise<AdminUserBatchStatsResponse> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<AdminUserBatchStatsResponse>>('/api/v1/admin/directory/users/batch/stats', {
+    params: {
+      limit,
+    },
+  })
+  return unwrapApiData(data, '获取批量任务统计失败')
+}
+
+export async function getMediaResources(): Promise<MediaResource[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<MediaResource[]>>('/api/v1/admin/media-resources')
+  return unwrapApiData(data, '获取媒体资源目录失败')
+}
+
 export async function deleteTask(taskId: string): Promise<void> {
   if (!USE_MOCK) {
     await http.delete(`/api/v1/tasks/${taskId}`)
@@ -367,6 +715,196 @@ export function getApiBaseUrl() {
   return API_BASE_URL || 'mock-mode(localStorage)'
 }
 
+export async function getStyleTemplates(options?: { courseId?: string }): Promise<StyleTemplate[]> {
+  if (!USE_MOCK) {
+    const { data } = await http.get<ApiEnvelope<StyleTemplate[]>>('/api/v1/style-templates', courseHeaderConfig(options?.courseId))
+    return unwrapApiData(data, '获取风格模板失败')
+  }
+  const { userId } = getClientProfile()
+  const courseId = options?.courseId?.trim()
+  return getMockStyleTemplates().filter((item) => {
+    if (!item.enabled) return false
+    if (item.scope === 'SYSTEM') return true
+    if (item.scope === 'PERSONAL') return item.ownerId === userId
+    return !!courseId && item.courseId === courseId
+  })
+}
+
+export async function createStyleTemplate(payload: StyleTemplateCreateRequest): Promise<StyleTemplate> {
+  if (!USE_MOCK) {
+    const { data } = await http.post<ApiEnvelope<StyleTemplate>>(
+      '/api/v1/style-templates',
+      payload,
+      courseHeaderConfig(payload.courseId),
+    )
+    return unwrapApiData(data, '创建风格模板失败')
+  }
+  const now = new Date().toISOString()
+  const template: StyleTemplate = {
+    templateId: `style_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    scope: payload.scope ?? 'PERSONAL',
+    name: payload.name.trim(),
+    category: payload.category?.trim() || null,
+    traits: payload.traits?.trim() || null,
+    fullPrompt: payload.fullPrompt.trim(),
+    styleKey: payload.styleKey?.trim() || null,
+    ownerId: getOrCreateClientUserId(),
+    ownerName: getOrCreateClientUserId(),
+    orgUnitId: null,
+    courseId: payload.courseId?.trim() || null,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const all = [...getMockStyleTemplates().filter((item) => item.scope !== 'SYSTEM'), template]
+  saveMockStyleTemplates(all)
+  return template
+}
+
+export async function updateStyleTemplate(
+  templateId: string,
+  payload: StyleTemplateUpdateRequest,
+): Promise<StyleTemplate> {
+  if (!USE_MOCK) {
+    const { data } = await http.put<ApiEnvelope<StyleTemplate>>(`/api/v1/style-templates/${encodeURIComponent(templateId)}`, payload)
+    return unwrapApiData(data, '更新风格模板失败')
+  }
+  const all = getMockStyleTemplates()
+  const idx = all.findIndex((item) => item.templateId === templateId)
+  if (idx < 0) throw new Error('风格模板不存在')
+  const prev = all[idx]
+  const next: StyleTemplate = {
+    ...prev,
+    name: payload.name?.trim() || prev.name,
+    category: payload.category !== undefined ? payload.category.trim() || null : prev.category,
+    traits: payload.traits !== undefined ? payload.traits.trim() || null : prev.traits,
+    fullPrompt: payload.fullPrompt?.trim() || prev.fullPrompt,
+    styleKey: payload.styleKey !== undefined ? payload.styleKey.trim() || null : prev.styleKey,
+    enabled: payload.enabled ?? prev.enabled,
+    updatedAt: new Date().toISOString(),
+  }
+  const merged = [...all]
+  merged[idx] = next
+  saveMockStyleTemplates(merged)
+  return next
+}
+
+export async function getAuditLogs(params?: {
+  entityType?: string
+  entityId?: string
+  actorUserId?: string
+}): Promise<AuditLogRecord[]> {
+  if (!USE_MOCK) {
+    const { data } = await http.get<ApiEnvelope<AuditLogRecord[]>>('/api/v1/audit-logs', { params })
+    return unwrapApiData(data, '获取审计日志失败')
+  }
+  return []
+}
+
+export async function getOperationsDashboard(): Promise<OperationsDashboardResponse> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<OperationsDashboardResponse>>('/api/v1/operations/dashboard')
+  return unwrapApiData(data, '获取统计看板失败')
+}
+
+export async function getCourses(): Promise<TeachingCourse[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<TeachingCourse[]>>('/api/v1/courses')
+  return unwrapApiData(data, '获取课程列表失败')
+}
+
+export async function createCourse(payload: CourseCreateRequest): Promise<TeachingCourse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<TeachingCourse>>('/api/v1/courses', payload)
+  return unwrapApiData(data, '创建课程失败')
+}
+
+export async function archiveCourse(courseId: string, payload?: TeachingCourseArchiveRequest): Promise<TeachingCourse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<TeachingCourse>>(
+    `/api/v1/courses/${encodeURIComponent(courseId)}/archive`,
+    payload ?? { archived: true },
+    courseHeaderConfig(courseId),
+  )
+  return unwrapApiData(data, '更新课程归档状态失败')
+}
+
+export async function getCourseAssignments(courseId: string): Promise<TeachingAssignment[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<TeachingAssignment[]>>(
+    `/api/v1/courses/${encodeURIComponent(courseId)}/assignments`,
+    courseHeaderConfig(courseId),
+  )
+  return unwrapApiData(data, '获取作业列表失败')
+}
+
+export async function createCourseAssignment(
+  courseId: string,
+  payload: AssignmentCreateRequest,
+): Promise<TeachingAssignment> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<TeachingAssignment>>(
+    `/api/v1/courses/${encodeURIComponent(courseId)}/assignments`,
+    payload,
+    courseHeaderConfig(courseId),
+  )
+  return unwrapApiData(data, '创建作业失败')
+}
+
+export async function updateCourseAssignmentStatus(
+  courseId: string,
+  assignmentId: string,
+  payload: TeachingAssignmentStatusUpdateRequest,
+): Promise<TeachingAssignment> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<TeachingAssignment>>(
+    `/api/v1/courses/${encodeURIComponent(courseId)}/assignments/${encodeURIComponent(assignmentId)}/status`,
+    payload,
+    courseHeaderConfig(courseId),
+  )
+  return unwrapApiData(data, '更新作业状态失败')
+}
+
+export async function getAssignmentSubmissions(assignmentId: string): Promise<AssignmentSubmission[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<AssignmentSubmission[]>>(
+    `/api/v1/assignments/${encodeURIComponent(assignmentId)}/submissions`,
+  )
+  return unwrapApiData(data, '获取提交列表失败')
+}
+
+export async function createAssignmentSubmission(
+  assignmentId: string,
+  payload: SubmissionCreateRequest,
+): Promise<AssignmentSubmission> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AssignmentSubmission>>(
+    `/api/v1/assignments/${encodeURIComponent(assignmentId)}/submissions`,
+    payload,
+  )
+  return unwrapApiData(data, '提交作业失败')
+}
+
+export async function reviewAssignmentSubmission(
+  submissionId: string,
+  payload: SubmissionReviewRequest,
+): Promise<AssignmentSubmission> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<AssignmentSubmission>>(
+    `/api/v1/submissions/${encodeURIComponent(submissionId)}/review`,
+    payload,
+  )
+  return unwrapApiData(data, '评分失败')
+}
+
+export async function getSubmissionReviews(submissionId: string): Promise<ReviewRecord[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<ReviewRecord[]>>(
+    `/api/v1/submissions/${encodeURIComponent(submissionId)}/reviews`,
+  )
+  return unwrapApiData(data, '获取评审记录失败')
+}
+
 export async function getConnections(): Promise<ConnectionConfig[]> {
   if (!USE_MOCK) {
     const { data } = await http.get<ApiEnvelope<ConnectionConfig[]>>('/api/v1/connections')
@@ -376,7 +914,7 @@ export async function getConnections(): Promise<ConnectionConfig[]> {
 }
 
 const MOCK_PRESET_MODELS: PresetModelListResponse = {
-  providers: ['openai', 'anthropic', 'deepseek', 'qwen', 'ark', 'onelinkai', 'moark'],
+  providers: ['openai', 'anthropic', 'deepseek', 'qwen', 'ark', 'onelinkai', 'vidu', 'moark'],
   models: [
     { provider: 'openai', modelName: 'gpt-4o', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o', capabilities: ['text'] },
     { provider: 'openai', modelName: 'gpt-4o-mini', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o Mini', capabilities: ['text'] },
@@ -388,11 +926,20 @@ const MOCK_PRESET_MODELS: PresetModelListResponse = {
     { provider: 'onelinkai', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Claude Sonnet 4.6', capabilities: ['text'] },
     { provider: 'onelinkai', modelName: 'gemini-2.5-pro', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Gemini 2.5 Pro', capabilities: ['text'] },
     { provider: 'onelinkai', modelName: 'wanx-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Wanx v1', capabilities: ['image'] },
+    { provider: 'onelinkai', modelName: 'kling-v2-1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图像生成 v2.1', capabilities: ['image'] },
+    { provider: 'onelinkai', modelName: 'kling-v2', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 多图参考生图 v2', capabilities: ['image'] },
     { provider: 'onelinkai', modelName: 'MiniMax-M2.1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI MiniMax M2.1', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'viduq3-turbo', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Vidu Q3 Turbo', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'viduq3-pro', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Vidu Q3 Pro', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'viduq2', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Vidu Q2', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'viduq1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Vidu Q1', capabilities: ['video'] },
+    { provider: 'onelinkai', modelName: 'kling-v2-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 文生视频 v2.6', capabilities: ['video'] },
+    { provider: 'onelinkai', modelName: 'kling-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图生视频 v1', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq3-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Turbo', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq3-pro', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Pro', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq2-pro-fast', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro Fast', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq2-pro', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq2-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Turbo', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq2', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq1', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'viduq1-classic', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1 Classic', capabilities: ['video'] },
+    { provider: 'vidu', modelName: 'vidu2.0', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu 2.0', capabilities: ['video'] },
     {
       provider: 'moark',
       modelName: 'Wan2.1-I2V-14B-720P',
@@ -489,11 +1036,21 @@ const MOCK_PROVIDER_CATALOG: ProviderCatalogListResponse = {
         'claude-sonnet-4-6',
         'gemini-2.5-pro',
         'wanx-v1',
+        'kling-v1',
+        'kling-v1-6',
+        'kling-v2',
+        'kling-v2-1',
+        'kling-v2-6',
         'MiniMax-M2.1',
         'viduq3-turbo',
         'viduq3-pro',
+        'viduq2-pro-fast',
+        'viduq2-pro',
+        'viduq2-turbo',
         'viduq2',
         'viduq1',
+        'viduq1-classic',
+        'vidu2.0',
       ],
     },
     {
@@ -507,6 +1064,28 @@ const MOCK_PROVIDER_CATALOG: ProviderCatalogListResponse = {
       imageProxySupported: true,
       videoProxySupported: true,
       staticModels: [],
+    },
+    {
+      key: 'vidu',
+      displayName: 'Vidu',
+      defaultBaseUrl: 'https://api.vidu.cn',
+      authMode: 'TOKEN',
+      apiFormat: 'vidu',
+      gatewayKind: 'OPENAI_COMPAT',
+      textProxySupported: false,
+      imageProxySupported: false,
+      videoProxySupported: true,
+      staticModels: [
+        'viduq3-turbo',
+        'viduq3-pro',
+        'viduq2-pro-fast',
+        'viduq2-pro',
+        'viduq2-turbo',
+        'viduq2',
+        'viduq1',
+        'viduq1-classic',
+        'vidu2.0',
+      ],
     },
   ],
 }
@@ -635,7 +1214,11 @@ export async function listScriptProjects(options?: { deleted?: boolean }): Promi
 
 export async function createScriptProject(payload: ScriptProjectCreateRequest): Promise<ScriptProjectAggregate> {
   requireScriptApi()
-  const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>('/api/v1/script-projects', payload)
+  const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>(
+    '/api/v1/script-projects',
+    payload,
+    courseHeaderConfig(payload.courseId),
+  )
   return unwrapApiData(data, '创建剧本工程失败')
 }
 
@@ -645,20 +1228,26 @@ export async function uploadScriptProject(payload: ScriptProjectUploadRequest): 
   formData.append('name', payload.name)
   formData.append('file', payload.file)
   if (payload.visualStyle) formData.append('visualStyle', payload.visualStyle)
+  if (payload.styleTemplateId) formData.append('styleTemplateId', payload.styleTemplateId)
   if (payload.aspectRatio) formData.append('aspectRatio', payload.aspectRatio)
   if (payload.targetDuration != null) formData.append('targetDuration', String(payload.targetDuration))
   if (payload.language) formData.append('language', payload.language)
+  if (payload.courseId) formData.append('courseId', payload.courseId)
   if (payload.explicitTextModel) formData.append('explicitTextModel', payload.explicitTextModel)
   if (payload.explicitImageModel) formData.append('explicitImageModel', payload.explicitImageModel)
   if (payload.explicitVideoModel) formData.append('explicitVideoModel', payload.explicitVideoModel)
-  const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>('/api/v1/script-projects/upload', formData)
+  const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>(
+    '/api/v1/script-projects/upload',
+    formData,
+    courseHeaderConfig(payload.courseId),
+  )
   return unwrapApiData(data, '上传剧本失败')
 }
 
 export async function getScriptProject(projectId: string): Promise<ScriptProjectAggregate> {
   requireScriptApi()
   const { data } = await http.get<ApiEnvelope<ScriptProjectAggregate>>(`/api/v1/script-projects/${projectId}`)
-  return unwrapApiData(data, '获取剧本工程详情失败')
+  return normalizeScriptProjectAggregate(unwrapApiData(data, '获取剧本工程详情失败'))
 }
 
 export async function deleteScriptProject(projectId: string): Promise<void> {
@@ -1101,10 +1690,193 @@ export async function retryScriptProjectVideoTask(projectId: string, segmentTask
   return unwrapApiData(data, '重试视频任务失败')
 }
 
+export async function generateScriptProjectDubbing(projectId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/dubbing/generate`)
+  return unwrapApiData(data, '启动配音生成失败')
+}
+
+export async function getScriptProjectDubbingTasks(projectId: string): Promise<DubbingTask[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<DubbingTask[]>>(`/api/v1/script-projects/${projectId}/dubbing/tasks`)
+  return unwrapApiData(data, '获取配音任务失败')
+}
+
+export async function retryScriptProjectDubbingTask(projectId: string, dubbingTaskId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/dubbing/tasks/${dubbingTaskId}/retry`)
+  return unwrapApiData(data, '重试配音任务失败')
+}
+
+export async function generateScriptProjectLipSync(projectId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/lip-sync/generate`)
+  return unwrapApiData(data, '启动口型同步失败')
+}
+
+export async function getScriptProjectLipSyncTasks(projectId: string): Promise<LipSyncTask[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<LipSyncTask[]>>(`/api/v1/script-projects/${projectId}/lip-sync/tasks`)
+  return unwrapApiData(data, '获取口型同步任务失败')
+}
+
+export async function retryScriptProjectLipSyncTask(projectId: string, lipSyncTaskId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/lip-sync/tasks/${lipSyncTaskId}/retry`)
+  return unwrapApiData(data, '重试口型同步任务失败')
+}
+
+export async function getScriptProjectVideoEditingDraft(projectId: string): Promise<VideoEditingDraft> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<unknown>>(`/api/v1/script-projects/${projectId}/video-editing/draft`)
+  return normalizeVideoEditingDraftResponse(unwrapApiData(data, '获取视频剪辑草稿失败'))
+}
+
+export async function getScriptProjectVideoEditingRenderTasks(projectId: string): Promise<VideoEditingRenderTask[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<unknown[]>>(`/api/v1/script-projects/${projectId}/video-editing/render/tasks`)
+  return unwrapApiData(data, '获取剪辑渲染任务失败').map(normalizeVideoEditingRenderTask)
+}
+
+export async function saveScriptProjectVideoEditingDraft(
+  projectId: string,
+  payload: VideoEditingSaveDraftRequest,
+): Promise<VideoEditingDraft> {
+  requireScriptApi()
+  const { data } = await http.put<ApiEnvelope<unknown>>(
+    `/api/v1/script-projects/${projectId}/video-editing/draft`,
+    toVideoEditingSaveDraftPayload(payload),
+  )
+  return normalizeVideoEditingDraftResponse(unwrapApiData(data, '保存视频剪辑草稿失败'))
+}
+
+export async function resetScriptProjectVideoEditingDraft(projectId: string): Promise<VideoEditingDraft> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<unknown>>(`/api/v1/script-projects/${projectId}/video-editing/draft/reset`)
+  return normalizeVideoEditingDraftResponse(unwrapApiData(data, '重置视频剪辑草稿失败'))
+}
+
+export async function renderScriptProjectVideoEditingPreview(
+  projectId: string,
+  payload?: VideoEditingRenderRequest,
+): Promise<PipelineStatus> {
+  requireScriptApi()
+  void payload
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(
+    `/api/v1/script-projects/${projectId}/video-editing/render/preview`,
+  )
+  return normalizePipelineStatus(unwrapApiData(data, '发起剪辑预览渲染失败'))
+}
+
+export async function publishScriptProjectVideoEditingResult(
+  projectId: string,
+  payload?: VideoEditingPublishRequest,
+): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(
+    `/api/v1/script-projects/${projectId}/video-editing/render/publish`,
+    toVideoEditingPublishPayload(payload),
+  )
+  return normalizePipelineStatus(unwrapApiData(data, '发布剪辑成片失败'))
+}
+
+export async function retryScriptProjectVideoEditingRenderTask(
+  projectId: string,
+  renderTaskId: string,
+): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(
+    `/api/v1/script-projects/${projectId}/video-editing/render/tasks/${encodeURIComponent(renderTaskId)}/retry`,
+  )
+  return normalizePipelineStatus(unwrapApiData(data, '重试剪辑渲染任务失败'))
+}
+
+export async function generateScriptProjectFinalComposition(projectId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/final-composition/generate`)
+  return unwrapApiData(data, '启动成片编排失败')
+}
+
+export async function getScriptProjectFinalCompositionTasks(projectId: string): Promise<FinalCompositionTask[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<FinalCompositionTask[]>>(`/api/v1/script-projects/${projectId}/final-composition/tasks`)
+  return unwrapApiData(data, '获取成片任务失败')
+}
+
+export async function retryScriptProjectFinalCompositionTask(projectId: string, finalCompositionTaskId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(
+    `/api/v1/script-projects/${projectId}/final-composition/tasks/${finalCompositionTaskId}/retry`,
+  )
+  return unwrapApiData(data, '重试成片任务失败')
+}
+
+export async function generateScriptProjectExportPackage(projectId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/export-package/generate`)
+  return unwrapApiData(data, '启动导出包生成失败')
+}
+
+export async function getScriptProjectExportPackageTasks(projectId: string): Promise<ExportPackageTask[]> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<ExportPackageTask[]>>(`/api/v1/script-projects/${projectId}/export-package/tasks`)
+  return unwrapApiData(data, '获取导出包任务失败')
+}
+
+export async function retryScriptProjectExportPackageTask(projectId: string, exportPackageTaskId: string): Promise<PipelineStatus> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<PipelineStatus>>(
+    `/api/v1/script-projects/${projectId}/export-package/tasks/${exportPackageTaskId}/retry`,
+  )
+  return unwrapApiData(data, '重试导出包任务失败')
+}
+
+export async function getScriptProjectContentReviewStatus(projectId: string): Promise<ContentReviewStatusResponse> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<ContentReviewStatusResponse>>(`/api/v1/script-projects/${projectId}/content-review`)
+  return unwrapApiData(data, '获取审核状态失败')
+}
+
+export async function submitScriptProjectContentReview(
+  projectId: string,
+  payload?: ContentReviewSubmitRequest,
+): Promise<ContentReviewStatusResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<ContentReviewStatusResponse>>(
+    `/api/v1/script-projects/${projectId}/content-review/submit`,
+    payload ?? {},
+  )
+  return unwrapApiData(data, '提交审核失败')
+}
+
+export async function approveScriptProjectContentReview(
+  projectId: string,
+  payload?: ContentReviewDecisionRequest,
+): Promise<ContentReviewStatusResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<ContentReviewStatusResponse>>(
+    `/api/v1/script-projects/${projectId}/content-review/approve`,
+    payload ?? {},
+  )
+  return unwrapApiData(data, '审核通过失败')
+}
+
+export async function rejectScriptProjectContentReview(
+  projectId: string,
+  payload?: ContentReviewDecisionRequest,
+): Promise<ContentReviewStatusResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<ContentReviewStatusResponse>>(
+    `/api/v1/script-projects/${projectId}/content-review/reject`,
+    payload ?? {},
+  )
+  return unwrapApiData(data, '驳回审核失败')
+}
+
 export async function getScriptProjectPipelineStatus(projectId: string): Promise<PipelineStatus> {
   requireScriptApi()
   const { data } = await http.get<ApiEnvelope<PipelineStatus>>(`/api/v1/script-projects/${projectId}/pipeline-status`)
-  return unwrapApiData(data, '获取流水线状态失败')
+  return normalizePipelineStatus(unwrapApiData(data, '获取流水线状态失败'))
 }
 
 // ── Workflow model settings ────────────────────────────────────────────────

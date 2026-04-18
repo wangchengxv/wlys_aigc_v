@@ -1,4 +1,5 @@
 import type { GraphState } from '@/lib/graph/schema'
+import { getStoredAccessToken } from '@/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 const ACCESS_TOKEN = import.meta.env.VITE_AIGC_ACCESS_TOKEN || 'dev-local-token'
@@ -34,13 +35,16 @@ function getOrCreateClientUserId() {
 }
 
 function getHeaders() {
-  const token = ACCESS_TOKEN.trim()
-  return {
+  const token = getStoredAccessToken() || ACCESS_TOKEN.trim()
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
     'x-aigc-token': token,
-    'x-user-id': getOrCreateClientUserId(),
   }
+  if (token === ACCESS_TOKEN.trim()) {
+    headers['x-user-id'] = getOrCreateClientUserId()
+  }
+  return headers
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

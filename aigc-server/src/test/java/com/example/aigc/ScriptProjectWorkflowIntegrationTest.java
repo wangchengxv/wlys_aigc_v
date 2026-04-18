@@ -1,5 +1,10 @@
 package com.example.aigc;
 
+import com.example.aigc.entity.ExportPackageTask;
+import com.example.aigc.entity.StoredFileRecord;
+import com.example.aigc.enums.ExportPackageTaskStatus;
+import com.example.aigc.enums.ProjectStatus;
+import com.example.aigc.service.ScriptProjectService;
 import com.example.aigc.service.LocalAssetFileService;
 import com.example.aigc.service.ProviderHttpGateway;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,6 +22,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -32,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,6 +67,9 @@ class ScriptProjectWorkflowIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private ScriptProjectService scriptProjectService;
+
     @MockitoSpyBean
     private LocalAssetFileService localAssetFileService;
 
@@ -77,7 +87,7 @@ class ScriptProjectWorkflowIntegrationTest {
         registry.add("spring.flyway.enabled", () -> false);
         registry.add("aigc.pipeline.video.max-parallel", () -> 2);
         registry.add("aigc.pipeline.video.poll-interval-ms", () -> 10L);
-        registry.add("aigc.pipeline.video.max-retries", () -> 1);
+        registry.add("aigc.pipeline.video.max-retries", () -> 2);
     }
 
     @BeforeEach
@@ -124,7 +134,7 @@ class ScriptProjectWorkflowIntegrationTest {
                 一个路人从远处经过，木制路牌在街角轻轻晃动。
                 """, "gpt-4o-mini");
 
-        JsonNode refined = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine", projectId))
+        JsonNode refined = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/refine", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(refined.path("projectId").asText()).isEqualTo(projectId);
@@ -132,9 +142,10 @@ class ScriptProjectWorkflowIntegrationTest {
         assertThat(refined.path("structuredScript").path("segments").isArray()).isTrue();
         assertThat(refined.path("structuredScript").path("segments").size()).isGreaterThan(0);
 
-        JsonNode refinedWithBrief = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine-with-brief", projectId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(Map.of("briefPrompt", "让节奏更紧凑，并突出阿满在清晨前的紧张与期待。"))))
+        JsonNode refinedWithBrief = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects/{projectId}/refine-with-brief", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(Map.of("briefPrompt", "让节奏更紧凑，并突出阿满在清晨前的紧张与期待。")))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(refinedWithBrief.path("projectId").asText()).isEqualTo(projectId);
@@ -152,28 +163,29 @@ class ScriptProjectWorkflowIntegrationTest {
                 """);
         updateScriptRequest.put("structuredScript", manualStructuredScript);
 
-        JsonNode updatedScript = readSuccessData(mockMvc.perform(put("/api/v1/script-projects/{projectId}/script", projectId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(updateScriptRequest)))
+        JsonNode updatedScript = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(updatedScript.path("structuredScript").path("characters").size()).isEqualTo(2);
         assertThat(updatedScript.path("structuredScript").path("props").size()).isEqualTo(2);
 
-        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId))
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
-        JsonNode extractedBackgrounds = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/assets/extract/backgrounds", projectId))
+        JsonNode extractedBackgrounds = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/backgrounds", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
-        JsonNode extractedProps = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/assets/extract/props", projectId))
+        JsonNode extractedProps = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/props", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(extractedCharacters.size()).isEqualTo(2);
         assertThat(extractedBackgrounds.size()).isEqualTo(1);
         assertThat(extractedProps.size()).isEqualTo(2);
 
-        JsonNode assets = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/assets", projectId))
+        JsonNode assets = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/assets", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(assets.size()).isEqualTo(5);
@@ -184,15 +196,16 @@ class ScriptProjectWorkflowIntegrationTest {
         updateAssetRequest.put("description", "主角视觉设定定稿，保留画箱与清晨薄雾氛围。");
         updateAssetRequest.put("tags", List.of("角色", "主视觉", "定稿"));
         updateAssetRequest.put("promptDraft", "电影感写实，阿满背着画箱走过古镇清晨街口。");
-        JsonNode updatedAsset = readSuccessData(mockMvc.perform(put("/api/v1/script-projects/{projectId}/assets/{assetId}", projectId, firstCharacterAssetId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(updateAssetRequest)))
+        JsonNode updatedAsset = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/assets/{assetId}", projectId, firstCharacterAssetId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateAssetRequest))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(updatedAsset.path("name").asText()).isEqualTo("阿满（定稿）");
         assertThat(updatedAsset.path("tags").size()).isEqualTo(3);
 
-        JsonNode shots = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/shots/split", projectId))
+        JsonNode shots = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(shots.size()).isEqualTo(1);
@@ -212,13 +225,13 @@ class ScriptProjectWorkflowIntegrationTest {
                 continue;
             }
 
-            JsonNode generatedKeyframes = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId))
+            JsonNode generatedKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
                     .andExpect(status().isOk())
                     .andReturn());
             assertThat(generatedKeyframes.size()).isEqualTo(2);
 
             String confirmedKeyframeId = generatedKeyframes.get(0).path("keyframeId").asText();
-            JsonNode confirmedKeyframe = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/confirm", projectId, confirmedKeyframeId))
+            JsonNode confirmedKeyframe = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/confirm", projectId, confirmedKeyframeId)))
                     .andExpect(status().isOk())
                     .andReturn());
             assertThat(confirmedKeyframe.path("selected").asBoolean()).isTrue();
@@ -227,7 +240,7 @@ class ScriptProjectWorkflowIntegrationTest {
             }
 
             if (!regeneratedOnce) {
-                JsonNode regenerated = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/regenerate", projectId, confirmedKeyframeId))
+                JsonNode regenerated = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/regenerate", projectId, confirmedKeyframeId)))
                         .andExpect(status().isOk())
                         .andReturn());
                 assertThat(regenerated.size()).isEqualTo(2);
@@ -235,7 +248,7 @@ class ScriptProjectWorkflowIntegrationTest {
             }
         }
 
-        JsonNode keyframes = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/keyframes", projectId))
+        JsonNode keyframes = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/keyframes", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(keyframes.size()).isEqualTo(8);
@@ -243,16 +256,16 @@ class ScriptProjectWorkflowIntegrationTest {
         assertThat(selectedAssetIds(keyframes)).isEqualTo(requiredAssetIds);
         assertThat(selectedImageFileId).isNotBlank();
 
-        readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/video/generate", projectId))
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/video/generate", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         JsonNode pipeline = waitForVideoCompletion(projectId);
-        assertThat(pipeline.path("projectStatus").asText()).isEqualTo("COMPLETED");
+        assertThat(pipeline.path("projectStatus").asText()).isEqualTo("VIDEO_READY");
         assertThat(pipeline.path("latestRun").path("status").asText()).isEqualTo("SUCCESS");
         assertThat(pipeline.path("failedCount").asInt()).isZero();
         assertThat(pipeline.path("successCount").asInt()).isEqualTo(shots.size());
 
-        JsonNode videoTasks = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/video/tasks", projectId))
+        JsonNode videoTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/video/tasks", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(videoTasks.size()).isEqualTo(1);
@@ -281,7 +294,7 @@ class ScriptProjectWorkflowIntegrationTest {
                 阿满背着画箱穿过薄雾，准备在天亮前完成第一张写生。
                 """, "gpt-4o-mini");
 
-        JsonNode revisions = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/revisions", projectId))
+        JsonNode revisions = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/revisions", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(revisions.isArray()).isTrue();
@@ -293,18 +306,18 @@ class ScriptProjectWorkflowIntegrationTest {
                 夜色下，主角站在街角，准备拨通电话。
                 """, "missing-text-model");
 
-        JsonNode failedRefine = readResponseTree(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine", projectId))
+        JsonNode failedRefine = readResponseTree(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/refine", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(failedRefine.path("code").asInt()).isEqualTo(400);
         assertThat(failedRefine.path("message").asText()).contains("未命中已配置的文本模型");
 
-        JsonNode detail = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}", projectId))
+        JsonNode detail = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(detail.path("project").path("status").asText()).isEqualTo("FAILED");
 
-        JsonNode pipeline = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId))
+        JsonNode pipeline = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(pipeline.path("projectStatus").asText()).isEqualTo("FAILED");
@@ -323,10 +336,11 @@ class ScriptProjectWorkflowIntegrationTest {
                 )
         );
 
-        JsonNode uploadData = readSuccessData(mockMvc.perform(multipart("/api/v1/script-projects/upload")
-                        .file(file)
-                        .param("name", "DOCX Smoke Project")
-                        .param("language", "zh-CN"))
+        JsonNode uploadData = readSuccessData(mockMvc.perform(
+                        withScriptAuth(multipart("/api/v1/script-projects/upload")
+                                .file(file)
+                                .param("name", "DOCX Smoke Project")
+                                .param("language", "zh-CN")))
                 .andExpect(status().isOk())
                 .andReturn());
 
@@ -337,7 +351,7 @@ class ScriptProjectWorkflowIntegrationTest {
         assertThat(project.path("uploadedSourceFileId").asText()).isNotBlank();
         assertThat(uploadData.path("documents").size()).isEqualTo(2);
 
-        JsonNode script = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/script", projectId))
+        JsonNode script = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/script", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(script.path("originalText").asText())
@@ -350,10 +364,10 @@ class ScriptProjectWorkflowIntegrationTest {
         assertThat(Files.exists(projectRoot.resolve("documents/original-script.txt"))).isTrue();
         assertThat(Files.exists(projectRoot.resolve("documents/uploads/script-smoke.docx"))).isTrue();
 
-        mockMvc.perform(delete("/api/v1/script-projects/{projectId}", projectId))
+        mockMvc.perform(withScriptAuth(delete("/api/v1/script-projects/{projectId}", projectId)))
                 .andExpect(status().isOk());
 
-        JsonNode detailAfterDelete = readResponseTree(mockMvc.perform(get("/api/v1/script-projects/{projectId}", projectId))
+        JsonNode detailAfterDelete = readResponseTree(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}", projectId)))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(detailAfterDelete.path("code").asInt()).isEqualTo(404);
@@ -371,9 +385,10 @@ class ScriptProjectWorkflowIntegrationTest {
         freeForm.put("aspectRatio", "16:9");
         freeForm.put("targetDuration", 15);
         freeForm.put("language", "中文");
-        JsonNode createdFree = readSuccessData(mockMvc.perform(post("/api/v1/script-projects")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(freeForm)))
+        JsonNode createdFree = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(freeForm))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(createdFree.path("project").path("visualStyle").asText()).contains("完全自定义");
@@ -385,9 +400,10 @@ class ScriptProjectWorkflowIntegrationTest {
         preset.put("aspectRatio", "16:9");
         preset.put("targetDuration", 15);
         preset.put("language", "中文");
-        JsonNode createdPreset = readSuccessData(mockMvc.perform(post("/api/v1/script-projects")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(preset)))
+        JsonNode createdPreset = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(preset))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(createdPreset.path("project").path("visualStyle").asText()).isEqualTo("live-action");
@@ -400,12 +416,738 @@ class ScriptProjectWorkflowIntegrationTest {
         longReq.put("aspectRatio", "16:9");
         longReq.put("targetDuration", 15);
         longReq.put("language", "中文");
-        JsonNode createdLong = readSuccessData(mockMvc.perform(post("/api/v1/script-projects")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(longReq)))
+        JsonNode createdLong = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(longReq))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(createdLong.path("project").path("visualStyle").asText().length()).isGreaterThan(8000);
+    }
+
+    @Test
+    void dubbingWorkflowStoresAudioAndSupportsRetryAfterModelFix() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，轻声自述今天一定要完成写生。
+                """, "gpt-4o-mini");
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱走进古镇街口，边走边低声给自己打气。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        createCapabilityModelConfig("tts-mock-v1", "tts");
+
+        Map<String, Object> invalidSettings = new LinkedHashMap<>();
+        invalidSettings.put("defaultTtsModel", "missing-tts-model");
+        invalidSettings.put("dubbingVoice", "温和旁白");
+        invalidSettings.put("dubbingLanguage", "zh-CN");
+        invalidSettings.put("dubbingSpeed", 1.15d);
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(invalidSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode failedPipeline = waitForDubbingCompletion(projectId);
+        assertThat(failedPipeline.path("projectStatus").asText()).isEqualTo("FAILED");
+        assertThat(failedPipeline.path("dubbingFailedCount").asInt()).isEqualTo(1);
+        assertThat(failedPipeline.path("dubbingReady").asBoolean()).isFalse();
+
+        JsonNode failedTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/dubbing/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(failedTasks.size()).isEqualTo(1);
+        assertThat(failedTasks.get(0).path("status").asText()).isEqualTo("FAILED");
+        assertThat(failedTasks.get(0).path("errorMessage").asText()).contains("未命中已配置的配音模型");
+        String dubbingTaskId = failedTasks.get(0).path("dubbingTaskId").asText();
+
+        Map<String, Object> validSettings = new LinkedHashMap<>();
+        validSettings.put("defaultTtsModel", "tts-mock-v1");
+        validSettings.put("dubbingVoice", "温和旁白");
+        validSettings.put("dubbingLanguage", "zh-CN");
+        validSettings.put("dubbingSpeed", 1.15d);
+        JsonNode savedSettings = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(validSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(savedSettings.path("defaultTtsModel").asText()).isEqualTo("tts-mock-v1");
+        assertThat(savedSettings.path("dubbingVoice").asText()).isEqualTo("温和旁白");
+        assertThat(savedSettings.path("dubbingLanguage").asText()).isEqualTo("zh-CN");
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/tasks/{dubbingTaskId}/retry", projectId, dubbingTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode completedPipeline = waitForDubbingCompletion(projectId);
+        assertThat(completedPipeline.path("projectStatus").asText()).isEqualTo("SCRIPT_READY");
+        assertThat(completedPipeline.path("dubbingReady").asBoolean()).isTrue();
+        assertThat(completedPipeline.path("dubbingSuccessCount").asInt()).isEqualTo(1);
+
+        JsonNode successTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/dubbing/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(successTasks.get(0).path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(successTasks.get(0).path("modelName").asText()).isEqualTo("tts-mock-v1");
+        assertThat(successTasks.get(0).path("voiceName").asText()).isEqualTo("温和旁白");
+        String audioFileId = successTasks.get(0).path("resultAudioFileId").asText();
+        assertThat(audioFileId).isNotBlank();
+
+        MvcResult audioPreview = mockMvc.perform(get("/api/v1/files/{fileId}", audioFileId))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(audioPreview.getResponse().getContentType()).startsWith("audio/wav");
+        assertThat(audioPreview.getResponse().getContentAsByteArray()).isNotEmpty();
+    }
+
+    @Test
+    void lipSyncWorkflowValidatesDependenciesStoresResultAndSupportsRetry() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，边走边低声练习今天的旁白。
+                """, "gpt-4o-mini");
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱走进古镇街口，边走边轻声自述今天一定要画好第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode missingDependencyResponse = readResponseTree(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(missingDependencyResponse.path("code").asInt()).isEqualTo(400);
+        assertThat(missingDependencyResponse.path("message").asText())
+                .contains("缺少源视频")
+                .contains("缺少配音音频");
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedBackgrounds = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/backgrounds", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedProps = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/props", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode assets = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/assets", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        Set<String> requiredAssetIds = collectShotAssetIds(readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/shots", projectId)))
+                .andExpect(status().isOk())
+                .andReturn()));
+        assertThat(extractedCharacters.size() + extractedBackgrounds.size() + extractedProps.size()).isEqualTo(assets.size());
+
+        for (JsonNode asset : assets) {
+            String assetId = asset.path("assetId").asText();
+            if (!requiredAssetIds.contains(assetId)) {
+                continue;
+            }
+            JsonNode generatedKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            String confirmedKeyframeId = generatedKeyframes.get(0).path("keyframeId").asText();
+            readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/confirm", projectId, confirmedKeyframeId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+        }
+
+        createCapabilityModelConfig("tts-mock-v1", "tts");
+        Map<String, Object> ttsSettings = new LinkedHashMap<>();
+        ttsSettings.put("defaultTtsModel", "tts-mock-v1");
+        ttsSettings.put("dubbingVoice", "温和旁白");
+        ttsSettings.put("dubbingLanguage", "zh-CN");
+        ttsSettings.put("dubbingSpeed", 1.0d);
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(ttsSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/video/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode videoPipeline = waitForVideoCompletion(projectId);
+        assertThat(videoPipeline.path("videoReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode dubbingPipeline = waitForDubbingCompletion(projectId);
+        assertThat(dubbingPipeline.path("projectStatus").asText()).isEqualTo("DUBBING_READY");
+        assertThat(dubbingPipeline.path("dubbingReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode lipSyncPipeline = waitForLipSyncCompletion(projectId);
+        assertThat(lipSyncPipeline.path("projectStatus").asText()).isEqualTo("LIP_SYNC_READY");
+        assertThat(lipSyncPipeline.path("lipSyncReady").asBoolean()).isTrue();
+        assertThat(lipSyncPipeline.path("lipSyncSuccessCount").asInt()).isEqualTo(1);
+
+        JsonNode lipSyncTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/lip-sync/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(lipSyncTasks.size()).isEqualTo(1);
+        JsonNode lipSyncTask = lipSyncTasks.get(0);
+        assertThat(lipSyncTask.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(lipSyncTask.path("sourceVideoFileId").asText()).isNotBlank();
+        assertThat(lipSyncTask.path("sourceAudioFileId").asText()).isNotBlank();
+        String lipSyncTaskId = lipSyncTask.path("lipSyncTaskId").asText();
+        String lipSyncVideoFileId = lipSyncTask.path("resultVideoFileId").asText();
+        assertThat(lipSyncVideoFileId).isNotBlank();
+
+        MvcResult lipSyncPreview = mockMvc.perform(get("/api/v1/files/{fileId}", lipSyncVideoFileId))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(lipSyncPreview.getResponse().getContentType()).startsWith("video/mp4");
+        assertThat(lipSyncPreview.getResponse().getContentAsByteArray()).isNotEmpty();
+
+        var aggregate = scriptProjectService.require(projectId);
+        var sourceAudio = scriptProjectService.findFile(aggregate, lipSyncTask.path("sourceAudioFileId").asText());
+        assertThat(sourceAudio).isNotNull();
+        Files.deleteIfExists(localAssetFileService.resolveStoredFile(sourceAudio));
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/tasks/{lipSyncTaskId}/retry", projectId, lipSyncTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode failedLipSyncPipeline = waitForLipSyncCompletion(projectId);
+        assertThat(failedLipSyncPipeline.path("projectStatus").asText()).isEqualTo("FAILED");
+        assertThat(failedLipSyncPipeline.path("lipSyncFailedCount").asInt()).isEqualTo(1);
+
+        JsonNode failedLipSyncTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/lip-sync/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(failedLipSyncTasks.get(0).path("errorMessage").asText()).contains("配音音频文件已丢失");
+
+        JsonNode dubbingTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/dubbing/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String dubbingTaskId = dubbingTasks.get(0).path("dubbingTaskId").asText();
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/tasks/{dubbingTaskId}/retry", projectId, dubbingTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode restoredDubbingPipeline = waitForDubbingCompletion(projectId);
+        assertThat(restoredDubbingPipeline.path("dubbingReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/tasks/{lipSyncTaskId}/retry", projectId, lipSyncTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode retriedLipSyncPipeline = waitForLipSyncCompletion(projectId);
+        assertThat(retriedLipSyncPipeline.path("projectStatus").asText()).isEqualTo("LIP_SYNC_READY");
+        assertThat(retriedLipSyncPipeline.path("lipSyncReady").asBoolean()).isTrue();
+    }
+
+    @Test
+    void finalCompositionWorkflowStoresMediaPrefersLipSyncAndFallsBackToVideo() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，边走边低声练习今天的旁白。
+                """, "gpt-4o-mini");
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱走进古镇街口，边走边轻声自述今天一定要画好第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode missingDependencyResponse = readResponseTree(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/final-composition/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(missingDependencyResponse.path("code").asInt()).isEqualTo(400);
+        assertThat(missingDependencyResponse.path("message").asText()).contains("缺少可用于成片编排的结果");
+
+        JsonNode missingExportDependencyResponse = readResponseTree(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/export-package/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(missingExportDependencyResponse.path("code").asInt()).isEqualTo(400);
+        assertThat(missingExportDependencyResponse.path("message").asText()).contains("缺少项目级成片");
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedBackgrounds = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/backgrounds", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedProps = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/props", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode assets = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/assets", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        Set<String> requiredAssetIds = collectShotAssetIds(readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/shots", projectId)))
+                .andExpect(status().isOk())
+                .andReturn()));
+        assertThat(extractedCharacters.size() + extractedBackgrounds.size() + extractedProps.size()).isEqualTo(assets.size());
+        for (JsonNode asset : assets) {
+            String assetId = asset.path("assetId").asText();
+            if (!requiredAssetIds.contains(assetId)) {
+                continue;
+            }
+            JsonNode generatedKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            String confirmedKeyframeId = generatedKeyframes.get(0).path("keyframeId").asText();
+            readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/confirm", projectId, confirmedKeyframeId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+        }
+
+        createCapabilityModelConfig("tts-mock-v1", "tts");
+        Map<String, Object> ttsSettings = new LinkedHashMap<>();
+        ttsSettings.put("defaultTtsModel", "tts-mock-v1");
+        ttsSettings.put("dubbingVoice", "温和旁白");
+        ttsSettings.put("dubbingLanguage", "zh-CN");
+        ttsSettings.put("dubbingSpeed", 1.0d);
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(ttsSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/video/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode videoPipeline = waitForVideoCompletion(projectId);
+        assertThat(videoPipeline.path("videoReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode dubbingPipeline = waitForDubbingCompletion(projectId);
+        assertThat(dubbingPipeline.path("dubbingReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode lipSyncPipeline = waitForLipSyncCompletion(projectId);
+        assertThat(lipSyncPipeline.path("projectStatus").asText()).isEqualTo("LIP_SYNC_READY");
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/final-composition/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode finalPipeline = waitForFinalCompositionCompletion(projectId);
+        assertThat(finalPipeline.path("projectStatus").asText()).isEqualTo("FINAL_COMPOSITION_READY");
+        assertThat(finalPipeline.path("finalCompositionReady").asBoolean()).isTrue();
+        assertThat(finalPipeline.path("latestRun").path("pipelineType").asText()).isEqualTo("FINAL_COMPOSITION");
+
+        JsonNode finalTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/final-composition/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(finalTasks.size()).isEqualTo(1);
+        JsonNode finalTask = finalTasks.get(0);
+        assertThat(finalTask.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(finalTask.path("inputSegments").get(0).path("sourceType").asText()).isEqualTo("LIP_SYNC");
+        String finalTaskId = finalTask.path("finalCompositionTaskId").asText();
+        String finalVideoFileId = finalTask.path("resultVideoFileId").asText();
+        assertThat(finalVideoFileId).isNotBlank();
+
+        MvcResult finalPreview = mockMvc.perform(get("/api/v1/files/{fileId}", finalVideoFileId))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(finalPreview.getResponse().getContentType()).startsWith("video/mp4");
+        assertThat(finalPreview.getResponse().getContentAsByteArray()).isNotEmpty();
+
+        var aggregate = scriptProjectService.require(projectId);
+        var finalVideo = scriptProjectService.findFile(aggregate, finalVideoFileId);
+        assertThat(finalVideo).isNotNull();
+        assertThat(finalVideo.storageProvider.name()).isEqualTo("LOCAL");
+        assertThat(finalVideo.bucketName).isNotBlank();
+        assertThat(finalVideo.objectKey).contains("final-composition/");
+        assertThat(finalVideo.publicUrl).contains("/api/v1/files/");
+
+        JsonNode lipSyncTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/lip-sync/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String lipSyncVideoFileId = lipSyncTasks.get(0).path("resultVideoFileId").asText();
+        var lipSyncVideo = scriptProjectService.findFile(aggregate, lipSyncVideoFileId);
+        assertThat(lipSyncVideo).isNotNull();
+        Files.deleteIfExists(localAssetFileService.resolveStoredFile(lipSyncVideo));
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/final-composition/tasks/{finalCompositionTaskId}/retry", projectId, finalTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode retriedPipeline = waitForFinalCompositionCompletion(projectId);
+        assertThat(retriedPipeline.path("projectStatus").asText()).isEqualTo("FINAL_COMPOSITION_READY");
+
+        JsonNode retriedTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/final-composition/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(retriedTasks.get(0).path("inputSegments").get(0).path("sourceType").asText()).isEqualTo("VIDEO");
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/export-package/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode exportPipeline = waitForExportPackageCompletion(projectId);
+        assertThat(exportPipeline.path("projectStatus").asText()).isEqualTo("EXPORT_PACKAGE_READY");
+        assertThat(exportPipeline.path("exportPackageReady").asBoolean()).isTrue();
+        assertThat(exportPipeline.path("latestRun").path("pipelineType").asText()).isEqualTo("EXPORT_PACKAGE");
+
+        JsonNode exportTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/export-package/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(exportTasks.size()).isEqualTo(1);
+        JsonNode exportTask = exportTasks.get(0);
+        assertThat(exportTask.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(exportTask.path("manifestFileId").asText()).isNotBlank();
+        assertThat(exportTask.path("resultArchiveFileId").asText()).isNotBlank();
+        assertThat(exportTask.path("archiveStorageProvider").asText()).isEqualTo("LOCAL");
+        assertThat(exportTask.path("archiveBucketName").asText()).isNotBlank();
+        assertThat(exportTask.path("archiveObjectKey").asText()).contains("export-package/");
+        assertThat(exportTask.path("archivePublicUrl").asText()).contains("/api/v1/files/");
+        assertThat(exportTask.path("manifestStorageProvider").asText()).isEqualTo("LOCAL");
+
+        MvcResult exportArchive = mockMvc.perform(get("/api/v1/files/{fileId}/download", exportTask.path("resultArchiveFileId").asText()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(exportArchive.getResponse().getContentType()).startsWith("application/zip");
+
+        Map<String, byte[]> archiveEntries = unzipEntries(exportArchive.getResponse().getContentAsByteArray());
+        assertThat(archiveEntries).containsKey("manifest.json");
+        String mediaEntryName = archiveEntries.keySet().stream()
+                .filter(name -> name.startsWith("media/") && name.endsWith(".mp4"))
+                .findFirst()
+                .orElse(null);
+        assertThat(mediaEntryName).isNotBlank();
+        JsonNode manifest = objectMapper.readTree(archiveEntries.get("manifest.json"));
+        assertThat(manifest.path("project").path("projectName").asText()).isEqualTo("古镇清晨项目");
+        assertThat(manifest.path("files").isArray()).isTrue();
+        assertThat(manifest.path("shots").size()).isEqualTo(1);
+    }
+
+    @Test
+    void exportPackageWorkflowSupportsFailureRetryAndStoredResultMetadata() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，边走边低声练习今天的旁白。
+                """, "gpt-4o-mini");
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱走进古镇街口，边走边轻声自述今天一定要画好第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedBackgrounds = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/backgrounds", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode extractedProps = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/props", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode assets = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/assets", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        Set<String> requiredAssetIds = collectShotAssetIds(readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/shots", projectId)))
+                .andExpect(status().isOk())
+                .andReturn()));
+        assertThat(extractedCharacters.size() + extractedBackgrounds.size() + extractedProps.size()).isEqualTo(assets.size());
+        for (JsonNode asset : assets) {
+            String assetId = asset.path("assetId").asText();
+            if (!requiredAssetIds.contains(assetId)) {
+                continue;
+            }
+            JsonNode generatedKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            String confirmedKeyframeId = generatedKeyframes.get(0).path("keyframeId").asText();
+            readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/keyframes/{keyframeId}/confirm", projectId, confirmedKeyframeId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+        }
+
+        createCapabilityModelConfig("tts-mock-v1", "tts");
+        Map<String, Object> ttsSettings = new LinkedHashMap<>();
+        ttsSettings.put("defaultTtsModel", "tts-mock-v1");
+        ttsSettings.put("dubbingVoice", "温和旁白");
+        ttsSettings.put("dubbingLanguage", "zh-CN");
+        ttsSettings.put("dubbingSpeed", 1.0d);
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(ttsSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/video/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode videoPipeline = waitForVideoCompletion(projectId);
+        assertThat(videoPipeline.path("videoReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/dubbing/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode dubbingPipeline = waitForDubbingCompletion(projectId);
+        assertThat(dubbingPipeline.path("dubbingReady").asBoolean()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/lip-sync/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode lipSyncPipeline = waitForLipSyncCompletion(projectId);
+        assertThat(lipSyncPipeline.path("projectStatus").asText()).isEqualTo("LIP_SYNC_READY");
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/final-composition/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode finalPipeline = waitForFinalCompositionCompletion(projectId);
+        assertThat(finalPipeline.path("projectStatus").asText()).isEqualTo("FINAL_COMPOSITION_READY");
+
+        JsonNode finalTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/final-composition/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(finalTasks.size()).isEqualTo(1);
+        String finalCompositionTaskId = finalTasks.get(0).path("finalCompositionTaskId").asText();
+        String finalVideoFileId = finalTasks.get(0).path("resultVideoFileId").asText();
+        assertThat(finalVideoFileId).isNotBlank();
+
+        boolean[] failArchiveOnce = {true};
+        doAnswer(invocation -> {
+            String relativePath = invocation.getArgument(1);
+            if (failArchiveOnce[0]
+                    && relativePath != null
+                    && relativePath.startsWith("export-package/")
+                    && relativePath.endsWith("/package.zip")) {
+                failArchiveOnce[0] = false;
+                throw new IllegalStateException("模拟导出包归档写入失败");
+            }
+            return invocation.callRealMethod();
+        }).when(localAssetFileService).storeBytes(anyString(), anyString(), anyString(), any());
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/export-package/generate", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode failedExportPipeline = waitForExportPackageCompletion(projectId);
+        assertThat(failedExportPipeline.path("projectStatus").asText()).isEqualTo("FAILED");
+        assertThat(failedExportPipeline.path("exportPackageFailedCount").asInt()).isEqualTo(1);
+        assertThat(failedExportPipeline.path("exportPackageReady").asBoolean()).isFalse();
+
+        JsonNode failedExportTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/export-package/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(failedExportTasks.size()).isEqualTo(1);
+        JsonNode failedExportTask = failedExportTasks.get(0);
+        String exportPackageTaskId = failedExportTask.path("exportPackageTaskId").asText();
+        assertThat(failedExportTask.path("status").asText()).isEqualTo("FAILED");
+        assertThat(failedExportTask.path("errorMessage").asText()).contains("导出包生成失败");
+        assertThat(failedExportTask.path("manifestFileId").isNull()).isTrue();
+        assertThat(failedExportTask.path("resultArchiveFileId").isNull()).isTrue();
+        assertThat(failedExportTask.path("archiveStorageProvider").isNull()).isTrue();
+        assertThat(failedExportTask.path("manifestStorageProvider").isNull()).isTrue();
+
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/export-package/tasks/{exportPackageTaskId}/retry", projectId, exportPackageTaskId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode recoveredExportPipeline = waitForExportPackageCompletion(projectId);
+        assertThat(recoveredExportPipeline.path("projectStatus").asText()).isEqualTo("EXPORT_PACKAGE_READY");
+        assertThat(recoveredExportPipeline.path("exportPackageReady").asBoolean()).isTrue();
+        assertThat(recoveredExportPipeline.path("exportPackageSuccessCount").asInt()).isEqualTo(1);
+
+        JsonNode recoveredExportTasks = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/export-package/tasks", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(recoveredExportTasks.size()).isEqualTo(1);
+        JsonNode recoveredExportTask = recoveredExportTasks.get(0);
+        assertThat(recoveredExportTask.path("exportPackageTaskId").asText()).isEqualTo(exportPackageTaskId);
+        assertThat(recoveredExportTask.path("status").asText()).isEqualTo("SUCCESS");
+        assertThat(recoveredExportTask.path("retryCount").asInt()).isEqualTo(1);
+        assertThat(recoveredExportTask.path("errorMessage").isNull()).isTrue();
+        assertThat(recoveredExportTask.path("sourceFinalCompositionTaskId").asText()).isEqualTo(finalCompositionTaskId);
+        assertThat(recoveredExportTask.path("sourceFinalVideoFileId").asText()).isEqualTo(finalVideoFileId);
+        assertThat(recoveredExportTask.path("manifestFileId").asText()).isNotBlank();
+        assertThat(recoveredExportTask.path("resultArchiveFileId").asText()).isNotBlank();
+        assertThat(recoveredExportTask.path("archiveStorageProvider").asText()).isEqualTo("LOCAL");
+        assertThat(recoveredExportTask.path("archiveBucketName").asText()).isNotBlank();
+        assertThat(recoveredExportTask.path("archiveObjectKey").asText()).contains("export-package/");
+        assertThat(recoveredExportTask.path("archivePublicUrl").asText()).contains("/api/v1/files/");
+        assertThat(recoveredExportTask.path("manifestStorageProvider").asText()).isEqualTo("LOCAL");
+        assertThat(recoveredExportTask.path("manifestBucketName").asText()).isNotBlank();
+        assertThat(recoveredExportTask.path("manifestObjectKey").asText()).contains("export-package/");
+        assertThat(recoveredExportTask.path("manifestPublicUrl").asText()).contains("/api/v1/files/");
+
+        MvcResult recoveredArchive = mockMvc.perform(get("/api/v1/files/{fileId}/download", recoveredExportTask.path("resultArchiveFileId").asText()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(recoveredArchive.getResponse().getContentType()).startsWith("application/zip");
+
+        Map<String, byte[]> archiveEntries = unzipEntries(recoveredArchive.getResponse().getContentAsByteArray());
+        assertThat(archiveEntries).containsKey("manifest.json");
+        assertThat(archiveEntries.keySet()).anyMatch(name -> name.startsWith("media/") && name.endsWith(".mp4"));
+        JsonNode manifest = objectMapper.readTree(archiveEntries.get("manifest.json"));
+        assertThat(manifest.path("exportPackageTaskId").asText()).isEqualTo(exportPackageTaskId);
+        assertThat(manifest.path("sourceFinalCompositionTaskId").asText()).isEqualTo(finalCompositionTaskId);
+        assertThat(manifest.path("project").path("projectId").asText()).isEqualTo(projectId);
+        assertThat(manifest.path("files").isArray()).isTrue();
+        assertThat(manifest.path("shots").size()).isEqualTo(1);
+    }
+
+    @Test
+    void contentReviewWorkflowSupportsRejectResubmitApproveAndAuditLogs() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，准备提交最终交付。
+                """, "gpt-4o-mini");
+
+        JsonNode blockedSubmit = readResponseTree(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects/{projectId}/content-review/submit", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(Map.of("comment", "请审核第一版交付")))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(blockedSubmit.path("code").asInt()).isEqualTo(400);
+        assertThat(blockedSubmit.path("message").asText()).contains("导出包");
+
+        seedExportReadyPackage(projectId);
+
+        JsonNode submitted = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects/{projectId}/content-review/submit", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(Map.of("comment", "请审核第一版交付")))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(submitted.path("status").asText()).isEqualTo("PENDING");
+        assertThat(submitted.path("resubmitCount").asInt()).isEqualTo(0);
+        assertThat(submitted.path("currentReviewId").asText()).isNotBlank();
+        assertThat(submitted.path("records")).hasSize(1);
+        String firstReviewId = submitted.path("currentReviewId").asText();
+
+        JsonNode pendingPipeline = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(pendingPipeline.path("contentReviewStatus").asText()).isEqualTo("PENDING");
+
+        JsonNode selfApproveBlocked = readResponseTree(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects/{projectId}/content-review/approve", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(Map.of("comment", "自己不能通过")))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(selfApproveBlocked.path("code").asInt()).isEqualTo(403);
+        assertThat(selfApproveBlocked.path("message").asText()).contains("不能审核自己提交的项目");
+
+        JsonNode rejected = readSuccessData(mockMvc.perform(
+                        withScriptAuth(
+                                post("/api/v1/script-projects/{projectId}/content-review/reject", projectId)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsBytes(Map.of("comment", "请补充片头字幕与导出说明"))),
+                                "admin-reviewer"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(rejected.path("status").asText()).isEqualTo("REJECTED");
+        assertThat(rejected.path("latestReviewComment").asText()).contains("片头字幕");
+        assertThat(rejected.path("records")).hasSize(1);
+        assertThat(rejected.path("records").get(0).path("status").asText()).isEqualTo("REJECTED");
+
+        JsonNode rejectedStatus = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/content-review", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(rejectedStatus.path("status").asText()).isEqualTo("REJECTED");
+        assertThat(rejectedStatus.path("canSubmit").asBoolean()).isTrue();
+
+        JsonNode resubmitted = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects/{projectId}/content-review/submit", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(Map.of("comment", "已按意见补充片头字幕，请再次审核")))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(resubmitted.path("status").asText()).isEqualTo("PENDING");
+        assertThat(resubmitted.path("resubmitCount").asInt()).isEqualTo(1);
+        assertThat(resubmitted.path("records")).hasSize(2);
+        assertThat(resubmitted.path("currentReviewId").asText()).isNotEqualTo(firstReviewId);
+
+        JsonNode approved = readSuccessData(mockMvc.perform(
+                        withScriptAuth(
+                                post("/api/v1/script-projects/{projectId}/content-review/approve", projectId)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsBytes(Map.of("comment", "内容符合交付要求，可以发布"))),
+                                "admin-reviewer"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(approved.path("status").asText()).isEqualTo("APPROVED");
+        assertThat(approved.path("latestReviewComment").asText()).contains("可以发布");
+        assertThat(approved.path("records")).hasSize(2);
+        assertThat(approved.path("records").get(0).path("status").asText()).isEqualTo("APPROVED");
+        assertThat(approved.path("records").get(1).path("status").asText()).isEqualTo("REJECTED");
+
+        JsonNode approvedPipeline = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(approvedPipeline.path("contentReviewStatus").asText()).isEqualTo("APPROVED");
+        assertThat(approvedPipeline.path("reviewResubmitCount").asInt()).isEqualTo(1);
+
+        JsonNode auditLogs = readSuccessData(mockMvc.perform(
+                        withScriptAuth(get("/api/v1/audit-logs")
+                                .param("entityType", "SCRIPT_PROJECT")
+                                .param("entityId", projectId), "admin-reviewer"))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(auditLogs.isArray()).isTrue();
+        assertThat(jsonTextSet(auditLogs, "action")).contains(
+                "PROJECT_REVIEW_SUBMITTED",
+                "PROJECT_REVIEW_REJECTED",
+                "PROJECT_REVIEW_RESUBMITTED",
+                "PROJECT_REVIEW_APPROVED"
+        );
     }
 
     private String createTextProject(String sourceText, String explicitTextModel) throws Exception {
@@ -421,16 +1163,59 @@ class ScriptProjectWorkflowIntegrationTest {
             request.put("explicitTextModel", explicitTextModel);
         }
 
-        JsonNode createData = readSuccessData(mockMvc.perform(post("/api/v1/script-projects")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(request)))
+        JsonNode createData = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(request))))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(createData.path("project").path("sourceType").asText()).isEqualTo("text");
         return createData.path("project").path("projectId").asText();
     }
 
+    private void seedExportReadyPackage(String projectId) {
+        var aggregate = scriptProjectService.require(projectId);
+        StoredFileRecord manifestFile = localAssetFileService.storeJson(
+                projectId,
+                "export-package/mock/manifest.json",
+                Map.of("projectId", projectId, "seed", true)
+        );
+        StoredFileRecord archiveFile = localAssetFileService.storeBytes(
+                projectId,
+                "export-package/mock/package.zip",
+                "application/zip",
+                new byte[]{1, 2, 3}
+        );
+        scriptProjectService.upsertFile(aggregate, manifestFile);
+        scriptProjectService.upsertFile(aggregate, archiveFile);
+
+        ExportPackageTask task = new ExportPackageTask();
+        task.exportPackageTaskId = "pkg-seed-" + projectId;
+        task.projectId = projectId;
+        task.status = ExportPackageTaskStatus.SUCCESS;
+        task.manifestFileId = manifestFile.fileId;
+        task.resultArchiveFileId = archiveFile.fileId;
+        task.manifestStorageProvider = manifestFile.storageProvider;
+        task.manifestBucketName = manifestFile.bucketName;
+        task.manifestObjectKey = manifestFile.objectKey;
+        task.manifestPublicUrl = manifestFile.publicUrl;
+        task.archiveStorageProvider = archiveFile.storageProvider;
+        task.archiveBucketName = archiveFile.bucketName;
+        task.archiveObjectKey = archiveFile.objectKey;
+        task.archivePublicUrl = archiveFile.publicUrl;
+        task.finishedAt = Instant.now();
+
+        aggregate.exportPackageTasks.clear();
+        aggregate.exportPackageTasks.add(task);
+        aggregate.project.status = ProjectStatus.EXPORT_PACKAGE_READY;
+        scriptProjectService.save(aggregate);
+    }
+
     private void createTextModelConfig(String modelName) throws Exception {
+        createCapabilityModelConfig(modelName, "text");
+    }
+
+    private void createCapabilityModelConfig(String modelName, String capability) throws Exception {
         Map<String, Object> connectionRequest = new LinkedHashMap<>();
         connectionRequest.put("name", "Test OpenAI Connection");
         connectionRequest.put("provider", "openai");
@@ -453,7 +1238,7 @@ class ScriptProjectWorkflowIntegrationTest {
         modelRequest.put("modelName", modelName);
         modelRequest.put("connectionId", connectionId);
         modelRequest.put("enabled", true);
-        modelRequest.put("metadata", Map.of("capabilities", List.of("text")));
+        modelRequest.put("metadata", Map.of("capabilities", List.of(capability)));
         readSuccessData(mockMvc.perform(post("/api/v1/models")
                         .header("Authorization", "Bearer " + TEST_ACCESS_TOKEN)
                         .header("x-aigc-token", TEST_ACCESS_TOKEN)
@@ -578,7 +1363,7 @@ class ScriptProjectWorkflowIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
         JsonNode latest = null;
         while (Instant.now().isBefore(deadline)) {
-            latest = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId))
+            latest = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
                     .andExpect(status().isOk())
                     .andReturn());
             if (latest.path("queuedCount").asInt() == 0 && latest.path("runningCount").asInt() == 0) {
@@ -589,6 +1374,78 @@ class ScriptProjectWorkflowIntegrationTest {
         throw new AssertionError("视频任务未在超时时间内完成: " + latest);
     }
 
+    private JsonNode waitForDubbingCompletion(String projectId) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+        JsonNode latest = null;
+        while (Instant.now().isBefore(deadline)) {
+            latest = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            if (latest.path("dubbingQueuedCount").asInt() == 0 && latest.path("dubbingRunningCount").asInt() == 0) {
+                return latest;
+            }
+            Thread.sleep(50L);
+        }
+        throw new AssertionError("配音任务未在超时时间内完成: " + latest);
+    }
+
+    private JsonNode waitForLipSyncCompletion(String projectId) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+        JsonNode latest = null;
+        while (Instant.now().isBefore(deadline)) {
+            latest = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            if (latest.path("lipSyncQueuedCount").asInt() == 0 && latest.path("lipSyncRunningCount").asInt() == 0) {
+                return latest;
+            }
+            Thread.sleep(50L);
+        }
+        throw new AssertionError("口型同步任务未在超时时间内完成: " + latest);
+    }
+
+    private JsonNode waitForFinalCompositionCompletion(String projectId) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+        JsonNode latest = null;
+        while (Instant.now().isBefore(deadline)) {
+            latest = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            if (latest.path("finalCompositionQueuedCount").asInt() == 0 && latest.path("finalCompositionRunningCount").asInt() == 0) {
+                return latest;
+            }
+            Thread.sleep(50L);
+        }
+        throw new AssertionError("成片任务未在超时时间内完成: " + latest);
+    }
+
+    private JsonNode waitForExportPackageCompletion(String projectId) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+        JsonNode latest = null;
+        while (Instant.now().isBefore(deadline)) {
+            latest = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/pipeline-status", projectId)))
+                    .andExpect(status().isOk())
+                    .andReturn());
+            if (latest.path("exportPackageQueuedCount").asInt() == 0 && latest.path("exportPackageRunningCount").asInt() == 0) {
+                return latest;
+            }
+            Thread.sleep(50L);
+        }
+        throw new AssertionError("导出包任务未在超时时间内完成: " + latest);
+    }
+
+    private Map<String, byte[]> unzipEntries(byte[] archiveBytes) throws IOException {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipInputStream inputStream = new ZipInputStream(new java.io.ByteArrayInputStream(archiveBytes))) {
+            ZipEntry entry;
+            while ((entry = inputStream.getNextEntry()) != null) {
+                entries.put(entry.getName(), inputStream.readAllBytes());
+                inputStream.closeEntry();
+            }
+        }
+        return entries;
+    }
+
     private JsonNode readSuccessData(MvcResult result) throws Exception {
         JsonNode root = readResponseTree(result);
         assertThat(root.path("code").asInt()).isEqualTo(200);
@@ -597,6 +1454,18 @@ class ScriptProjectWorkflowIntegrationTest {
 
     private JsonNode readResponseTree(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private <T extends AbstractMockHttpServletRequestBuilder<T>> T withScriptAuth(T builder) {
+        return withScriptAuth(builder, "integration-test-user");
+    }
+
+    private <T extends AbstractMockHttpServletRequestBuilder<T>> T withScriptAuth(T builder, String userId) {
+        return builder
+                .header("Authorization", "Bearer " + TEST_ACCESS_TOKEN)
+                .header("x-aigc-token", TEST_ACCESS_TOKEN)
+                .header("x-user-id", userId)
+                .header("x-user-name", userId);
     }
 
     private static byte[] createDocx(String... paragraphs) {

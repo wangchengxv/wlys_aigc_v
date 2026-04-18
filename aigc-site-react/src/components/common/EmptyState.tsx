@@ -9,10 +9,12 @@ type Props = {
 export function EmptyState({ title, description = '', children }: Props) {
   return (
     <div className="empty-state panel glass">
-      <div className="orb" />
+      <div className="empty-state__orb-wrap" aria-hidden>
+        <div className="orb" />
+      </div>
       <h3>{title}</h3>
       {description ? <p className="muted">{description}</p> : null}
-      {children}
+      {children ? <div className="empty-state__actions">{children}</div> : null}
     </div>
   )
 }

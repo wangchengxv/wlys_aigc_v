@@ -5,7 +5,6 @@ import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.service.LocalAssetFileService;
 import com.example.aigc.service.ScriptProjectService;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -53,8 +52,7 @@ public class FileAssetController {
         if (record == null) {
             throw new BizException(404, "文件不存在");
         }
-        Path filePath = localAssetFileService.resolveStoredFile(record);
-        Resource resource = new FileSystemResource(filePath);
+        Resource resource = localAssetFileService.openAsResource(record);
         if (!resource.exists()) {
             throw new BizException(404, "文件不存在");
         }

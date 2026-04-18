@@ -30,6 +30,8 @@ export function graphToState(graph: LGraph, canvas: LGraphCanvas): GraphState {
   return {
     schemaVersion: CANVAS_GRAPH_SCHEMA_VERSION,
     updatedAt: Date.now(),
+    title: '',
+    projectId: null,
     graph: snapshot,
     viewport: {
       offset: [state.offset[0], state.offset[1]],
@@ -64,6 +66,8 @@ export function parseImportedState(input: string): GraphState {
     return {
       schemaVersion: typeof raw.schemaVersion === 'number' ? raw.schemaVersion : CANVAS_GRAPH_SCHEMA_VERSION,
       updatedAt: Date.now(),
+      title: typeof raw.title === 'string' ? raw.title : '',
+      projectId: typeof raw.projectId === 'string' ? raw.projectId : null,
       graph: raw.graph as unknown as GraphState['graph'],
       viewport: sanitizedViewport,
     }
@@ -73,6 +77,8 @@ export function parseImportedState(input: string): GraphState {
     return {
       schemaVersion: CANVAS_GRAPH_SCHEMA_VERSION,
       updatedAt: Date.now(),
+      title: '',
+      projectId: null,
       graph: raw as unknown as GraphState['graph'],
       viewport: DEFAULT_VIEWPORT,
     }

@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.util.Map;
+
 public record GenerateRequest(
         @NotBlank(message = "prompt不能为空")
         @Size(max = 500, message = "prompt最长500字")
@@ -36,8 +38,14 @@ public record GenerateRequest(
         @Size(max = 120, message = "videoModel最长120字")
         String videoModel,
 
+        /** 统一高级媒体请求结构：按 image/video 分组承载扩展字段 */
+        Map<String, Object> advancedMedia,
+
         /** Moark 等图生视频：参考图 HTTP(S) URL（可选；未填时 Moark 将报错提示） */
         @Size(max = 2048, message = "参考图 URL 过长")
-        String videoReferenceImageUrl
+        String videoReferenceImageUrl,
+
+        /** Vidu 图生视频可选参数（duration/resolution/audio 等） */
+        Map<String, Object> videoViduOptions
 ) {
 }

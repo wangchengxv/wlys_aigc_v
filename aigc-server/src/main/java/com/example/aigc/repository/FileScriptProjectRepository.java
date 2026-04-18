@@ -95,10 +95,15 @@ public class FileScriptProjectRepository implements ScriptProjectRepository {
     private ScriptProjectSummary toSummary(ScriptProjectAggregate aggregate) {
         ScriptProjectSummary summary = new ScriptProjectSummary();
         summary.projectId = aggregate.project.projectId;
+        summary.ownerId = aggregate.project.ownerId;
+        summary.ownerName = aggregate.project.ownerName;
+        summary.orgUnitId = aggregate.project.orgUnitId;
+        summary.courseId = aggregate.project.courseId;
         summary.name = aggregate.project.name;
         summary.status = aggregate.project.status;
         summary.scriptSummary = aggregate.project.scriptSummary;
         summary.visualStyle = aggregate.project.visualStyle;
+        summary.styleTemplateId = aggregate.project.styleTemplateId;
         summary.aspectRatio = aggregate.project.aspectRatio;
         summary.targetDuration = aggregate.project.targetDuration;
         summary.coverFileId = resolveCoverFileId(aggregate);

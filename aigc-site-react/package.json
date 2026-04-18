@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:workspace-advanced-media": "node --import tsx --test src/lib/workspace/advancedMedia.test.mjs",
+    "test:video-editing-contract": "node --import tsx --test src/lib/scriptProject/videoEditingContract.test.mjs",
+    "test:video-editing-pages": "TSX_TSCONFIG=tsconfig.app.json node --import tsx --test src/lib/scriptProject/videoEditingPages.test.mjs"
   },
   "dependencies": {
     "@comfyorg/litegraph": "^0.17.2",
@@ -27,6 +30,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "tsx": "^4.20.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
     "vite": "^8.0.1"

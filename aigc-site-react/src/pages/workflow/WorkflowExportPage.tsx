@@ -10,6 +10,10 @@ const STEPS = [
     body: '在工程内「镜头拆分与视频生成」中启动任务；完成后进入「成片与导出」页按镜预览、复制直链或新窗口打开。',
   },
   {
+    title: '确认配音准备状态',
+    body: '如需旁白或镜头配音，先在「配音管理」页试听并处理失败任务，再回到导出页确认准备状态。',
+  },
+  {
     title: '统一回看与检索',
     body: '工程内成片以本页为主；工作台单次任务可在「历史记录」中跨任务检索。',
   },
@@ -20,7 +24,7 @@ export function WorkflowExportPage() {
     <WorkflowScriptProjectHub
       eyebrow="成片与导出"
       title="汇总素材与成片输出"
-      lede="在资产页与视频页生产片段后，进入各工程的「成片与导出」页汇总链接；需要跨任务检索时再打开历史记录。"
+      lede="在资产页、视频页和配音页准备素材后，进入各工程的「成片与导出」页汇总链接，并确认配音是否已就绪。"
       headerActions={[
         { label: '选择剧本工程', to: '/script-projects', variant: 'primary' },
         { label: '历史记录', to: '/history' },

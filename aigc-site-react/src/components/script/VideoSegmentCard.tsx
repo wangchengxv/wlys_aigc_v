@@ -80,7 +80,7 @@ export function VideoSegmentCard({
     <article className="segment panel glass">
       <div className="head">
         <div>
-          <p className="eyebrow">Shot {shot.sequenceNo}</p>
+          <p className="eyebrow">镜头 {shot.sequenceNo}</p>
           <h3>{shot.title}</h3>
         </div>
         <div className="head-actions">

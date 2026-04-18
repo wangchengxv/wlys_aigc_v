@@ -55,6 +55,10 @@ public class AiCapabilityRoutingService {
         return resolve("video", explicitModelName);
     }
 
+    public ResolvedAiModel resolveTts(String explicitModelName) {
+        return resolve("tts", explicitModelName);
+    }
+
     public ResolvedAiModel resolve(String capability, String explicitModelName) {
         List<ModelConfig> candidates = modelConfigRepository.findAll().stream()
                 .filter(ModelConfig::isEnabled)
@@ -166,6 +170,7 @@ public class AiCapabilityRoutingService {
             case "image" -> provider.imageGenerationPath() != null && !provider.imageGenerationPath().isBlank();
             case "video" -> provider.videoSubmitPath() != null && !provider.videoSubmitPath().isBlank()
                     && provider.videoResultPath() != null && !provider.videoResultPath().isBlank();
+            case "tts" -> provider.textProxySupported() && textGatewayReady(provider);
             default -> false;
         };
     }

@@ -81,7 +81,6 @@ function Section({
               key={c}
               type="button"
               className="artd-swatch"
-              title={c}
               style={{ background: c }}
               onClick={() => void handleCopy(`${title} 色值`, c)}
             >
@@ -216,4 +215,3 @@ export function ArtDirectionPreview({ artDirectionJson, onCopy }: Props) {
     </div>
   )
 }
-

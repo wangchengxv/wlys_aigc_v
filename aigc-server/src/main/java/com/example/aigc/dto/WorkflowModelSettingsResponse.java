@@ -11,5 +11,9 @@ public record WorkflowModelSettingsResponse(
         String defaultTextModel,
         String defaultImageModel,
         String defaultVideoModel,
+        String defaultTtsModel,
+        String dubbingVoice,
+        String dubbingLanguage,
+        Double dubbingSpeed,
         Map<String, String> overrides
 ) {}

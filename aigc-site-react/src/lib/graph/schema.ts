@@ -10,6 +10,8 @@ export type GraphViewport = {
 export type GraphState = {
   schemaVersion: number
   updatedAt: number
+  title?: string
+  projectId?: string | null
   graph: SerialisableGraph
   viewport: GraphViewport
 }

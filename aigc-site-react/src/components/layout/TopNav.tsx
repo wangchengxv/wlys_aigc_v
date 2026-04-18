@@ -1,7 +1,31 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useAuthStore } from '@/stores/authStore'
+import type { UserRole } from '@/types'
 
-type NavKey = 'home' | 'workflow' | 'canvas' | 'tools' | 'history' | 'settings'
+type NavSectionKey =
+  | 'overview'
+  | 'courses'
+  | 'projects'
+  | 'tools'
+  | 'directory'
+  | 'resources'
+  | 'review'
+  | 'settings'
+
+type NavItem = {
+  label: string
+  to: string
+  patterns?: string[]
+  roles?: UserRole[]
+  badge?: string
+}
+
+type NavSection = {
+  id: NavSectionKey
+  title: string
+  items: NavItem[]
+}
 
 function pathMatches(pathname: string, pattern: string): boolean {
   if (pattern.endsWith('/*')) {
@@ -11,16 +35,84 @@ function pathMatches(pathname: string, pattern: string): boolean {
   return pathname === pattern || pathname.startsWith(`${pattern}/`)
 }
 
-function activeKeyForPath(pathname: string): NavKey {
-  if (pathname === '/') return 'home'
-  if (pathMatches(pathname, '/global-settings') || pathMatches(pathname, '/script-projects') || pathMatches(pathname, '/workflow')) {
-    return 'workflow'
-  }
-  if (pathMatches(pathname, '/canvas')) return 'canvas'
-  if (pathname === '/workspace' || pathMatches(pathname, '/tools')) return 'tools'
-  if (pathMatches(pathname, '/history')) return 'history'
-  if (pathMatches(pathname, '/settings') || pathMatches(pathname, '/models')) return 'settings'
-  return 'home'
+const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'overview',
+    title: '概览',
+    items: [
+      { label: '平台首页', to: '/' },
+      { label: '平台概览', to: '/operations-dashboard', roles: ['ADMIN', 'TEACHER'] },
+    ],
+  },
+  {
+    id: 'courses',
+    title: '课程与实训',
+    items: [{ label: '课程工作台', to: '/courses', patterns: ['/courses/*'] }],
+  },
+  {
+    id: 'projects',
+    title: '项目与作品',
+    items: [
+      { label: '剧本工程', to: '/script-projects', patterns: ['/script-projects/*'] },
+      { label: '剧本与故事', to: '/workflow/script-story' },
+      { label: '场景与道具', to: '/workflow/scenes-props' },
+      { label: '导演模式', to: '/workflow/director' },
+      { label: '配音与旁白', to: '/workflow/dubbing' },
+      { label: '成片与导出', to: '/workflow/export' },
+      { label: '提示词管理', to: '/workflow/prompts' },
+    ],
+  },
+  {
+    id: 'tools',
+    title: '创作工具',
+    items: [
+      { label: '文生图', to: '/tools/image' },
+      { label: '文生视频', to: '/tools/video' },
+      { label: '图生视频', to: '/tools/image-to-video' },
+      { label: '三视图 / 九宫格', to: '/tools/asset-visual', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+      { label: '无限画布', to: '/canvas' },
+      { label: '历史记录', to: '/history' },
+    ],
+  },
+  {
+    id: 'directory',
+    title: '组织与用户',
+    items: [
+      { label: '组织与用户', to: '/admin/directory', roles: ['ADMIN'] },
+    ],
+  },
+  {
+    id: 'resources',
+    title: '资源与模型',
+    items: [
+      { label: '媒体资源中心', to: '/admin/media-resources', roles: ['ADMIN', 'TEACHER'] },
+      { label: '模型配置', to: '/models', roles: ['ADMIN'] },
+      { label: '服务商中心', to: '/models/hub', roles: ['ADMIN'] },
+    ],
+  },
+  {
+    id: 'review',
+    title: '审核与审计',
+    items: [{ label: '审计日志', to: '/audit-logs', roles: ['ADMIN'] }],
+  },
+  {
+    id: 'settings',
+    title: '系统设置',
+    items: [
+      { label: '设置中心', to: '/settings' },
+      { label: '全局设定', to: '/global-settings', roles: ['ADMIN'] },
+    ],
+  },
+]
+
+function isItemActive(pathname: string, item: NavItem) {
+  const patterns = item.patterns ?? [item.to]
+  return patterns.some((pattern) => pathMatches(pathname, pattern))
+}
+
+function canViewItem(role: UserRole | undefined, item: NavItem) {
+  if (!item.roles) return true
+  return role ? item.roles.includes(role) : false
 }
 
 type Props = {
@@ -30,211 +122,102 @@ type Props = {
 
 export function TopNav({ navOpen, setNavOpen }: Props) {
   const { pathname } = useLocation()
-  const activeKey = activeKeyForPath(pathname)
-  const [hoverKey, setHoverKey] = useState<NavKey | null>(null)
-  const [tapKey, setTapKey] = useState<NavKey | null>(null)
-  const [canHover, setCanHover] = useState(true)
+  const user = useAuthStore((s) => s.user)
+  const roleText = user?.role === 'ADMIN' ? '管理员' : user?.role === 'TEACHER' ? '教师' : user?.role === 'STUDENT' ? '学生' : ''
+  const userRole = user?.role
 
-  useEffect(() => {
-    const mq = window.matchMedia('(hover: hover)')
-    const apply = () => setCanHover(mq.matches)
-    apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
-  }, [])
-
-  const openKey = useMemo(() => {
-    if (canHover) return hoverKey
-    return tapKey
-  }, [canHover, hoverKey, tapKey])
-
-  const onGroupEnter = useCallback(
-    (key: NavKey) => {
-      if (canHover) setHoverKey(key)
-    },
-    [canHover],
+  const visibleSections = useMemo(
+    () =>
+      NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => canViewItem(userRole, item)),
+      })).filter((section) => section.items.length > 0),
+    [userRole],
   )
 
-  const onGroupLeave = useCallback(() => {
-    if (canHover) setHoverKey(null)
-  }, [canHover])
-
-  const toggleTap = useCallback(
-    (key: NavKey) => {
-      if (canHover) return
-      setTapKey((k) => (k === key ? null : key))
-    },
-    [canHover],
+  const activeSectionId = useMemo(
+    () => visibleSections.find((section) => section.items.some((item) => isItemActive(pathname, item)))?.id ?? visibleSections[0]?.id,
+    [pathname, visibleSections],
   )
 
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
+
   useEffect(() => {
-    setHoverKey(null)
-    setTapKey(null)
-  }, [pathname])
-
-  function dropdownOpen(key: NavKey) {
-    return openKey === key
-  }
-
-  const onNavigate = () => setNavOpen(false)
-
-  const clusterClass = `top-nav__cluster${navOpen ? ' top-nav__cluster--open' : ''}`
+    setExpandedSections((current) => {
+      const next: Record<string, boolean> = {}
+      visibleSections.forEach((section) => {
+        next[section.id] = current[section.id] ?? section.id === activeSectionId
+      })
+      if (activeSectionId) {
+        next[activeSectionId] = true
+      }
+      return next
+    })
+  }, [activeSectionId, visibleSections])
 
   return (
-    <header className="top-nav panel glass top-nav--mega">
-      <div className="brand">
-        <span className="dot" aria-hidden />
-        <span className="brand-text">
-          <span className="brand-name">AIGC Studio</span>
-          <span className="brand-tag">Image · Video · Script</span>
-        </span>
+    <aside className={`admin-sidebar panel glass${navOpen ? ' is-open' : ''}`} aria-label="后台导航">
+      <div className="admin-sidebar__brand">
+        <span className="admin-sidebar__brand-mark" aria-hidden />
+        <div className="admin-sidebar__brand-text">
+          <strong>高校 AIGC 实训平台</strong>
+          <span>Campus AI Console</span>
+        </div>
       </div>
 
-      <nav className={clusterClass} aria-label="主导航">
-        <div
-          className={`top-nav__item top-nav__item--accent-home${activeKey === 'home' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('home')}
-          onMouseLeave={onGroupLeave}
-        >
-          <NavLink to="/" end className="top-nav__link" onClick={onNavigate}>
-            首页
-          </NavLink>
-        </div>
+      <div className="admin-sidebar__meta">
+        <span>{roleText || '访客模式'}</span>
+        <span>{visibleSections.length} 个导航分组</span>
+      </div>
 
-        <div
-          className={`top-nav__item top-nav__item--has-sub top-nav__item--accent-workflow${activeKey === 'workflow' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('workflow')}
-          onMouseLeave={onGroupLeave}
-        >
-          <button
-            type="button"
-            className={`top-nav__trigger${dropdownOpen('workflow') ? ' is-open' : ''}`}
-            aria-expanded={dropdownOpen('workflow')}
-            onClick={() => toggleTap('workflow')}
-          >
-            工作流模式
-          </button>
-          <ul className={`top-nav__dropdown${dropdownOpen('workflow') ? ' is-visible' : ''}`} role="list">
-            <li>
-              <NavLink to="/global-settings" onClick={onNavigate}>
-                全局设置
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/script-projects" onClick={onNavigate}>
-                剧本工程
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/workflow/script-story" onClick={onNavigate}>
-                剧本与故事
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/workflow/scenes-props" onClick={onNavigate}>
-                场景与道具
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/workflow/director" onClick={onNavigate}>
-                导演模式
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/workflow/export" onClick={onNavigate}>
-                成片与导出
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/workflow/prompts" onClick={onNavigate}>
-                提示词管理
-              </NavLink>
-            </li>
-          </ul>
-        </div>
+      <nav className="admin-sidebar__nav">
+        {visibleSections.map((section) => {
+          const expanded = expandedSections[section.id] ?? true
+          const active = section.id === activeSectionId
+          return (
+            <section key={section.id} className={`admin-sidebar__group${active ? ' is-active' : ''}`}>
+              <button
+                type="button"
+                className="admin-sidebar__group-toggle"
+                aria-expanded={expanded}
+                onClick={() =>
+                  setExpandedSections((current) => ({
+                    ...current,
+                    [section.id]: !expanded,
+                  }))
+                }
+              >
+                <span>{section.title}</span>
+                <span className="admin-sidebar__group-caret" aria-hidden>
+                  {expanded ? '−' : '+'}
+                </span>
+              </button>
 
-        <div
-          className={`top-nav__item top-nav__item--accent-canvas${activeKey === 'canvas' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('canvas')}
-          onMouseLeave={onGroupLeave}
-        >
-          <NavLink to="/canvas" className="top-nav__link" onClick={onNavigate}>
-            无限画布模式
-            <span className="top-nav__badge-muted" aria-hidden>
-              （后期开发）
-            </span>
-          </NavLink>
-        </div>
-
-        <div
-          className={`top-nav__item top-nav__item--has-sub top-nav__item--accent-tools${activeKey === 'tools' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('tools')}
-          onMouseLeave={onGroupLeave}
-        >
-          <button
-            type="button"
-            className={`top-nav__trigger${dropdownOpen('tools') ? ' is-open' : ''}`}
-            aria-expanded={dropdownOpen('tools')}
-            onClick={() => toggleTap('tools')}
-          >
-            小工具
-          </button>
-          <ul className={`top-nav__dropdown${dropdownOpen('tools') ? ' is-visible' : ''}`} role="list">
-            <li>
-              <NavLink to="/tools/image" onClick={onNavigate}>
-                文生图
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/tools/video" onClick={onNavigate}>
-                文生视频
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/tools/image-to-video" onClick={onNavigate}>
-                图生视频
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/tools/asset-visual" onClick={onNavigate}>
-                三视图 / 九宫格
-              </NavLink>
-            </li>
-          </ul>
-        </div>
-
-        <div
-          className={`top-nav__item top-nav__item--accent-history${activeKey === 'history' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('history')}
-          onMouseLeave={onGroupLeave}
-        >
-          <NavLink to="/history" className="top-nav__link" onClick={onNavigate}>
-            历史记录
-          </NavLink>
-        </div>
-
-        <div
-          className={`top-nav__item top-nav__item--accent-settings${activeKey === 'settings' ? ' is-active' : ''}`}
-          onMouseEnter={() => onGroupEnter('settings')}
-          onMouseLeave={onGroupLeave}
-        >
-          <NavLink to="/settings" className="top-nav__link" onClick={onNavigate}>
-            设置
-          </NavLink>
-        </div>
+              {expanded ? (
+                <div className="admin-sidebar__group-links">
+                  {section.items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={`admin-sidebar__link${isItemActive(pathname, item) ? ' is-active' : ''}`}
+                      onClick={() => setNavOpen(false)}
+                    >
+                      <span>{item.label}</span>
+                      {item.badge ? <span className="admin-sidebar__badge">{item.badge}</span> : null}
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          )
+        })}
       </nav>
 
-      <button
-        className="hamburger"
-        type="button"
-        aria-expanded={navOpen}
-        aria-label="菜单"
-        onClick={() => setNavOpen((o) => !o)}
-      >
-        <span />
-        <span />
-        <span />
-      </button>
-    </header>
+      <div className="admin-sidebar__footer">
+        <span className="admin-sidebar__footer-label">{user ? '当前账号' : '访客提示'}</span>
+        <strong>{user?.displayName || '访客模式'}</strong>
+        <p>{user ? `${roleText} · ${user.username}` : '可从顶部栏右侧登录按钮打开全局登录弹窗，解锁受限导航与后台能力。'}</p>
+      </div>
+    </aside>
   )
 }

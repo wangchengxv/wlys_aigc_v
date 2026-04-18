@@ -31,9 +31,41 @@ aigc:
     allowed-origin-patterns: ${AIGC_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,http://152.136.237.31:*,http://chengxvblog.top,https://chengxvblog.top,http://chengxvblog.top:*,https://chengxvblog.top:*}
   storage:
     data-dir: ${AIGC_DATA_DIR:${user.home}/.aigcmanju}
+    provider: ${AIGC_STORAGE_PROVIDER:LOCAL}
+    local-bucket: ${AIGC_STORAGE_LOCAL_BUCKET:aigc-local}
   auth:
     access-token: ${AIGC_ACCESS_TOKEN:dev-local-token}
     user-id-required: ${AIGC_USER_ID_REQUIRED:true}
+    development-headers-enabled: ${AIGC_DEVELOPMENT_HEADERS_ENABLED:true}
+    jwt-secret: ${AIGC_JWT_SECRET:change-this-jwt-secret-change-this-jwt-secret}
+    jwt-issuer: ${AIGC_JWT_ISSUER:aigc-server}
+    jwt-expire-minutes: ${AIGC_JWT_EXPIRE_MINUTES:720}
+    login-failure-threshold: ${AIGC_LOGIN_FAILURE_THRESHOLD:5}
+    lock-duration-minutes: ${AIGC_LOCK_DURATION_MINUTES:30}
+    force-password-change-on-reset: ${AIGC_FORCE_PASSWORD_CHANGE_ON_RESET:false}
+    seed-users:
+      - user-id: admin-001
+        username: admin
+        password: ${AIGC_SEED_ADMIN_PASSWORD:Admin@123}
+        display-name: 平台管理员
+        role: ADMIN
+        org-unit-id: platform
+        enabled: true
+      - user-id: teacher-001
+        username: teacher
+        password: ${AIGC_SEED_TEACHER_PASSWORD:Teacher@123}
+        display-name: 张老师
+        role: TEACHER
+        org-unit-id: film-school
+        enabled: true
+      - user-id: student-001
+        username: student
+        password: ${AIGC_SEED_STUDENT_PASSWORD:Student@123}
+        display-name: 李同学
+        role: STUDENT
+        org-unit-id: film-school
+        classroom-id: film-school-class-1
+        enabled: true
   pipeline:
     video:
       max-parallel: 3

@@ -1,0 +1,48 @@
+- generic [ref=e3]:
+  - complementary "应用导航" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 云
+      - generic [ref=e7]:
+        - strong [ref=e8]: AIGC实训台
+        - generic [ref=e9]: 访客工作区
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - generic [ref=e13]:
+          - link "首页" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "创作工作台" [ref=e15] [cursor=pointer]:
+            - /url: /workspace
+          - link "历史记录" [ref=e16] [cursor=pointer]:
+            - /url: /history
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: 教学管理
+        - link "课程中心" [ref=e20] [cursor=pointer]:
+          - /url: /courses
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: 项目生产
+        - generic [ref=e23]:
+          - link "项目库" [ref=e24] [cursor=pointer]:
+            - /url: /script-projects
+          - link "流程工作区" [ref=e25] [cursor=pointer]:
+            - /url: /workflow/script-story
+    - generic [ref=e26]:
+      - generic [ref=e27]: 访客模式
+      - strong [ref=e28]: 打开登录后解锁完整后台能力
+  - generic [ref=e29]:
+    - banner [ref=e30]:
+      - generic [ref=e32]:
+        - strong [ref=e33]: 工作区
+        - generic [ref=e34]: 项目与作品
+      - generic [ref=e35]:
+        - generic [ref=e36]: 访客
+        - button "登录" [ref=e37] [cursor=pointer]
+    - main [ref=e38]:
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: Project
+        - heading "项目详情" [level=1] [ref=e42]
+        - generic [ref=e43]:
+          - generic [ref=e44]: 项目与作品
+          - generic [ref=e45]: 访客
+      - generic "加载中" [ref=e47]:
+        - generic [ref=e49]: 生成中，请稍候...

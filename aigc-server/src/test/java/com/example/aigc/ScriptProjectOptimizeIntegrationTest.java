@@ -16,6 +16,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -113,11 +114,11 @@ class ScriptProjectOptimizeIntegrationTest {
                 "gpt-4o-mini"
         );
 
-        readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine", projectId))
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/refine", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
-        JsonNode afterScenes = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId))
+        JsonNode afterScenes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
@@ -128,19 +129,19 @@ class ScriptProjectOptimizeIntegrationTest {
         assertThat(afterScenes.path("structuredScript").path("segments").get(0).path("blocking").asText())
                 .isNotBlank();
 
-        JsonNode afterCharacters = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/optimize/characters", projectId))
+        JsonNode afterCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/optimize/characters", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
         assertThat(afterCharacters.path("structuredScript").path("characters").get(0).path("persona").asText())
                 .contains("画师");
 
-        JsonNode afterProps = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/optimize/props", projectId))
+        JsonNode afterProps = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/optimize/props", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
         assertThat(afterProps.path("structuredScript").path("props").get(0).path("creativeUse").asText())
                 .contains("把画箱当作镜头");
 
-        JsonNode revisions = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/revisions", projectId))
+        JsonNode revisions = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/revisions", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
         assertThat(revisions.isArray()).isTrue();
@@ -149,10 +150,10 @@ class ScriptProjectOptimizeIntegrationTest {
         String beforeCharacterRevisionId = findRevisionIdByKind(revisions, "OPTIMIZE_CHARACTER");
         assertThat(beforeCharacterRevisionId).isNotBlank();
 
-        JsonNode restored = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/revisions/{revisionId}/restore",
+        JsonNode restored = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/revisions/{revisionId}/restore",
                         projectId,
                         beforeCharacterRevisionId
-                ))
+                )))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
@@ -166,7 +167,7 @@ class ScriptProjectOptimizeIntegrationTest {
         assertThat(restored.path("structuredScript").path("props").get(0).hasNonNull("creativeUse"))
                 .isFalse();
 
-        JsonNode revisionsAfterRestore = readSuccessData(mockMvc.perform(get("/api/v1/script-projects/{projectId}/revisions", projectId))
+        JsonNode revisionsAfterRestore = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/revisions", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
         assertThat(revisionsAfterRestore.size()).isGreaterThan(revisions.size());
@@ -183,16 +184,16 @@ class ScriptProjectOptimizeIntegrationTest {
                 "gpt-4o-mini"
         );
 
-        readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine", projectId))
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/refine", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
         // Optimize scenes/segments to inject estimatedDurationSec.
-        readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId))
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
-        JsonNode shots = readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/shots/split", projectId))
+        JsonNode shots = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/shots/split", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
@@ -217,13 +218,13 @@ class ScriptProjectOptimizeIntegrationTest {
                 "gpt-4o-mini"
         );
 
-        readSuccessData(mockMvc.perform(post("/api/v1/script-projects/{projectId}/refine", projectId))
+        readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/refine", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
         optimizeReturnInvalidJson = true;
 
-        JsonNode failed = readResponseTree(mockMvc.perform(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId))
+        JsonNode failed = readResponseTree(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/optimize/scenes", projectId)))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
         assertThat(failed.path("code").asInt()).isEqualTo(502);
@@ -242,6 +243,13 @@ class ScriptProjectOptimizeIntegrationTest {
 
     private JsonNode readResponseTree(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private <T extends AbstractMockHttpServletRequestBuilder<T>> T withScriptAuth(T builder) {
+        return builder
+                .header("Authorization", "Bearer " + TEST_ACCESS_TOKEN)
+                .header("x-aigc-token", TEST_ACCESS_TOKEN)
+                .header("x-user-id", "integration-test-user");
     }
 
     private String extractSystemText(Map<String, Object> payload) {
@@ -268,9 +276,10 @@ class ScriptProjectOptimizeIntegrationTest {
         request.put("language", "zh-CN");
         request.put("explicitTextModel", explicitTextModel);
 
-        JsonNode createData = readSuccessData(mockMvc.perform(post("/api/v1/script-projects")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsBytes(request)))
+        JsonNode createData = readSuccessData(mockMvc.perform(
+                        withScriptAuth(post("/api/v1/script-projects")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(request))))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                 .andReturn());
 
@@ -427,4 +436,3 @@ class ScriptProjectOptimizeIntegrationTest {
         }
     }
 }
-

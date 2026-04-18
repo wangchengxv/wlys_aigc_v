@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { getPresetById } from '@/data/videoStylePresets'
 import type {
   GlobalAspectRatio,
   GlobalCreationMode,
@@ -94,11 +93,8 @@ function loadPartial(): Partial<GlobalSettingsSnapshot> {
     if (parsed.visualStylePresetId === null) {
       out.visualStylePresetId = null
     } else if (typeof parsed.visualStylePresetId === 'string') {
-      const id = parsed.visualStylePresetId
-      out.visualStylePresetId = getPresetById(id) ? id : null
-      if (out.visualStylePresetId === null && parsed.visualStyleMode === 'preset') {
-        out.visualStyleMode = 'custom'
-      }
+      const id = parsed.visualStylePresetId.trim()
+      out.visualStylePresetId = id || null
     }
     if (typeof parsed.visualStyleLongTextMode === 'boolean') {
       out.visualStyleLongTextMode = parsed.visualStyleLongTextMode

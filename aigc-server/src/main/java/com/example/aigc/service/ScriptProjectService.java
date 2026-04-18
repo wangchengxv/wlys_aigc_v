@@ -1,25 +1,26 @@
 package com.example.aigc.service;
 
+import com.example.aigc.dto.PromptTemplateOverridesUpdateRequest;
 import com.example.aigc.dto.ScriptDocumentPayload;
 import com.example.aigc.dto.ScriptProjectCreateRequest;
 import com.example.aigc.dto.UpdateScriptRequest;
-import com.example.aigc.dto.PromptTemplateOverridesUpdateRequest;
 import com.example.aigc.dto.WorkflowModelSettingsResponse;
 import com.example.aigc.dto.WorkflowModelSettingsUpdateRequest;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.aigc.entity.ScriptDocumentVersion;
 import com.example.aigc.entity.ScriptProject;
 import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.ScriptProjectSummary;
 import com.example.aigc.entity.ScriptRevision;
 import com.example.aigc.entity.StoredFileRecord;
+import com.example.aigc.enums.ContentReviewStatus;
 import com.example.aigc.enums.DocumentVersionType;
 import com.example.aigc.enums.ProjectStatus;
 import com.example.aigc.enums.RevisionKind;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.model.VideoStylePresetRegistry;
 import com.example.aigc.repository.ScriptProjectRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,6 +45,9 @@ public class ScriptProjectService {
     private final VideoStylePresetRegistry videoStylePresetRegistry;
     private final ObjectMapper objectMapper;
     private final PromptTemplateService promptTemplateService;
+    private final StyleTemplateService styleTemplateService;
+    private final AuditLogService auditLogService;
+    private final AuthorizationService authorizationService;
 
     private static final TypeReference<Map<String, String>> STR_MAP_TYPE = new TypeReference<>() {};
 
@@ -53,7 +57,10 @@ public class ScriptProjectService {
             ScriptDocxService scriptDocxService,
             VideoStylePresetRegistry videoStylePresetRegistry,
             ObjectMapper objectMapper,
-            PromptTemplateService promptTemplateService
+            PromptTemplateService promptTemplateService,
+            StyleTemplateService styleTemplateService,
+            AuditLogService auditLogService,
+            AuthorizationService authorizationService
     ) {
         this.scriptProjectRepository = scriptProjectRepository;
         this.localAssetFileService = localAssetFileService;
@@ -61,18 +68,24 @@ public class ScriptProjectService {
         this.videoStylePresetRegistry = videoStylePresetRegistry;
         this.objectMapper = objectMapper;
         this.promptTemplateService = promptTemplateService;
+        this.styleTemplateService = styleTemplateService;
+        this.auditLogService = auditLogService;
+        this.authorizationService = authorizationService;
     }
 
-    public ScriptProjectAggregate create(ScriptProjectCreateRequest request) {
+    public ScriptProjectAggregate create(RequestUserContext userContext, ScriptProjectCreateRequest request) {
         return createInternal(
+                userContext,
                 request.name(),
                 request.sourceText(),
                 null,
                 null,
                 request.visualStyle(),
+                request.styleTemplateId(),
                 request.aspectRatio(),
                 request.targetDuration(),
                 request.language(),
+                request.courseId(),
                 request.explicitTextModel(),
                 request.explicitImageModel(),
                 request.explicitVideoModel(),
@@ -81,12 +94,15 @@ public class ScriptProjectService {
     }
 
     public ScriptProjectAggregate createFromUpload(
+            RequestUserContext userContext,
             String name,
             MultipartFile file,
             String visualStyle,
+            String styleTemplateId,
             String aspectRatio,
             Integer targetDuration,
             String language,
+            String courseId,
             String explicitTextModel,
             String explicitImageModel,
             String explicitVideoModel
@@ -98,14 +114,17 @@ public class ScriptProjectService {
             byte[] bytes = file.getBytes();
             String originalText = scriptDocxService.extractText(file.getOriginalFilename(), bytes);
             return createInternal(
+                    userContext,
                     name,
                     originalText,
                     file,
                     bytes,
                     visualStyle,
+                    styleTemplateId,
                     aspectRatio,
                     targetDuration,
                     language,
+                    courseId,
                     explicitTextModel,
                     explicitImageModel,
                     explicitVideoModel,
@@ -119,14 +138,23 @@ public class ScriptProjectService {
         }
     }
 
-    public List<ScriptProjectSummary> list(boolean deleted) {
+    public List<ScriptProjectSummary> list(RequestUserContext userContext, boolean deleted) {
         return scriptProjectRepository.findAll(deleted).stream()
+                .filter(item -> userContext.isAdmin() || isVisibleToOwner(item.ownerId, userContext.userId()))
                 .sorted(Comparator.comparing((ScriptProjectSummary item) -> item.updatedAt, Comparator.nullsLast(Instant::compareTo)).reversed())
                 .toList();
     }
 
     public ScriptProjectAggregate require(String projectId) {
         return requireInternal(projectId, false);
+    }
+
+    public ScriptProjectAggregate require(String projectId, RequestUserContext actor) {
+        ScriptProjectAggregate aggregate = requireInternal(projectId, false);
+        if (!authorizationService.canReadProject(aggregate.project, actor)) {
+            throw new BizException(403, "无权访问该剧本工程");
+        }
+        return aggregate;
     }
 
     public ScriptProjectAggregate restore(String projectId) {
@@ -139,6 +167,28 @@ public class ScriptProjectService {
         return aggregate;
     }
 
+    public ScriptProjectAggregate restore(String projectId, RequestUserContext actor) {
+        ScriptProjectAggregate aggregate = requireInternal(projectId, true);
+        if (!authorizationService.canWriteProject(aggregate.project, actor)) {
+            throw new BizException(403, "无权恢复该剧本工程");
+        }
+        aggregate = restore(projectId);
+        auditLogService.record(actor, "PROJECT_RESTORED", "SCRIPT_PROJECT", projectId, Map.of(
+                "projectName", aggregate.project.name
+        ));
+        return aggregate;
+    }
+
+    public void assertProjectAccess(String projectId, RequestUserContext actor, boolean writeAccess) {
+        ScriptProjectAggregate aggregate = requireInternal(projectId, true);
+        boolean allowed = writeAccess
+                ? authorizationService.canWriteProject(aggregate.project, actor)
+                : authorizationService.canReadProject(aggregate.project, actor);
+        if (!allowed) {
+            throw new BizException(403, writeAccess ? "无权修改该剧本工程" : "无权访问该剧本工程");
+        }
+    }
+
     private ScriptProjectAggregate requireInternal(String projectId, boolean includeDeleted) {
         ScriptProjectAggregate aggregate = scriptProjectRepository.findById(projectId)
                 .orElseThrow(() -> new BizException(404, "剧本工程不存在"));
@@ -147,9 +197,54 @@ public class ScriptProjectService {
         }
         if (aggregate.project != null) {
             aggregate.project.visualStyle = videoStylePresetRegistry.normalizeStyleKeyForRead(aggregate.project.visualStyle);
+            if (aggregate.project.contentReviewStatus == null) {
+                aggregate.project.contentReviewStatus = ContentReviewStatus.NOT_SUBMITTED;
+            }
+            if (aggregate.project.reviewResubmitCount == null) {
+                aggregate.project.reviewResubmitCount = 0;
+            }
+        }
+        if (aggregate.contentReviewRecords == null) {
+            aggregate.contentReviewRecords = new ArrayList<>();
         }
         if (aggregate.revisions == null) {
             aggregate.revisions = new ArrayList<>();
+        }
+        if (aggregate.documents == null) {
+            aggregate.documents = new ArrayList<>();
+        }
+        if (aggregate.files == null) {
+            aggregate.files = new ArrayList<>();
+        }
+        if (aggregate.assets == null) {
+            aggregate.assets = new ArrayList<>();
+        }
+        if (aggregate.keyframes == null) {
+            aggregate.keyframes = new ArrayList<>();
+        }
+        if (aggregate.shots == null) {
+            aggregate.shots = new ArrayList<>();
+        }
+        if (aggregate.videoTasks == null) {
+            aggregate.videoTasks = new ArrayList<>();
+        }
+        if (aggregate.dubbingTasks == null) {
+            aggregate.dubbingTasks = new ArrayList<>();
+        }
+        if (aggregate.lipSyncTasks == null) {
+            aggregate.lipSyncTasks = new ArrayList<>();
+        }
+        if (aggregate.videoEditRenderTasks == null) {
+            aggregate.videoEditRenderTasks = new ArrayList<>();
+        }
+        if (aggregate.finalCompositionTasks == null) {
+            aggregate.finalCompositionTasks = new ArrayList<>();
+        }
+        if (aggregate.exportPackageTasks == null) {
+            aggregate.exportPackageTasks = new ArrayList<>();
+        }
+        if (aggregate.pipelineRuns == null) {
+            aggregate.pipelineRuns = new ArrayList<>();
         }
         return aggregate;
     }
@@ -159,17 +254,24 @@ public class ScriptProjectService {
         return scriptProjectRepository.save(aggregate);
     }
 
-    public void delete(String projectId) {
-        require(projectId);
+    public void delete(String projectId, RequestUserContext actor) {
+        ScriptProjectAggregate aggregate = requireInternal(projectId, false);
+        if (!authorizationService.canDeleteProject(aggregate.project, actor)) {
+            throw new BizException(403, "无权删除该剧本工程");
+        }
         scriptProjectRepository.delete(projectId);
+        auditLogService.record(actor, "PROJECT_DELETED", "SCRIPT_PROJECT", projectId, Map.of(
+                "projectId", projectId
+        ));
     }
 
-    public ScriptDocumentPayload getScriptPayload(String projectId) {
-        ScriptProjectAggregate aggregate = require(projectId);
+    public ScriptDocumentPayload getScriptPayload(String projectId, RequestUserContext actor) {
+        ScriptProjectAggregate aggregate = require(projectId, actor);
         return buildScriptPayload(aggregate);
     }
 
-    public ScriptDocumentPayload updateScript(String projectId, UpdateScriptRequest request) {
+    public ScriptDocumentPayload updateScript(String projectId, UpdateScriptRequest request, RequestUserContext actor) {
+        assertProjectAccess(projectId, actor, true);
         return updateScript(projectId, request, true);
     }
 
@@ -421,14 +523,17 @@ public class ScriptProjectService {
     }
 
     private ScriptProjectAggregate createInternal(
+            RequestUserContext userContext,
             String name,
             String originalText,
             MultipartFile uploadedFile,
             byte[] uploadedBytes,
             String visualStyle,
+            String styleTemplateId,
             String aspectRatio,
             Integer targetDuration,
             String language,
+            String courseId,
             String explicitTextModel,
             String explicitImageModel,
             String explicitVideoModel,
@@ -441,9 +546,15 @@ public class ScriptProjectService {
         ScriptProjectAggregate aggregate = new ScriptProjectAggregate();
         aggregate.project = new ScriptProject();
         aggregate.project.projectId = nextId("sp");
+        aggregate.project.ownerId = userContext.userId();
+        aggregate.project.ownerName = defaultIfBlank(userContext.userName(), userContext.userId());
+        aggregate.project.orgUnitId = blankToNull(userContext.orgUnitId());
+        String effectiveCourseId = firstNonBlank(courseId, userContext.courseId());
+        aggregate.project.courseId = effectiveCourseId;
         aggregate.project.name = name == null || name.isBlank() ? "未命名剧本工程" : name.trim();
         aggregate.project.status = ProjectStatus.DRAFT;
         aggregate.project.sourceType = sourceType;
+        aggregate.project.styleTemplateId = validateStyleTemplateIfPresent(styleTemplateId, userContext, effectiveCourseId);
         aggregate.project.visualStyle = normalizeVisualStyleForWrite(visualStyle);
         aggregate.project.aspectRatio = defaultIfBlank(aspectRatio, "16:9");
         aggregate.project.targetDuration = targetDuration == null ? 15 : targetDuration;
@@ -451,6 +562,12 @@ public class ScriptProjectService {
         aggregate.project.explicitTextModel = blankToNull(explicitTextModel);
         aggregate.project.explicitImageModel = blankToNull(explicitImageModel);
         aggregate.project.explicitVideoModel = blankToNull(explicitVideoModel);
+        aggregate.project.explicitTtsModel = null;
+        aggregate.project.dubbingVoice = "通用女声";
+        aggregate.project.dubbingLanguage = aggregate.project.language;
+        aggregate.project.dubbingSpeed = 1.0d;
+        aggregate.project.contentReviewStatus = ContentReviewStatus.NOT_SUBMITTED;
+        aggregate.project.reviewResubmitCount = 0;
         aggregate.project.createdAt = Instant.now();
         aggregate.project.updatedAt = aggregate.project.createdAt;
 
@@ -478,7 +595,14 @@ public class ScriptProjectService {
             aggregate.project.uploadedSourceFileId = uploadedSource.fileId;
         }
 
-        return save(aggregate);
+        ScriptProjectAggregate saved = save(aggregate);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("projectName", saved.project.name);
+        details.put("sourceType", sourceType);
+        details.put("styleTemplateId", saved.project.styleTemplateId);
+        details.put("courseId", saved.project.courseId);
+        auditLogService.record(userContext, "PROJECT_CREATED", "SCRIPT_PROJECT", saved.project.projectId, details);
+        return saved;
     }
 
     private String normalizeVisualStyleForWrite(String visualStyle) {
@@ -525,19 +649,41 @@ public class ScriptProjectService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private String firstNonBlank(String value, String fallback) {
+        String normalized = blankToNull(value);
+        if (normalized != null) {
+            return normalized;
+        }
+        return blankToNull(fallback);
+    }
+
     private String defaultIfBlank(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
+    private boolean isVisibleToOwner(String projectOwnerId, String currentOwnerId) {
+        return projectOwnerId == null || projectOwnerId.isBlank() || Objects.equals(projectOwnerId, currentOwnerId);
+    }
+
+    private String validateStyleTemplateIfPresent(String styleTemplateId, RequestUserContext userContext, String courseId) {
+        String normalized = blankToNull(styleTemplateId);
+        if (normalized == null) {
+            return null;
+        }
+        styleTemplateService.requireVisibleForCourse(normalized, userContext, courseId);
+        return normalized;
+    }
+
     // ── Workflow model settings ────────────────────────────────────────────
 
-    public WorkflowModelSettingsResponse getModelSettings(String projectId) {
-        ScriptProjectAggregate aggregate = require(projectId);
+    public WorkflowModelSettingsResponse getModelSettings(String projectId, RequestUserContext actor) {
+        ScriptProjectAggregate aggregate = require(projectId, actor);
         return toModelSettingsResponse(aggregate.project);
     }
 
-    public WorkflowModelSettingsResponse updateModelSettings(String projectId, WorkflowModelSettingsUpdateRequest request) {
-        ScriptProjectAggregate aggregate = require(projectId);
+    public WorkflowModelSettingsResponse updateModelSettings(String projectId, WorkflowModelSettingsUpdateRequest request, RequestUserContext actor) {
+        assertProjectAccess(projectId, actor, true);
+        ScriptProjectAggregate aggregate = requireInternal(projectId, false);
         ScriptProject p = aggregate.project;
         if (request.defaultTextModel() != null) {
             p.explicitTextModel = blankToNull(request.defaultTextModel());
@@ -547,6 +693,18 @@ public class ScriptProjectService {
         }
         if (request.defaultVideoModel() != null) {
             p.explicitVideoModel = blankToNull(request.defaultVideoModel());
+        }
+        if (request.defaultTtsModel() != null) {
+            p.explicitTtsModel = blankToNull(request.defaultTtsModel());
+        }
+        if (request.dubbingVoice() != null) {
+            p.dubbingVoice = blankToNull(request.dubbingVoice());
+        }
+        if (request.dubbingLanguage() != null) {
+            p.dubbingLanguage = blankToNull(request.dubbingLanguage());
+        }
+        if (request.dubbingSpeed() != null) {
+            p.dubbingSpeed = normalizeDubbingSpeed(request.dubbingSpeed());
         }
         if (request.overrides() != null) {
             Map<String, String> current = parseOverrides(p.workflowModelOverrides);
@@ -569,7 +727,7 @@ public class ScriptProjectService {
      * Resolve the effective model name for a given workflow function key.
      * Lookup order:
      *   1. workflowModelOverrides[functionKey]
-     *   2. project-level explicit field (matched by defaultCapability: "text" | "image" | "video")
+     *   2. project-level explicit field (matched by defaultCapability: "text" | "image" | "video" | "tts")
      *   3. null  (caller falls back to AiCapabilityRoutingService auto-routing)
      */
     public String resolveWorkflowModel(ScriptProject project, String functionKey, String defaultCapability) {
@@ -582,6 +740,7 @@ public class ScriptProjectService {
             case "text"  -> project.explicitTextModel;
             case "image" -> project.explicitImageModel;
             case "video" -> project.explicitVideoModel;
+            case "tts"   -> project.explicitTtsModel;
             default      -> null;
         };
     }
@@ -610,8 +769,19 @@ public class ScriptProjectService {
                 p.explicitTextModel,
                 p.explicitImageModel,
                 p.explicitVideoModel,
+                p.explicitTtsModel,
+                p.dubbingVoice,
+                p.dubbingLanguage,
+                normalizeDubbingSpeed(p.dubbingSpeed),
                 parseOverrides(p.workflowModelOverrides)
         );
+    }
+
+    private Double normalizeDubbingSpeed(Double value) {
+        if (value == null || Double.isNaN(value) || Double.isInfinite(value)) {
+            return 1.0d;
+        }
+        return Math.max(0.5d, Math.min(2.0d, value));
     }
 
     public Map<String, String> getPromptTemplateOverrides(String projectId) {

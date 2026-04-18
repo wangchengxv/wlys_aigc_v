@@ -1,90 +1,287 @@
+import type { ComponentType } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from '@/layouts/AppLayout'
-import { HistoryPage } from '@/pages/HistoryPage'
-import { HomePage } from '@/pages/HomePage'
-import { ModelConfigPage } from '@/pages/ModelConfigPage'
-import { ProviderHubPage } from '@/pages/ProviderHubPage'
-import { NotFoundPage } from '@/pages/NotFoundPage'
-import { ScriptProjectAssetsPage } from '@/pages/ScriptProjectAssetsPage'
-import { ScriptProjectCreatePage } from '@/pages/ScriptProjectCreatePage'
-import { ScriptProjectDetailPage } from '@/pages/ScriptProjectDetailPage'
-import { ScriptProjectListPage } from '@/pages/ScriptProjectListPage'
-import { ScriptProjectPreviewPage } from '@/pages/ScriptProjectPreviewPage'
-import { ScriptProjectExportPage } from '@/pages/ScriptProjectExportPage'
-import { ScriptProjectPromptTemplatesPage } from '@/pages/ScriptProjectPromptTemplatesPage'
-import { ScriptProjectVideoPage } from '@/pages/ScriptProjectVideoPage'
-import { CanvasPage } from '@/pages/CanvasPage'
-import { GlobalSettingsPage } from '@/pages/GlobalSettingsPage'
-import { SettingsPage } from '@/pages/SettingsPage'
-import { WorkflowDirectorPage } from '@/pages/workflow/WorkflowDirectorPage'
-import { WorkflowExportPage } from '@/pages/workflow/WorkflowExportPage'
-import { WorkflowScenesPropsPage } from '@/pages/workflow/WorkflowScenesPropsPage'
-import { WorkflowScriptStoryPage } from '@/pages/workflow/WorkflowScriptStoryPage'
-import { ToolsAssetVisualPage } from '@/pages/ToolsAssetVisualPage'
-import { WorkspacePage } from '@/pages/WorkspacePage'
 import type { RouteHandle } from '@/routes/types'
 
 const H = (h: RouteHandle) => h
+
+function lazyPage<T extends Record<string, ComponentType<object>>>(
+  loader: () => Promise<T>,
+  exportName: keyof T,
+) {
+  return async () => {
+    const mod = await loader()
+    return { Component: mod[exportName] as ComponentType<object> }
+  }
+}
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <HomePage />, handle: H({ title: '首页', eyebrow: 'Overview' }) },
-      { path: 'canvas', element: <CanvasPage />, handle: H({ title: '敬请期待', eyebrow: 'Canvas' }) },
+      {
+        index: true,
+        lazy: lazyPage(() => import('@/pages/HomePage'), 'HomePage'),
+        handle: H({
+          title: '平台首页',
+          eyebrow: '概览',
+          section: '概览',
+          description: '查看平台入口、功能概览与常用创作能力导航。',
+        }),
+      },
+      {
+        path: 'canvas',
+        lazy: lazyPage(() => import('@/pages/CanvasPage'), 'CanvasPage'),
+        handle: H({
+          title: '无限画布',
+          eyebrow: '画布',
+          section: '创作工具',
+          description: '预留为后续节点式创作与流程编排能力的画布空间。',
+        }),
+      },
       {
         path: 'workflow/script-story',
-        element: <WorkflowScriptStoryPage />,
-        handle: H({ title: '剧本与故事', eyebrow: 'Workflow' }),
+        lazy: lazyPage(() => import('@/pages/workflow/WorkflowScriptStoryPage'), 'WorkflowScriptStoryPage'),
+        handle: H({ title: '剧本与故事', eyebrow: '流程', section: '项目与作品' }),
       },
       {
         path: 'workflow/scenes-props',
-        element: <WorkflowScenesPropsPage />,
-        handle: H({ title: '场景与道具', eyebrow: 'Workflow' }),
+        lazy: lazyPage(() => import('@/pages/workflow/WorkflowScenesPropsPage'), 'WorkflowScenesPropsPage'),
+        handle: H({ title: '场景与道具', eyebrow: '流程', section: '项目与作品' }),
       },
       {
         path: 'workflow/director',
-        element: <WorkflowDirectorPage />,
-        handle: H({ title: '导演模式', eyebrow: 'Workflow' }),
+        lazy: lazyPage(() => import('@/pages/workflow/WorkflowDirectorPage'), 'WorkflowDirectorPage'),
+        handle: H({ title: '导演模式', eyebrow: '流程', section: '项目与作品' }),
+      },
+      {
+        path: 'workflow/dubbing',
+        lazy: lazyPage(() => import('@/pages/workflow/WorkflowDubbingPage'), 'WorkflowDubbingPage'),
+        handle: H({ title: '配音与旁白', eyebrow: '流程', section: '项目与作品' }),
       },
       {
         path: 'workflow/export',
-        element: <WorkflowExportPage />,
-        handle: H({ title: '成片与导出', eyebrow: 'Workflow' }),
+        lazy: lazyPage(() => import('@/pages/workflow/WorkflowExportPage'), 'WorkflowExportPage'),
+        handle: H({ title: '剪辑成片与导出', eyebrow: '流程', section: '项目与作品' }),
       },
-      { path: 'workflow/prompts', element: <WorkspacePage />, handle: H({ title: '提示词管理', eyebrow: 'Workflow' }) },
-      { path: 'tools/image', element: <WorkspacePage />, handle: H({ title: '文生图', eyebrow: 'Tools' }) },
-      { path: 'tools/video', element: <WorkspacePage />, handle: H({ title: '文生视频', eyebrow: 'Tools' }) },
+      {
+        path: 'workflow/prompts',
+        lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
+        handle: H({
+          title: '提示词管理',
+          eyebrow: '流程',
+          section: '项目与作品',
+          description: '统一管理工作流中可复用的提示词内容与调试入口。',
+          workspaceMode: 'both',
+          workspaceVariant: 'workspace',
+        }),
+      },
+      {
+        path: 'tools/image',
+        lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
+        handle: H({
+          title: '文生图',
+          eyebrow: '工具',
+          section: '创作工具',
+          workspaceMode: 'image',
+          workspaceVariant: 'image',
+        }),
+      },
+      {
+        path: 'tools/video',
+        lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
+        handle: H({
+          title: '文生视频',
+          eyebrow: '工具',
+          section: '创作工具',
+          workspaceMode: 'video',
+          workspaceVariant: 'video',
+        }),
+      },
       {
         path: 'tools/image-to-video',
-        element: <WorkspacePage />,
-        handle: H({ title: '图生视频', eyebrow: 'Tools' }),
+        lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
+        handle: H({
+          title: '图生视频',
+          eyebrow: '工具',
+          section: '创作工具',
+          workspaceMode: 'video',
+          workspaceVariant: 'image-to-video',
+        }),
       },
       {
         path: 'tools/asset-visual',
-        element: <ToolsAssetVisualPage />,
-        handle: H({ title: '三视图 / 九宫格', eyebrow: 'Tools' }),
+        lazy: lazyPage(() => import('@/pages/ToolsAssetVisualPage'), 'ToolsAssetVisualPage'),
+        handle: H({ title: '三视图 / 九宫格', eyebrow: '工具', section: '创作工具' }),
       },
-      { path: 'workspace', element: <WorkspacePage />, handle: H({ title: '文生图/文生视频', eyebrow: 'Create' }) },
-      { path: 'script-projects', element: <ScriptProjectListPage />, handle: H({ title: '剧本工程', eyebrow: 'Workflow' }) },
-      { path: 'script-projects/new', element: <ScriptProjectCreatePage />, handle: H({ title: '新建剧本工程', eyebrow: 'Create' }) },
-      { path: 'script-projects/:projectId', element: <ScriptProjectDetailPage />, handle: H({ title: '项目详情', eyebrow: 'Project' }) },
-      { path: 'script-projects/:projectId/preview', element: <ScriptProjectPreviewPage />, handle: H({ title: '剧本预览', eyebrow: 'Script' }) },
-      { path: 'script-projects/:projectId/assets', element: <ScriptProjectAssetsPage />, handle: H({ title: '资产与关键帧', eyebrow: 'Assets' }) },
-      { path: 'script-projects/:projectId/export', element: <ScriptProjectExportPage />, handle: H({ title: '成片与导出', eyebrow: 'Project' }) },
-      { path: 'script-projects/:projectId/video', element: <ScriptProjectVideoPage />, handle: H({ title: '视频生成', eyebrow: 'Video' }) },
+      {
+        path: 'workspace',
+        lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
+        handle: H({
+          title: '创作工作台',
+          eyebrow: '创作',
+          section: '创作工具',
+          description: '快速发起图像、视频等 AIGC 生成任务。',
+          workspaceMode: 'both',
+          workspaceVariant: 'workspace',
+        }),
+      },
+      {
+        path: 'courses',
+        lazy: lazyPage(() => import('@/pages/TeachingCoursesPage'), 'TeachingCoursesPage'),
+        handle: H({
+          title: '课程工作台',
+          eyebrow: '教学',
+          section: '课程与实训',
+          description: '查看课程、作业、提交与实训进度，承载教师与学生的教学主入口。',
+        }),
+      },
+      {
+        path: 'courses/:courseId',
+        lazy: lazyPage(() => import('@/pages/TeachingCourseDetailPage'), 'TeachingCourseDetailPage'),
+        handle: H({ title: '课程详情', eyebrow: '教学', section: '课程与实训' }),
+      },
+      {
+        path: 'courses/:courseId/assignments/:assignmentId',
+        lazy: lazyPage(() => import('@/pages/TeachingAssignmentDetailPage'), 'TeachingAssignmentDetailPage'),
+        handle: H({ title: '作业提交与评分', eyebrow: '教学', section: '课程与实训' }),
+      },
+      {
+        path: 'script-projects',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectListPage'), 'ScriptProjectListPage'),
+        handle: H({
+          title: '剧本工程',
+          eyebrow: '项目',
+          section: '项目与作品',
+          description: '按课程、提交人与项目状态统一管理 AIGC 实训项目。',
+        }),
+      },
+      {
+        path: 'script-projects/new',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectCreatePage'), 'ScriptProjectCreatePage'),
+        handle: H({ title: '新建剧本工程', eyebrow: '项目', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectDetailPage'), 'ScriptProjectDetailPage'),
+        handle: H({ title: '项目详情', eyebrow: '项目', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/preview',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectPreviewPage'), 'ScriptProjectPreviewPage'),
+        handle: H({ title: '剧本预览', eyebrow: '剧本', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/assets',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectAssetsPage'), 'ScriptProjectAssetsPage'),
+        handle: H({ title: '资产与关键帧', eyebrow: '资产', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/dubbing',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectDubbingPage'), 'ScriptProjectDubbingPage'),
+        handle: H({ title: '配音管理', eyebrow: '音频', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/lip-sync',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectLipSyncPage'), 'ScriptProjectLipSyncPage'),
+        handle: H({ title: '口型同步', eyebrow: '视频', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/final-composition',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectFinalCompositionPage'), 'ScriptProjectFinalCompositionPage'),
+        handle: H({ title: '视频剪辑工作台', eyebrow: '视频', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/export',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectExportPage'), 'ScriptProjectExportPage'),
+        handle: H({ title: '剪辑成片与导出', eyebrow: '项目', section: '项目与作品' }),
+      },
+      {
+        path: 'script-projects/:projectId/video',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectVideoPage'), 'ScriptProjectVideoPage'),
+        handle: H({ title: '视频生成', eyebrow: '视频', section: '项目与作品' }),
+      },
       {
         path: 'script-projects/:projectId/prompt-templates',
-        element: <ScriptProjectPromptTemplatesPage />,
-        handle: H({ title: '提示词模板', eyebrow: 'Project' }),
+        lazy: lazyPage(() => import('@/pages/ScriptProjectPromptTemplatesPage'), 'ScriptProjectPromptTemplatesPage'),
+        handle: H({ title: '提示词模板', eyebrow: '项目', section: '项目与作品' }),
       },
-      { path: 'history', element: <HistoryPage />, handle: H({ title: '历史记录', eyebrow: 'Library' }) },
-      { path: 'settings', element: <SettingsPage />, handle: H({ title: '设置', eyebrow: 'Preferences' }) },
-      { path: 'global-settings', element: <GlobalSettingsPage />, handle: H({ title: '全局设定', eyebrow: 'Defaults' }) },
-      { path: 'models/hub', element: <ProviderHubPage />, handle: H({ title: '服务商中心', eyebrow: 'Providers' }) },
-      { path: 'models', element: <ModelConfigPage />, handle: H({ title: '模型配置', eyebrow: 'Admin' }) },
-      { path: '*', element: <NotFoundPage />, handle: H({ title: '页面不存在', eyebrow: 'Error' }) },
+      {
+        path: 'history',
+        lazy: lazyPage(() => import('@/pages/HistoryPage'), 'HistoryPage'),
+        handle: H({ title: '历史记录', eyebrow: '历史', section: '创作工具' }),
+      },
+      {
+        path: 'login',
+        lazy: lazyPage(() => import('@/pages/LoginPage'), 'LoginPage'),
+        handle: H({
+          title: '登录入口',
+          eyebrow: '认证',
+          section: '认证中心',
+          description: '兼容旧登录地址，访问后会回到首页并打开登录入口。',
+        }),
+      },
+      {
+        path: 'admin/directory',
+        lazy: lazyPage(() => import('@/pages/AdminDirectoryPage'), 'AdminDirectoryPage'),
+        handle: H({
+          title: '组织与用户',
+          eyebrow: '治理',
+          section: '组织与用户',
+          description: '维护组织、班级和用户归属，支撑高校后台中的账号治理能力。',
+        }),
+      },
+      {
+        path: 'admin/media-resources',
+        lazy: lazyPage(() => import('@/pages/MediaResourcesPage'), 'MediaResourcesPage'),
+        handle: H({ title: '媒体资源中心', eyebrow: '资源', section: '资源与模型' }),
+      },
+      {
+        path: 'audit-logs',
+        lazy: lazyPage(() => import('@/pages/AuditLogsPage'), 'AuditLogsPage'),
+        handle: H({ title: '审计日志', eyebrow: '治理', section: '审核与审计' }),
+      },
+      {
+        path: 'operations-dashboard',
+        lazy: lazyPage(() => import('@/pages/OperationsDashboardPage'), 'OperationsDashboardPage'),
+        handle: H({
+          title: '平台概览',
+          eyebrow: '概览',
+          section: '概览',
+          description: '汇总课程、提交、项目、审核与导出状态，形成高校实训后台首页的驾驶舱视图。',
+        }),
+      },
+      {
+        path: 'settings',
+        lazy: lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage'),
+        handle: H({
+          title: '设置中心',
+          eyebrow: '设置',
+          section: '系统设置',
+          description: '保留账号、系统、模型与创作默认配置，不再承担高校业务总入口。',
+        }),
+      },
+      {
+        path: 'global-settings',
+        lazy: lazyPage(() => import('@/pages/GlobalSettingsPage'), 'GlobalSettingsPage'),
+        handle: H({ title: '全局设定', eyebrow: '设置', section: '系统设置' }),
+      },
+      {
+        path: 'models/hub',
+        lazy: lazyPage(() => import('@/pages/ProviderHubPage'), 'ProviderHubPage'),
+        handle: H({ title: '服务商中心', eyebrow: '服务商', section: '资源与模型' }),
+      },
+      {
+        path: 'models',
+        lazy: lazyPage(() => import('@/pages/ModelConfigPage'), 'ModelConfigPage'),
+        handle: H({ title: '模型配置', eyebrow: '管理', section: '资源与模型' }),
+      },
+      {
+        path: '*',
+        lazy: lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPage'),
+        handle: H({ title: '页面不存在', eyebrow: '异常', section: '异常页面' }),
+      },
     ],
   },
 ])

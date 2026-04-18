@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EmptyState } from '@/components/common/EmptyState'
 import { HistoryCard } from '@/components/history/HistoryCard'
@@ -10,25 +10,32 @@ import type { GenerateMode } from '@/types'
 
 export function HistoryPage() {
   const navigate = useNavigate()
-  const store = useGenerationStore()
   const { showToast } = useToast()
   const tasks = useGenerationStore((s) => s.tasks)
+  const loadHistory = useGenerationStore((s) => s.loadHistory)
+  const setCurrentTask = useGenerationStore((s) => s.setCurrentTask)
+  const removeTaskById = useGenerationStore((s) => s.removeTask)
 
   const [page, setPage] = useState(1)
   const pageSize = 6
   const [total, setTotal] = useState(0)
   const [mode, setMode] = useState<GenerateMode | 'all'>('all')
 
-  async function fetchHistory() {
-    const data = await store.loadHistory(page, pageSize, mode)
-    setTotal(data.total)
-  }
+  const fetchHistory = useCallback(async () => {
+    try {
+      const data = await loadHistory(page, pageSize, mode)
+      setTotal(data.total)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '加载历史记录失败', 'error')
+      setTotal(0)
+    }
+  }, [loadHistory, mode, page, showToast])
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   useEffect(() => {
     void fetchHistory()
-  }, [page, mode])
+  }, [fetchHistory])
 
   async function changePage(next: number) {
     setPage(Math.min(totalPages, Math.max(1, next)))
@@ -42,13 +49,13 @@ export function HistoryPage() {
   function openInWorkspace(taskId: string) {
     const task = tasks.find((item) => item.taskId === taskId)
     if (task) {
-      store.setCurrentTask(task)
+      setCurrentTask(task)
       navigate('/workspace')
     }
   }
 
   async function remove(taskId: string) {
-    await store.removeTask(taskId)
+    await removeTaskById(taskId)
     showToast('记录已删除', 'success')
     const remaining = useGenerationStore.getState().tasks
     if (!remaining.length && page > 1) {

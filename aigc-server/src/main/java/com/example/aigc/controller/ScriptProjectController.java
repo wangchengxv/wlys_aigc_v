@@ -1,5 +1,6 @@
 package com.example.aigc.controller;
 
+import com.example.aigc.config.RequestContextAttributes;
 import com.example.aigc.dto.ApiResponse;
 import com.example.aigc.dto.AppendScriptPreviewRequest;
 import com.example.aigc.dto.AppendScriptPreviewResponse;
@@ -16,6 +17,7 @@ import com.example.aigc.dto.WorkflowModelSettingsUpdateRequest;
 import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.ScriptProjectSummary;
 import com.example.aigc.entity.ScriptRevision;
+import com.example.aigc.service.RequestUserContext;
 import com.example.aigc.service.ScriptProjectService;
 import com.example.aigc.service.ScriptWorkflowService;
 import jakarta.validation.Valid;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,29 +52,38 @@ public class ScriptProjectController {
     }
 
     @PostMapping
-    public ApiResponse<ScriptProjectAggregate> create(@Valid @RequestBody ScriptProjectCreateRequest request) {
-        return ApiResponse.ok(scriptProjectService.create(request));
+    public ApiResponse<ScriptProjectAggregate> create(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @Valid @RequestBody ScriptProjectCreateRequest request
+    ) {
+        return ApiResponse.ok(scriptProjectService.create(userContext, request));
     }
 
     @PostMapping("/upload")
     public ApiResponse<ScriptProjectAggregate> upload(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
             @RequestParam String name,
             @RequestParam MultipartFile file,
             @RequestParam(required = false) String visualStyle,
+            @RequestParam(required = false) String styleTemplateId,
             @RequestParam(required = false) String aspectRatio,
             @RequestParam(required = false) Integer targetDuration,
             @RequestParam(required = false) String language,
+            @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String explicitTextModel,
             @RequestParam(required = false) String explicitImageModel,
             @RequestParam(required = false) String explicitVideoModel
     ) {
         return ApiResponse.ok(scriptProjectService.createFromUpload(
+                userContext,
                 name,
                 file,
                 visualStyle,
+                styleTemplateId,
                 aspectRatio,
                 targetDuration,
                 language,
+                courseId,
                 explicitTextModel,
                 explicitImageModel,
                 explicitVideoModel
@@ -80,25 +92,35 @@ public class ScriptProjectController {
 
     @GetMapping
     public ApiResponse<List<ScriptProjectSummary>> list(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
             @RequestParam(name = "deleted", required = false, defaultValue = "false") boolean deleted
     ) {
-        return ApiResponse.ok(scriptProjectService.list(deleted));
+        return ApiResponse.ok(scriptProjectService.list(userContext, deleted));
     }
 
     @GetMapping("/{projectId}")
-    public ApiResponse<ScriptProjectAggregate> detail(@PathVariable String projectId) {
-        return ApiResponse.ok(scriptProjectService.require(projectId));
+    public ApiResponse<ScriptProjectAggregate> detail(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @PathVariable String projectId
+    ) {
+        return ApiResponse.ok(scriptProjectService.require(projectId, userContext));
     }
 
     @DeleteMapping("/{projectId}")
-    public ApiResponse<Void> delete(@PathVariable String projectId) {
-        scriptProjectService.delete(projectId);
+    public ApiResponse<Void> delete(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @PathVariable String projectId
+    ) {
+        scriptProjectService.delete(projectId, userContext);
         return ApiResponse.ok(null);
     }
 
     @PostMapping("/{projectId}/restore")
-    public ApiResponse<ScriptProjectAggregate> restore(@PathVariable String projectId) {
-        return ApiResponse.ok(scriptProjectService.restore(projectId));
+    public ApiResponse<ScriptProjectAggregate> restore(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @PathVariable String projectId
+    ) {
+        return ApiResponse.ok(scriptProjectService.restore(projectId, userContext));
     }
 
     @PostMapping("/{projectId}/refine")
@@ -131,16 +153,20 @@ public class ScriptProjectController {
     }
 
     @GetMapping("/{projectId}/script")
-    public ApiResponse<ScriptDocumentPayload> script(@PathVariable String projectId) {
-        return ApiResponse.ok(scriptProjectService.getScriptPayload(projectId));
+    public ApiResponse<ScriptDocumentPayload> script(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @PathVariable String projectId
+    ) {
+        return ApiResponse.ok(scriptProjectService.getScriptPayload(projectId, userContext));
     }
 
     @PutMapping("/{projectId}/script")
     public ApiResponse<ScriptDocumentPayload> updateScript(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
             @PathVariable String projectId,
             @RequestBody UpdateScriptRequest request
     ) {
-        return ApiResponse.ok(scriptProjectService.updateScript(projectId, request));
+        return ApiResponse.ok(scriptProjectService.updateScript(projectId, request, userContext));
     }
 
     @PostMapping("/{projectId}/import")
@@ -194,16 +220,20 @@ public class ScriptProjectController {
     }
 
     @GetMapping("/{projectId}/model-settings")
-    public ApiResponse<WorkflowModelSettingsResponse> getModelSettings(@PathVariable String projectId) {
-        return ApiResponse.ok(scriptProjectService.getModelSettings(projectId));
+    public ApiResponse<WorkflowModelSettingsResponse> getModelSettings(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
+            @PathVariable String projectId
+    ) {
+        return ApiResponse.ok(scriptProjectService.getModelSettings(projectId, userContext));
     }
 
     @PutMapping("/{projectId}/model-settings")
     public ApiResponse<WorkflowModelSettingsResponse> updateModelSettings(
+            @RequestAttribute(RequestContextAttributes.CURRENT_USER_CONTEXT) RequestUserContext userContext,
             @PathVariable String projectId,
             @RequestBody WorkflowModelSettingsUpdateRequest request
     ) {
-        return ApiResponse.ok(scriptProjectService.updateModelSettings(projectId, request));
+        return ApiResponse.ok(scriptProjectService.updateModelSettings(projectId, request, userContext));
     }
 
     @GetMapping("/{projectId}/prompt-template-overrides")

@@ -1,0 +1,9 @@
+- [ ] 服务商目录返回 `Kling` 或等价 `OneLinkAI Kling` 类型，且默认 Base URL 指向 `https://api.onelinkai.cloud/kling`
+- [ ] 用户可以通过现有连接配置流程保存 `Kling` 的 Base URL 与 API Key
+- [ ] 用户可以通过现有模型配置流程保存 `Kling` 模型与视频输入模式
+- [ ] 选择 `Kling` 模型且未提供参考图时，请求走文生视频接口
+- [ ] 选择 `Kling` 模型且提供参考图时，请求走图生视频接口
+- [ ] 当 `Kling` 模型模式与输入冲突时，后端返回明确的 4xx 业务错误
+- [ ] `Kling` 异步任务轮询可以提取任务状态、失败原因与最终视频 URL
+- [ ] `Kling` 结果可以映射到现有统一视频结果结构
+- [ ] `Ark`、`Vidu`、`Moark` 的现有视频提交与查询逻辑没有回归

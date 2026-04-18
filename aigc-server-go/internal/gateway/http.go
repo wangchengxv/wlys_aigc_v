@@ -25,9 +25,9 @@ func str(v any) string {
 
 // HTTPGateway mirrors ProviderHttpGateway (non-streaming core).
 type HTTPGateway struct {
-	HTTP     *http.Client
-	Bedrock  BedrockGateway
-	Vertex   *VertexGateway
+	HTTP    *http.Client
+	Bedrock BedrockGateway
+	Vertex  *VertexGateway
 }
 
 func NewHTTPGateway() *HTTPGateway {
@@ -286,6 +286,10 @@ func applyHeaders(req *http.Request, def *catalog.Provider, apiKey string, meta 
 	case catalog.AuthAPIKeyHeader:
 		if apiKey != "" {
 			req.Header.Set("api-key", apiKey)
+		}
+	case catalog.AuthToken:
+		if apiKey != "" {
+			req.Header.Set("Authorization", "Token "+apiKey)
 		}
 	}
 	if meta == nil {

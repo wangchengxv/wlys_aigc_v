@@ -17,17 +17,16 @@ export function applyLitegraphFrontCanvasBlitFix() {
   if (!original) return
 
   proto.drawFrontCanvas = function (this: LGraphCanvas) {
-    const self = this
     const ctx = this.ctx
     if (!ctx) return original.call(this)
 
     const savedDrawImage = ctx.drawImage.bind(ctx)
     let bgBlitFixed = false
 
-    const patchedDrawImage = function (this: CanvasRenderingContext2D, ...args: unknown[]) {
-      if (!bgBlitFixed && args.length === 5 && args[0] === self.bgcanvas) {
+    const patchedDrawImage = (...args: unknown[]) => {
+      if (!bgBlitFixed && args.length === 5 && args[0] === this.bgcanvas) {
         bgBlitFixed = true
-        const bg = self.bgcanvas as HTMLCanvasElement
+        const bg = this.bgcanvas as HTMLCanvasElement
         return (savedDrawImage as (typeof ctx)['drawImage'])(
           bg,
           0,
@@ -36,15 +35,15 @@ export function applyLitegraphFrontCanvasBlitFix() {
           bg.height,
           0,
           0,
-          self.canvas.width,
-          self.canvas.height,
+          this.canvas.width,
+          this.canvas.height,
         )
       }
       return (savedDrawImage as (...a: unknown[]) => unknown).apply(ctx, args)
     }
     ctx.drawImage = patchedDrawImage as CanvasRenderingContext2D['drawImage']
     try {
-      return original.call(self)
+      return original.call(this)
     } finally {
       ctx.drawImage = savedDrawImage as CanvasRenderingContext2D['drawImage']
     }

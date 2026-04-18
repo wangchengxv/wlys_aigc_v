@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 
-export type ThemeId = 'light' | 'dark' | 'onelink'
+export type ThemeId = 'light'
 
 const STORAGE_KEY = 'aigc-theme'
-const THEME_ORDER: ThemeId[] = ['light', 'dark', 'onelink']
+const THEME_ORDER: ThemeId[] = ['light']
 
 function isThemeId(value: string | null | undefined): value is ThemeId {
-  return value === 'light' || value === 'dark' || value === 'onelink'
+  return value === 'light'
 }
 
 function applyTheme(theme: ThemeId) {
@@ -29,22 +29,14 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   theme: 'light',
 
   initTheme: () => {
-    let next: ThemeId = 'light'
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (isThemeId(raw)) next = raw
-    } catch {
-      /* ignore */
-    }
-    const dom = document.documentElement.dataset.theme
-    if (isThemeId(dom)) next = dom
-    applyTheme(next)
-    set({ theme: next })
+    applyTheme('light')
+    set({ theme: 'light' })
   },
 
   setTheme: (next) => {
-    applyTheme(next)
-    set({ theme: next })
+    const resolved = isThemeId(next) ? next : 'light'
+    applyTheme(resolved)
+    set({ theme: resolved })
   },
 
   toggle: () => {

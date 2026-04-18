@@ -216,9 +216,6 @@ public class ModelConfigService {
 
     private java.util.Map<String, Object> normalizeMetadata(java.util.Map<String, Object> metadata, String provider, String modelName) {
         java.util.Map<String, Object> source = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
-        return modelCapabilityService.mergeCapabilities(
-                source,
-                modelCapabilityService.resolveCapabilities(source, provider, modelName)
-        );
+        return modelCapabilityService.normalizeModelMetadata(source, provider, modelName);
     }
 }

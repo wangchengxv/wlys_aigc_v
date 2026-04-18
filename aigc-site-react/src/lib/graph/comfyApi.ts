@@ -14,6 +14,26 @@ type PromptNodePayload = {
   inputs: Record<string, unknown>
 }
 
+type ComfyAssetRef = {
+  filename?: string
+  subfolder?: string
+  type?: string
+}
+
+export type ComfyResultImage = {
+  nodeId: string
+  url: string
+  filename: string
+}
+
+export type ComfyPromptResult = {
+  completed: boolean
+  statusText: string
+  errorText: string | null
+  images: ComfyResultImage[]
+  outputCount: number
+}
+
 /** 规范化 Comfy 根地址，避免 fetch 收到非法 URL（会报 “The string did not match the expected pattern”） */
 function resolveComfyBase(): string {
   const raw = import.meta.env.VITE_COMFY_BASE_URL
@@ -32,6 +52,12 @@ function resolveComfyBase(): string {
 }
 
 const COMFY_BASE = resolveComfyBase()
+
+function resolveComfyUrl(path: string): string {
+  const base = COMFY_BASE.endsWith('/') ? COMFY_BASE.slice(0, -1) : COMFY_BASE
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${base}${normalizedPath}`
+}
 
 function toLinkMap(links: unknown): Map<number, LinkTuple> {
   const map = new Map<number, LinkTuple>()
@@ -79,9 +105,7 @@ export function buildPromptFromGraph(state: GraphState): Record<string, PromptNo
 }
 
 async function comfyFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = COMFY_BASE.endsWith('/') ? COMFY_BASE.slice(0, -1) : COMFY_BASE
-  const p = path.startsWith('/') ? path : `/${path}`
-  const url = base.startsWith('http') ? `${base}${p}` : `${base}${p}`
+  const url = resolveComfyUrl(path)
   const response = await fetch(url, init)
   if (!response.ok) {
     const text = await response.text()
@@ -109,6 +133,96 @@ export async function fetchComfyHistory(promptId: string): Promise<Record<string
   return comfyFetch<Record<string, unknown>>(`/history/${encodeURIComponent(promptId)}`)
 }
 
+function readPromptHistoryEntry(history: Record<string, unknown> | null, promptId: string): Record<string, unknown> | null {
+  if (!history || typeof history !== 'object') return null
+  const entry = history[promptId]
+  return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : null
+}
+
+function collectHistoryImages(entry: Record<string, unknown>): ComfyResultImage[] {
+  const outputs = entry.outputs
+  if (typeof outputs !== 'object' || outputs === null) return []
+
+  return Object.entries(outputs).flatMap(([nodeId, value]) => {
+    if (typeof value !== 'object' || value === null) return []
+    const images = (value as { images?: unknown[] }).images
+    if (!Array.isArray(images)) return []
+    return images
+      .map((image) => {
+        const item = image as ComfyAssetRef
+        if (!item?.filename) return null
+        const params = new URLSearchParams({ filename: item.filename })
+        if (item.subfolder) params.set('subfolder', item.subfolder)
+        if (item.type) params.set('type', item.type)
+        return {
+          nodeId,
+          filename: item.filename,
+          url: resolveComfyUrl(`/view?${params.toString()}`),
+        } satisfies ComfyResultImage
+      })
+      .filter((item): item is ComfyResultImage => item != null)
+  })
+}
+
+function readStatusText(entry: Record<string, unknown>): string {
+  const status = entry.status
+  if (typeof status === 'object' && status !== null) {
+    const statusStr = (status as { status_str?: unknown }).status_str
+    if (typeof statusStr === 'string' && statusStr.trim()) return statusStr
+    const completed = (status as { completed?: unknown }).completed
+    if (completed === true) return 'completed'
+  }
+  return 'unknown'
+}
+
+function readErrorText(entry: Record<string, unknown>): string | null {
+  const status = entry.status
+  if (typeof status !== 'object' || status === null) return null
+  const messages = (status as { messages?: unknown[] }).messages
+  if (!Array.isArray(messages)) return null
+  for (const item of messages) {
+    if (!Array.isArray(item) || item.length < 2) continue
+    const level = item[0]
+    const payload = item[1]
+    if (level !== 'execution_error') continue
+    if (typeof payload === 'string') return payload
+    if (typeof payload === 'object' && payload !== null) {
+      const message = (payload as { exception_message?: unknown; message?: unknown }).exception_message
+      if (typeof message === 'string' && message.trim()) return message
+      const fallback = (payload as { message?: unknown }).message
+      if (typeof fallback === 'string' && fallback.trim()) return fallback
+      try {
+        return JSON.stringify(payload)
+      } catch {
+        return '执行失败'
+      }
+    }
+  }
+  return null
+}
+
+export function parseComfyPromptResult(history: Record<string, unknown> | null, promptId: string): ComfyPromptResult {
+  const entry = readPromptHistoryEntry(history, promptId)
+  if (!entry) {
+    return {
+      completed: false,
+      statusText: 'queued',
+      errorText: null,
+      images: [],
+      outputCount: 0,
+    }
+  }
+
+  const images = collectHistoryImages(entry)
+  return {
+    completed: true,
+    statusText: readStatusText(entry),
+    errorText: readErrorText(entry),
+    images,
+    outputCount: Object.keys(((entry.outputs as Record<string, unknown> | undefined) ?? {})).length,
+  }
+}
+
 type PollComfyHistoryOptions = {
   intervalMs?: number
   maxAttempts?: number
@@ -122,7 +236,7 @@ export async function pollComfyHistory(
   const maxAttempts = options?.maxAttempts ?? 30
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const history = await fetchComfyHistory(promptId)
-    const completed = Boolean(history?.[promptId])
+    const completed = Boolean(readPromptHistoryEntry(history, promptId))
     if (completed) {
       return { history, completed: true }
     }

@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { QuickActionGrid } from '@/components/common/QuickActionGrid'
+import { StatStrip } from '@/components/common/StatStrip'
 import { getApiBaseUrl, healthCheck } from '@/api'
-import { useThemeStore } from '@/stores/themeStore'
+import { useAuthStore } from '@/stores/authStore'
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const theme = useThemeStore((s) => s.theme)
-  const setTheme = useThemeStore((s) => s.setTheme)
-
+  const user = useAuthStore((s) => s.user)
+  const signOut = useAuthStore((s) => s.signOut)
   const [status, setStatus] = useState<'loading' | 'ok' | 'fail'>('loading')
   const [mode, setMode] = useState('unknown')
   const envMode = import.meta.env.MODE
   const apiBaseUrl = getApiBaseUrl()
+  const isAdmin = user?.role === 'ADMIN'
+  const canAccessGlobalSettings = user?.role === 'ADMIN' || user?.role === 'TEACHER' || user?.role === 'STUDENT'
+  const systemEntries = [
+    ...(isAdmin ? [{ key: 'models', title: '模型配置', description: '查看模型列表与联调状态', to: '/models', badge: '管理员' }] : []),
+    ...(isAdmin ? [{ key: 'hub', title: '服务商中心', description: '维护多服务商接入', to: '/models/hub', badge: '管理员' }] : []),
+    ...(canAccessGlobalSettings
+      ? [{ key: 'global', title: '全局设定', description: '维护创作默认参数', to: '/global-settings', badge: '三角色可用' }]
+      : []),
+  ]
 
   useEffect(() => {
     void (async () => {
@@ -26,66 +36,73 @@ export function SettingsPage() {
   }, [])
 
   return (
-    <section className="panel glass settings-page">
-      <div className="setting-item theme-block">
-        <p>外观</p>
-        <p className="hint muted">浅色 / 深色 / OneLink（青靛科技风，参考 onelinkai.cloud）</p>
-        <div className="theme-pills" role="group" aria-label="主题选择">
-          <button type="button" className={`pill${theme === 'light' ? ' active' : ''}`} onClick={() => setTheme('light')}>
-            浅色
-          </button>
-          <button type="button" className={`pill${theme === 'dark' ? ' active' : ''}`} onClick={() => setTheme('dark')}>
-            深色
-          </button>
-          <button type="button" className={`pill${theme === 'onelink' ? ' active' : ''}`} onClick={() => setTheme('onelink')}>
-            OneLink
-          </button>
+    <section className="settings-page settings-page--revamp">
+      <StatStrip
+        items={[
+          { key: 'role', label: '当前角色', value: user?.role || '未登录' },
+          { key: 'service', label: '服务状态', value: status === 'loading' ? '检测中' : status === 'ok' ? '正常' : '异常' },
+          { key: 'mode', label: '运行模式', value: mode === 'unknown' ? envMode : mode.toUpperCase() },
+        ]}
+      />
+
+      <div className="content-card-grid">
+        <section className="content-card">
+          <div className="section-heading">
+            <h3>账号与访问</h3>
+            <span>只保留常用操作</span>
+          </div>
+          {user ? (
+            <div className="settings-page__list">
+              <div><span>显示名称</span><strong>{user.displayName}</strong></div>
+              <div><span>用户名</span><strong>{user.username}</strong></div>
+              <div><span>组织</span><strong>{user.orgUnitId || '未设置'}</strong></div>
+              <div><span>班级</span><strong>{user.classroomId || '未设置'}</strong></div>
+            </div>
+          ) : (
+            <p className="muted">当前为访客模式，登录后可查看角色相关后台入口。</p>
+          )}
+          <div className="inline-actions">
+            <button type="button" className="app-btn v-ghost s-md" onClick={() => navigate('/login')}>
+              {user ? '切换账号' : '去登录'}
+            </button>
+            {user ? (
+              <button
+                type="button"
+                className="app-btn v-ghost s-md"
+                onClick={() => {
+                  void signOut().then(() => navigate('/login'))
+                }}
+              >
+                退出登录
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="content-card">
+          <div className="section-heading">
+            <h3>系统入口</h3>
+            <span>按角色收起复杂配置</span>
+          </div>
+          <QuickActionGrid
+            items={systemEntries}
+          />
+          {!canAccessGlobalSettings ? <p className="muted">登录后可访问全局设定。</p> : null}
+        </section>
+      </div>
+
+      <section className="content-card">
+        <div className="section-heading">
+          <h3>环境信息</h3>
+          <span>轻量展示，便于联调</span>
         </div>
-      </div>
-      <div className="setting-item">
-        <p>模型服务状态</p>
-        <strong className={`health ${status}`}>
-          <span className={`dot ${status}`} />
-          {status === 'loading' ? '检测中...' : status === 'ok' ? `正常（${mode.toUpperCase()}）` : '异常，请检查后端服务'}
-        </strong>
-      </div>
-      <div className="setting-item">
-        <p>系统信息</p>
-        <ul>
-          <li>运行模式：{envMode}</li>
-          <li>接口地址：{apiBaseUrl}</li>
-          <li>前端版本：v1.0 (React)</li>
-        </ul>
-      </div>
-      <div className="setting-item">
-        <p>全局创作默认</p>
-        <p className="hint muted">画面比例、剧本类型、模型策略、创作模式与分镜布局</p>
-        <div className="actions-row">
-          <button type="button" className="pill" onClick={() => navigate('/global-settings')}>
-            打开全局设定
-          </button>
+        <div className="settings-page__list">
+          <div><span>前端模式</span><strong>{envMode}</strong></div>
+          <div><span>接口地址</span><strong>{apiBaseUrl}</strong></div>
+          <div><span>主题策略</span><strong>浅色工作台</strong></div>
         </div>
-      </div>
-      <div className="setting-item">
-        <p>模型配置管理</p>
-        <div className="actions-row">
-          <button type="button" className="pill" onClick={() => navigate('/models')}>
-            模型配置
-          </button>
-          <button type="button" className="pill" onClick={() => navigate('/models/hub')}>
-            服务商中心
-          </button>
-        </div>
-      </div>
-      <div className="setting-item">
-        <p>使用说明</p>
-        <ul>
-          <li>1. 输入主题提示词，选择生成模式与风格。</li>
-          <li>2. 图文模式可选图片模型；视频模式可选即梦视频模型。</li>
-          <li>3. 点击开始生成，视频任务可能需要 10~60 秒返回。</li>
-          <li>4. 支持复制文案、下载图片/视频、复制视频链接、历史回看。</li>
-        </ul>
-      </div>
+      </section>
+
     </section>
   )
 }

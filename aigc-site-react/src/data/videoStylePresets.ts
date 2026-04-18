@@ -1,4 +1,4 @@
-import type { GlobalVisualStyleMode, VideoStylePreset } from '@/types'
+import type { GlobalVisualStyleMode, StyleTemplate, VideoStylePreset } from '@/types'
 
 export const VIDEO_STYLE_PRESETS: VideoStylePreset[] = [
   {
@@ -181,12 +181,40 @@ export const VIDEO_STYLE_PRESETS: VideoStylePreset[] = [
 
 const PRESET_BY_ID = new Map(VIDEO_STYLE_PRESETS.map((p) => [p.id, p]))
 
-export function getPresetById(id: string): VideoStylePreset | undefined {
-  return PRESET_BY_ID.get(id)
+function toStyleTemplate(preset: VideoStylePreset): StyleTemplate {
+  return {
+    templateId: preset.id,
+    scope: 'SYSTEM',
+    name: preset.name,
+    category: preset.category,
+    traits: preset.traits,
+    fullPrompt: preset.fullPrompt,
+    styleKey: null,
+    ownerId: null,
+    ownerName: null,
+    orgUnitId: null,
+    courseId: null,
+    enabled: true,
+    createdAt: '1970-01-01T00:00:00.000Z',
+    updatedAt: '1970-01-01T00:00:00.000Z',
+  }
 }
 
-export function presetDescriptor(p: VideoStylePreset): string {
-  return `${p.name}：${p.traits}`
+export const FALLBACK_STYLE_TEMPLATES: StyleTemplate[] = VIDEO_STYLE_PRESETS.map(toStyleTemplate)
+
+export function getPresetById(
+  id: string,
+  templates: readonly StyleTemplate[] = FALLBACK_STYLE_TEMPLATES,
+): StyleTemplate | undefined {
+  const matched = templates.find((item) => item.templateId === id)
+  if (matched) return matched
+  const fallback = PRESET_BY_ID.get(id)
+  return fallback ? toStyleTemplate(fallback) : undefined
+}
+
+export function presetDescriptor(p: Pick<StyleTemplate, 'name' | 'traits'>): string {
+  const traits = p.traits?.trim()
+  return traits ? `${p.name}：${traits}` : p.name
 }
 
 const FALLBACK_STYLE = '电影感写实'
@@ -198,14 +226,17 @@ export type GlobalStyleSlice = {
   visualStyleLongTextMode: boolean
 }
 
-export function resolveVisualStyleForProject(s: GlobalStyleSlice): string {
+export function resolveVisualStyleForProject(
+  s: GlobalStyleSlice,
+  templates: readonly StyleTemplate[] = FALLBACK_STYLE_TEMPLATES,
+): string {
   if (s.visualStyleMode === 'custom') {
     const t = s.customVisualStyle.trim()
     return t || FALLBACK_STYLE
   }
   const id = s.visualStylePresetId
   if (!id) return FALLBACK_STYLE
-  const preset = getPresetById(id)
+  const preset = getPresetById(id, templates)
   if (!preset) return FALLBACK_STYLE
   if (s.visualStyleLongTextMode) {
     return preset.fullPrompt.trim() || presetDescriptor(preset)
@@ -214,27 +245,33 @@ export function resolveVisualStyleForProject(s: GlobalStyleSlice): string {
 }
 
 /** 新建项目页「全局偏好」一行中的简短展示 */
-export function styleSummaryShort(s: GlobalStyleSlice): string {
+export function styleSummaryShort(
+  s: GlobalStyleSlice,
+  templates: readonly StyleTemplate[] = FALLBACK_STYLE_TEMPLATES,
+): string {
   if (s.visualStyleMode === 'custom') {
     const t = s.customVisualStyle.trim()
     if (!t) return '自定义（未填）'
     return t.length > 28 ? `${t.slice(0, 28)}…` : t
   }
-  const p = s.visualStylePresetId ? getPresetById(s.visualStylePresetId) : null
+  const p = s.visualStylePresetId ? getPresetById(s.visualStylePresetId, templates) : null
   if (!p) return '预设（未选）'
   const long = s.visualStyleLongTextMode ? ' · 长文本' : ''
   return `预设：${p.name}${long}`
 }
 
-export function groupPresetsByCategory(): { category: string; presets: VideoStylePreset[] }[] {
+export function groupPresetsByCategory(
+  templates: readonly StyleTemplate[] = FALLBACK_STYLE_TEMPLATES,
+): { category: string; presets: StyleTemplate[] }[] {
   const order: string[] = []
-  const map = new Map<string, VideoStylePreset[]>()
-  for (const p of VIDEO_STYLE_PRESETS) {
-    if (!map.has(p.category)) {
-      order.push(p.category)
-      map.set(p.category, [])
+  const map = new Map<string, StyleTemplate[]>()
+  for (const p of templates) {
+    const category = p.category?.trim() || '未分类'
+    if (!map.has(category)) {
+      order.push(category)
+      map.set(category, [])
     }
-    map.get(p.category)!.push(p)
+    map.get(category)!.push(p)
   }
   return order.map((category) => ({ category, presets: map.get(category)! }))
 }

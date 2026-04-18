@@ -15,7 +15,7 @@ import { AssetHistoryPanel } from '@/components/script/AssetHistoryPanel'
 import { KeyframeCard } from '@/components/script/KeyframeCard'
 import { PromptVersionsEditor } from '@/components/script/PromptVersionsEditor'
 import { ArtDirectionPreview } from '@/components/script/ArtDirectionPreview'
-import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
+import { ProjectSubpageShell } from '@/components/script/ProjectSubpageShell'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
@@ -132,11 +132,11 @@ function AssetBlock({
   const [histOpen, setHistOpen] = useState<{ type: AssetHistoryType; referenceId: string } | null>(null)
   useEffect(() => {
     setDraft(initial)
-  }, [initial.assetId, initial.updatedAt])
+  }, [initial])
 
   const list = keyframes.filter((k) => k.assetId === draft.assetId)
   const isCharacter = draft.assetType === 'CHARACTER'
-  const storyboardPanels = useMemo(() => parseStoryboardPanels(draft), [draft.storyboardPlanJson, draft.storyboardTranslationsJson])
+  const storyboardPanels = useMemo(() => parseStoryboardPanels(draft), [draft])
 
   useEffect(() => {
     if (shots.length > 0 && !selectedShotId) {
@@ -460,7 +460,7 @@ export function ScriptProjectAssetsPage() {
         showToast(e instanceof Error ? e.message : '页面初始化失败，请重试', 'error')
       }
     })()
-  }, [projectId, loadProject, loadAssets, loadKeyframes, loadShots])
+  }, [projectId, loadProject, loadAssets, loadKeyframes, loadShots, showToast])
 
   async function extractCurrent() {
     try {
@@ -695,10 +695,33 @@ export function ScriptProjectAssetsPage() {
     return <EmptyState title="项目不存在" description="请返回列表重新选择项目。" />
   }
 
+  const project = currentProject.project
+
   return (
-    <div className="script-project-workflow-layout">
-      <ScriptProjectWorkflowNav projectId={projectId} />
-      <div className="script-project-workflow-layout__main">
+    <ProjectSubpageShell
+      projectId={projectId}
+      title="资产与关键帧"
+      description="把资产抽取、视觉提示词、关键帧、九宫格和群像都收进同一工作区，首屏只保留当前分类、模型入口和关键动作。"
+      meta={
+        <>
+          <span className="soft-badge">{project.name}</span>
+          <span className="soft-badge">{activeTab === 'CHARACTER' ? '人物形象' : activeTab === 'BACKGROUND' ? '视频背景' : '视频道具'}</span>
+        </>
+      }
+      stats={[
+        { key: 'assets', label: '当前分类资产', value: currentAssets.length },
+        { key: 'keyframes', label: '关键帧总数', value: keyframes.length },
+        { key: 'characters', label: '角色资产', value: characterAssets.length },
+        { key: 'group-history', label: '群像历史', value: groupSceneHistory.length },
+      ]}
+      helpTitle="查看资产页说明"
+      help={
+        <>
+          <p>资产页已经整合抽取资产、美术指导、提示词、关键帧、三视图、九宫格和群像，不再分散到多个次级入口。</p>
+          <p>帮助说明默认收起，批量生成和历史回看留在就近区域处理。</p>
+        </>
+      }
+    >
     <section className="script-assets-page">
       <div className="toolbar panel glass">
         <div>
@@ -878,7 +901,6 @@ export function ScriptProjectAssetsPage() {
         <EmptyState title="当前分类还没有资产" description="点击上方按钮抽取当前分类的视觉资产，然后再生成关键帧。" />
       )}
     </section>
-      </div>
-    </div>
+    </ProjectSubpageShell>
   )
 }

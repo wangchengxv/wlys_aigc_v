@@ -1,0 +1,14 @@
+- [x] 服务商目录可返回 `Vidu` 类型，默认 Base URL 为 `https://api.vidu.cn`
+- [x] 用户可通过现有连接配置流程保存并读取 Vidu API Key
+- [x] Vidu 图生视频请求统一发送到 `POST /ent/v2/img2video`
+- [x] 请求头使用 `Authorization: Token {api key}` 与 `Content-Type: application/json`
+- [x] `images` 仅支持单图输入，且提交前完成格式、比例、体积校验
+- [x] `model` 必填且支持官方可用模型枚举的配置与校验
+- [x] `duration`、`resolution` 按模型族约束生效，越界参数会被明确拒绝
+- [x] `audio` 相关参数（`audio_type`、`voice_id`）在条件满足时才生效
+- [x] `is_rec` 启用时遵循官方行为，不与手动 `prompt` 冲突
+- [x] `bgm`、`off_peak`、`watermark`、`wm_position`、`payload` 可按条件透传
+- [x] Vidu 任务查询可同步处理中/成功/失败状态
+- [x] 成功结果可提取视频 URL 与可选带水印 URL 并映射到统一结构（主视频与水印视频均可同时保留）
+- [x] 失败结果可提取供应商错误信息并映射到平台错误结构
+- [x] Ark、Moark 与现有 Vidu 其他能力链路无回归（已补最小回归用例）；Kling 链路由独立规格 `add-kling-onelink-video-provider` 跟踪

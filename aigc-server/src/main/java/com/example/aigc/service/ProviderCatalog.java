@@ -43,7 +43,7 @@ public class ProviderCatalog {
                 "/v1/models",
                 AuthMode.BEARER,
                 true,
-                null,
+                "/v1/images/generations",
                 null,
                 null,
                 GatewayKind.OPENAI_COMPAT,
@@ -54,11 +54,21 @@ public class ProviderCatalog {
                         "gemini-2.5-pro",
                         "gemini-2.5-flash",
                         "wanx-v1",
+                        "kling-v1",
+                        "kling-v1-6",
+                        "kling-v2",
+                        "kling-v2-1",
+                        "kling-v2-6",
                         "MiniMax-M2.1",
                         "viduq3-turbo",
                         "viduq3-pro",
+                        "viduq2-pro-fast",
+                        "viduq2-pro",
+                        "viduq2-turbo",
                         "viduq2",
-                        "viduq1"
+                        "viduq1",
+                        "viduq1-classic",
+                        "vidu2.0"
                 ),
                 null,
                 false
@@ -308,6 +318,33 @@ public class ProviderCatalog {
                 "https://moark.com",
                 true
         ), "moark");
+        register(new ProviderDefinition(
+                "vidu",
+                "Vidu",
+                "https://api.vidu.cn",
+                "vidu",
+                null,
+                null,
+                AuthMode.TOKEN,
+                false,
+                null,
+                "/ent/v2/img2video",
+                "/ent/v2/tasks/{taskId}/creations",
+                GatewayKind.OPENAI_COMPAT,
+                List.of(
+                        "viduq3-turbo",
+                        "viduq3-pro",
+                        "viduq2-pro-fast",
+                        "viduq2-pro",
+                        "viduq2-turbo",
+                        "viduq2",
+                        "viduq1",
+                        "viduq1-classic",
+                        "vidu2.0"
+                ),
+                null,
+                false
+        ), "viduai");
         /** Internal: Vidu image-to-video paths via OneLink proxy; base URL comes from the user's onelinkai connection. */
         register(new ProviderDefinition(
                 "vidu_onelink",
@@ -371,6 +408,8 @@ public class ProviderCatalog {
         X_API_KEY,
         /** Azure OpenAI: {@code api-key} header. */
         API_KEY_HEADER,
+        /** Vidu: {@code Authorization: Token <apiKey>}. */
+        TOKEN,
         NONE
     }
 

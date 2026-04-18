@@ -565,6 +565,9 @@ public class ProviderHttpGateway {
         if (definition.authMode() == AuthMode.API_KEY_HEADER && apiKey != null && !apiKey.isBlank()) {
             builder.header("api-key", apiKey);
         }
+        if (definition.authMode() == AuthMode.TOKEN && apiKey != null && !apiKey.isBlank()) {
+            builder.header("Authorization", "Token " + apiKey);
+        }
         applyCustomHeadersFromMeta(builder, meta);
     }
 

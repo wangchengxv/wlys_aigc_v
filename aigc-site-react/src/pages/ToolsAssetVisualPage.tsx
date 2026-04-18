@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  generateContent,
   generateThreeView,
   generateTurnaroundImage,
   generateTurnaroundPlan,
@@ -9,12 +10,15 @@ import {
   resolveScriptFileUrl,
 } from '@/api'
 import { AppButton } from '@/components/common/AppButton'
+import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { useToast } from '@/context/ToastContext'
+import { useAuthStore } from '@/stores/authStore'
 import type { ExtractedAsset, ScriptProjectSummary } from '@/types'
 
 export function ToolsAssetVisualPage() {
   const { showToast } = useToast()
+  const user = useAuthStore((s) => s.user)
   const [projects, setProjects] = useState<ScriptProjectSummary[]>([])
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [projectId, setProjectId] = useState('')
@@ -22,6 +26,12 @@ export function ToolsAssetVisualPage() {
   const [assetsLoading, setAssetsLoading] = useState(false)
   const [assetId, setAssetId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [quickAssetName, setQuickAssetName] = useState('')
+  const [quickAssetDesc, setQuickAssetDesc] = useState('')
+  const [quickAssetType, setQuickAssetType] = useState<'CHARACTER' | 'BACKGROUND' | 'PROP'>('CHARACTER')
+  const [quickBusy, setQuickBusy] = useState(false)
+  const [quickThreeViewUrl, setQuickThreeViewUrl] = useState('')
+  const [quickTurnaroundUrl, setQuickTurnaroundUrl] = useState('')
 
   const loadProjects = useCallback(async () => {
     setProjectsLoading(true)
@@ -73,7 +83,7 @@ export function ToolsAssetVisualPage() {
 
   async function run<T>(fn: () => Promise<T>, okMsg: string, errMsg: string) {
     if (!projectId || !assetId) {
-      showToast('请先选择剧本工程与资产', 'error')
+      showToast('当前未绑定工程。你仍可使用下方免绑定快速模式；如需写入工程，请先选择工程与资产。', 'info')
       return
     }
     setBusy(true)
@@ -88,13 +98,63 @@ export function ToolsAssetVisualPage() {
     }
   }
 
+  async function runQuick(kind: 'THREE_VIEW' | 'TURNAROUND') {
+    const name = quickAssetName.trim()
+    if (!name) {
+      showToast('请先填写主体名称', 'error')
+      return
+    }
+
+    if (kind === 'TURNAROUND' && quickAssetType !== 'CHARACTER') {
+      showToast('九宫格快速模式仅支持角色类型，请先切换为“角色”', 'info')
+      return
+    }
+
+    const desc = quickAssetDesc.trim()
+    const base = [`主体：${name}`, desc ? `描述：${desc}` : '', `类型：${quickAssetType}`].filter(Boolean).join('；')
+    const prompt =
+      kind === 'THREE_VIEW'
+        ? `请生成角色设定三视图（正面、侧面、背面）拼图，统一服装与体态，白底，细节清晰。${base}`
+        : `请生成角色九宫格设定图，九个机位保持同一角色一致性，白底，细节清晰。${base}`
+
+    setQuickBusy(true)
+    try {
+      const res = await generateContent({
+        prompt,
+        mode: 'image',
+        style: '影视级真实',
+        imageSize: '1024x1024',
+        textLength: 'medium',
+        count: 1,
+      })
+      const imageUrl = res.imageResults?.[0]
+      if (!imageUrl) {
+        throw new Error('未返回图片结果')
+      }
+      if (kind === 'THREE_VIEW') {
+        setQuickThreeViewUrl(imageUrl)
+      } else {
+        setQuickTurnaroundUrl(imageUrl)
+      }
+      showToast(kind === 'THREE_VIEW' ? '免绑定三视图已生成' : '免绑定九宫格已生成', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '免绑定生成失败', 'error')
+    } finally {
+      setQuickBusy(false)
+    }
+  }
+
+  if (!user) {
+    return <EmptyState title="请先登录后访问" description="三视图工具面向已登录用户开放，请登录后继续使用。" />
+  }
+
   return (
     <section className="tools-asset-visual-page">
       <div className="head panel glass">
         <div>
-          <p className="eyebrow">Tools</p>
+          <p className="eyebrow">工具</p>
           <h2>三视图与九宫格</h2>
-          <p className="muted">选择已有剧本工程与资产，调用与「资产与关键帧」页相同的生成能力；数据仍保存在该工程中。</p>
+          <p className="muted">绑定工程为可选项。可直接使用免绑定快速模式生成示意图；如选择工程与资产，则结果会写回项目资产页。</p>
         </div>
         {projectId ? (
           <Link className="create-link" to={`/script-projects/${encodeURIComponent(projectId)}/assets`}>
@@ -206,6 +266,57 @@ export function ToolsAssetVisualPage() {
         </div>
       ) : null}
 
+      {!selected ? (
+        <div className="panel glass tools-asset-visual-actions">
+          <div className="tools-asset-visual-section">
+            <p className="eyebrow">免绑定快速模式</p>
+            <p className="muted">无需绑定工程，可直接生成三视图与九宫格示意图（不写入项目资产）。</p>
+            <div className="form-grid">
+              <label className="input-wrap">
+                <span className="label">主体名称</span>
+                <input
+                  className="ctrl"
+                  value={quickAssetName}
+                  onChange={(e) => setQuickAssetName(e.target.value)}
+                  placeholder="例如：未来女警"
+                />
+              </label>
+              <label className="input-wrap">
+                <span className="label">类型</span>
+                <select className="ctrl" value={quickAssetType} onChange={(e) => setQuickAssetType(e.target.value as 'CHARACTER' | 'BACKGROUND' | 'PROP')}>
+                  <option value="CHARACTER">角色</option>
+                  <option value="BACKGROUND">背景</option>
+                  <option value="PROP">道具</option>
+                </select>
+              </label>
+            </div>
+            <label className="input-wrap">
+              <span className="label">描述（可选）</span>
+              <textarea
+                className="ctrl"
+                rows={3}
+                value={quickAssetDesc}
+                onChange={(e) => setQuickAssetDesc(e.target.value)}
+                placeholder="例如：银白短发、机能风外套、冷色调"
+              />
+            </label>
+            <div className="actions">
+              <AppButton size="sm" loading={quickBusy} onClick={() => void runQuick('THREE_VIEW')}>
+                免绑定生成三视图
+              </AppButton>
+              <AppButton
+                size="sm"
+                variant="primary"
+                loading={quickBusy}
+                onClick={() => void runQuick('TURNAROUND')}
+              >
+                免绑定生成九宫格 B-7
+              </AppButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selected ? (
         <div className="panel glass tools-asset-visual-previews">
           {isCharacter && selected.turnaroundImageFileId ? (
@@ -230,6 +341,23 @@ export function ToolsAssetVisualPage() {
           ) : null}
           {!selected.threeViewImageFileId && !(isCharacter && selected.turnaroundImageFileId) ? (
             <p className="muted">尚无预览图，生成后将显示在此。</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!selected && (quickThreeViewUrl || quickTurnaroundUrl) ? (
+        <div className="panel glass tools-asset-visual-previews">
+          {quickTurnaroundUrl ? (
+            <div className="turnaround-preview">
+              <p className="eyebrow">免绑定九宫格造型 B-7</p>
+              <img className="turnaround-img" src={quickTurnaroundUrl} alt="免绑定九宫格" />
+            </div>
+          ) : null}
+          {quickThreeViewUrl ? (
+            <div className="turnaround-preview">
+              <p className="eyebrow">免绑定三视图（正/侧/背）</p>
+              <img className="turnaround-img" src={quickThreeViewUrl} alt="免绑定三视图" />
+            </div>
           ) : null}
         </div>
       ) : null}

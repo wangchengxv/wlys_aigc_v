@@ -8,7 +8,7 @@ import { ScriptRevisionPanel } from '@/components/script/ScriptRevisionPanel'
 import { ScriptAppendPreviewDialog } from '@/components/script/ScriptAppendPreviewDialog'
 import { ScriptRewriteDialog } from '@/components/script/ScriptRewriteDialog'
 import type { RewriteDiffMode } from '@/components/script/ScriptRewriteDiffPanel'
-import { ScriptProjectWorkflowNav } from '@/components/script/ScriptProjectWorkflowNav'
+import { ProjectSubpageShell } from '@/components/script/ProjectSubpageShell'
 import { ScriptStructuredPreview } from '@/components/script/ScriptStructuredPreview'
 import { WorkflowModelPanel } from '@/components/script/WorkflowModelPanel'
 import { useToast } from '@/context/ToastContext'
@@ -95,7 +95,7 @@ export function ScriptProjectPreviewPage() {
       }
     })()
     setActiveTab(initialTab)
-  }, [projectId, loadProject, loadScript, loadRevisions, initialTab])
+  }, [projectId, loadProject, loadScript, loadRevisions, initialTab, showToast])
 
   const structuredText = useMemo(() => JSON.stringify(scriptPayload?.structuredScript || {}, null, 2), [scriptPayload?.structuredScript])
 
@@ -252,10 +252,33 @@ export function ScriptProjectPreviewPage() {
     return <EmptyState title="项目不存在" description="请返回列表重新选择项目。" />
   }
 
+  const project = currentProject.project
+
   return (
-    <div className="script-project-workflow-layout">
-      <ScriptProjectWorkflowNav projectId={projectId} />
-      <div className="script-project-workflow-layout__main">
+    <ProjectSubpageShell
+      projectId={projectId}
+      title="剧本预览与优化"
+      description="把导入、完善、续写、改写、结构化预览和版本回溯收进同一页，首屏只保留关键动作与当前状态。"
+      meta={
+        <>
+          <span className="soft-badge">{project.name}</span>
+          <span className="soft-badge">{scriptPayload?.structuredScript ? '结构化已生成' : '待结构化'}</span>
+        </>
+      }
+      stats={[
+        { key: 'revisions', label: '版本数', value: revisions.length },
+        { key: 'documents', label: '文档版本', value: currentProject.documents.length },
+        { key: 'assets', label: '已抽取资产', value: currentProject.assets.length },
+        { key: 'shots', label: '镜头数', value: currentProject.shots.length },
+      ]}
+      helpTitle="查看剧本页说明"
+      help={
+        <>
+          <p>导入、完善、结构化、续写和改写都集中在这页处理，减少剧本文本在多个入口间来回跳转。</p>
+          <p>三阶段优化与版本回溯保留，但说明文案全部下沉到帮助提示，首屏只保留动作与结果。</p>
+        </>
+      }
+    >
     <section className="script-preview-page">
       <input
         ref={fileInputRef}
@@ -428,7 +451,6 @@ export function ScriptProjectPreviewPage() {
         </aside>
       </div>
     </section>
-      </div>
-    </div>
+    </ProjectSubpageShell>
   )
 }

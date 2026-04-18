@@ -1,0 +1,92 @@
+- generic [ref=e3]:
+  - complementary "应用导航" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 云
+      - generic [ref=e7]:
+        - strong [ref=e8]: AIGC实训台
+        - generic [ref=e9]: 访客工作区
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - generic [ref=e13]:
+          - link "首页" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "创作工作台" [ref=e15] [cursor=pointer]:
+            - /url: /workspace
+          - link "历史记录" [ref=e16] [cursor=pointer]:
+            - /url: /history
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: 教学管理
+        - link "课程中心" [ref=e20] [cursor=pointer]:
+          - /url: /courses
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: 项目生产
+        - generic [ref=e23]:
+          - link "项目库" [ref=e24] [cursor=pointer]:
+            - /url: /script-projects
+          - link "流程工作区" [ref=e25] [cursor=pointer]:
+            - /url: /workflow/script-story
+    - generic [ref=e26]:
+      - generic [ref=e27]: 访客模式
+      - strong [ref=e28]: 打开登录后解锁完整后台能力
+  - generic [ref=e29]:
+    - banner [ref=e30]:
+      - generic [ref=e32]:
+        - strong [ref=e33]: 工作区
+        - generic [ref=e34]: 项目与作品
+      - generic [ref=e35]:
+        - generic [ref=e36]: 访客
+        - button "登录" [ref=e37] [cursor=pointer]
+    - main [ref=e38]:
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: Project
+        - heading "剧本工程" [level=1] [ref=e42]
+        - generic [ref=e43]:
+          - generic [ref=e44]: 项目与作品
+          - generic [ref=e45]: 访客
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - article [ref=e49]:
+            - generic [ref=e50]: 项目总数
+            - strong [ref=e51]: "0"
+          - article [ref=e52]:
+            - generic [ref=e53]: 待审核项目
+            - strong [ref=e54]: "0"
+          - article [ref=e55]:
+            - generic [ref=e56]: 可交付项目
+            - strong [ref=e57]: "0"
+          - article [ref=e58]:
+            - generic [ref=e59]: 归档课程项目
+            - strong [ref=e60]: "0"
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - heading "项目筛选" [level=3] [ref=e64]
+              - generic [ref=e66]: 0 项结果
+            - generic [ref=e68]:
+              - button "项目列表" [ref=e69] [cursor=pointer]
+              - button "回收站" [ref=e70] [cursor=pointer]
+              - link "新建项目" [ref=e71] [cursor=pointer]:
+                - /url: /script-projects/new
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - generic [ref=e74]: 关键词
+              - textbox "关键词" [ref=e75]:
+                - /placeholder: 搜索项目名、课程、班级、提交人
+            - generic [ref=e76]:
+              - generic [ref=e77]: 课程
+              - combobox "课程" [ref=e78]:
+                - option "全部课程" [selected]
+            - generic [ref=e79]:
+              - generic [ref=e80]: 班级
+              - combobox "班级" [ref=e81]:
+                - option "全部班级" [selected]
+            - generic [ref=e82]:
+              - generic [ref=e83]: 提交人
+              - combobox "提交人" [ref=e84]:
+                - option "全部提交人" [selected]
+        - generic [ref=e85]:
+          - heading "还没有项目" [level=3] [ref=e86]
+          - paragraph [ref=e87]: 先创建项目，再把剧本、资产、视频和导出放进同一工作区。
+        - group [ref=e88]:
+          - generic "查看项目库说明" [ref=e89] [cursor=pointer]

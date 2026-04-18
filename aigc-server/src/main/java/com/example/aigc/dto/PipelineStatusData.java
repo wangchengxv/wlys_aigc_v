@@ -1,6 +1,7 @@
 package com.example.aigc.dto;
 
 import com.example.aigc.entity.PipelineRun;
+import com.example.aigc.enums.ContentReviewStatus;
 import com.example.aigc.enums.ProjectStatus;
 
 public class PipelineStatusData {
@@ -13,4 +14,50 @@ public class PipelineStatusData {
     public int runningCount;
     public int queuedCount;
     public int pendingCount;
+    public int videoTaskCount;
+    public int dubbingTaskCount;
+    public int dubbingSuccessCount;
+    public int dubbingFailedCount;
+    public int dubbingRunningCount;
+    public int dubbingQueuedCount;
+    public int dubbingPendingCount;
+    public int lipSyncTaskCount;
+    public int lipSyncSuccessCount;
+    public int lipSyncFailedCount;
+    public int lipSyncRunningCount;
+    public int lipSyncQueuedCount;
+    public int lipSyncPendingCount;
+    public int videoEditRenderTaskCount;
+    public int videoEditPreviewTaskCount;
+    public int videoEditPublishTaskCount;
+    public int videoEditRenderSuccessCount;
+    public int videoEditRenderFailedCount;
+    public int videoEditRenderRunningCount;
+    public int videoEditRenderQueuedCount;
+    public int videoEditRenderPendingCount;
+    public Integer videoEditDraftVersion;
+    public Integer videoEditPublishedVersion;
+    public boolean videoEditHasPublishedResult;
+    public boolean videoEditHasUnpublishedChanges;
+    public int finalCompositionTaskCount;
+    public int finalCompositionSuccessCount;
+    public int finalCompositionFailedCount;
+    public int finalCompositionRunningCount;
+    public int finalCompositionQueuedCount;
+    public int finalCompositionPendingCount;
+    public int exportPackageTaskCount;
+    public int exportPackageSuccessCount;
+    public int exportPackageFailedCount;
+    public int exportPackageRunningCount;
+    public int exportPackageQueuedCount;
+    public int exportPackagePendingCount;
+    public ContentReviewStatus contentReviewStatus;
+    public int reviewResubmitCount;
+    public String currentReviewId;
+    public String latestReviewComment;
+    public boolean videoReady;
+    public boolean dubbingReady;
+    public boolean lipSyncReady;
+    public boolean finalCompositionReady;
+    public boolean exportPackageReady;
 }

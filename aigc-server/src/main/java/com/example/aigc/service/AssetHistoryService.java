@@ -3,6 +3,7 @@ package com.example.aigc.service;
 import com.example.aigc.entity.AssetGenerationHistory;
 import com.example.aigc.entity.ExtractedAsset;
 import com.example.aigc.entity.KeyframeRecord;
+import com.example.aigc.entity.LipSyncTask;
 import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.entity.StoryboardShot;
@@ -112,6 +113,10 @@ public class AssetHistoryService {
                 VideoSegmentTask task = findVideoTask(aggregate, hist.getReferenceId());
                 task.resultVideoFileId = file.fileId;
             }
+            case LIP_SYNC_VIDEO -> {
+                LipSyncTask task = findLipSyncTask(aggregate, hist.getReferenceId());
+                task.resultVideoFileId = file.fileId;
+            }
             case STORYBOARD_CROP -> {
                 String[] parts = parseCropReference(hist.getReferenceId());
                 String assetId = parts[0];
@@ -152,6 +157,13 @@ public class AssetHistoryService {
                 .filter(t -> Objects.equals(t.segmentTaskId, segmentTaskId))
                 .findFirst()
                 .orElseThrow(() -> new BizException(404, "视频任务不存在"));
+    }
+
+    private LipSyncTask findLipSyncTask(ScriptProjectAggregate aggregate, String lipSyncTaskId) {
+        return aggregate.lipSyncTasks.stream()
+                .filter(t -> Objects.equals(t.lipSyncTaskId, lipSyncTaskId))
+                .findFirst()
+                .orElseThrow(() -> new BizException(404, "口型同步任务不存在"));
     }
 
     private String[] parseCropReference(String referenceId) {

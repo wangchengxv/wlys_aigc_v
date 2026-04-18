@@ -1,0 +1,98 @@
+- generic [ref=e3]:
+  - complementary "应用导航" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 云
+      - generic [ref=e7]:
+        - strong [ref=e8]: AIGC实训台
+        - generic [ref=e9]: 教师工作区
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - generic [ref=e13]:
+          - link "首页" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "创作工作台" [ref=e15] [cursor=pointer]:
+            - /url: /workspace
+          - link "历史记录" [ref=e16] [cursor=pointer]:
+            - /url: /history
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: 教学管理
+        - link "课程中心" [ref=e20] [cursor=pointer]:
+          - /url: /courses
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: 项目生产
+        - generic [ref=e23]:
+          - link "项目库" [ref=e24] [cursor=pointer]:
+            - /url: /script-projects
+          - link "流程工作区" [ref=e25] [cursor=pointer]:
+            - /url: /workflow/script-story
+      - generic [ref=e81]:
+        - paragraph [ref=e82]: 资源中心
+        - link "三视图工具" [ref=e84] [cursor=pointer]:
+          - /url: /tools/asset-visual
+      - generic [ref=e85]:
+        - paragraph [ref=e86]: 平台管理
+        - link "设置" [ref=e88] [cursor=pointer]:
+          - /url: /settings
+    - generic [ref=e26]:
+      - generic [ref=e27]: 张老师
+      - strong [ref=e28]: teacher
+  - generic [ref=e29]:
+    - banner [ref=e30]:
+      - generic [ref=e32]:
+        - strong [ref=e33]: 工作区
+        - generic [ref=e34]: 课程与实训
+      - generic [ref=e35]:
+        - generic [ref=e36]: 教师
+        - generic [ref=e89]:
+          - strong [ref=e90]: 张老师
+          - generic [ref=e91]: teacher
+        - button "退出" [ref=e92] [cursor=pointer]
+    - main [ref=e38]:
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: Teaching
+        - heading "课程工作台" [level=1] [ref=e42]
+        - generic [ref=e43]:
+          - generic [ref=e44]: 课程与实训
+          - generic [ref=e45]: 教师
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - article [ref=e49]:
+            - generic [ref=e50]: 课程总数
+            - strong [ref=e51]: "0"
+          - article [ref=e52]:
+            - generic [ref=e53]: 进行中
+            - strong [ref=e54]: "0"
+          - article [ref=e55]:
+            - generic [ref=e56]: 已归档
+            - strong [ref=e57]: "0"
+          - article [ref=e58]:
+            - generic [ref=e59]: 我负责的课程
+            - strong [ref=e60]: "0"
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - heading "课程筛选" [level=3] [ref=e64]
+              - generic [ref=e66]: 0 门课程 · 教师视角
+            - button "新建课程" [ref=e93] [cursor=pointer]
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: 关键词
+              - textbox "关键词" [ref=e72]:
+                - /placeholder: 搜索课程名、编码、负责人
+            - generic [ref=e73]:
+              - generic [ref=e74]: 课程状态
+              - combobox "课程状态" [ref=e75]:
+                - option "全部课程" [selected]
+                - option "仅看进行中"
+                - option "仅看已归档"
+            - generic [ref=e94]:
+              - generic [ref=e95]: 负责范围
+              - combobox "负责范围" [ref=e96]:
+                - option "全部课程" [selected]
+                - option "我负责的课程"
+        - generic [ref=e97]:
+          - heading "还没有课程" [level=3] [ref=e98]
+          - paragraph [ref=e99]: 先创建课程，再把作业、学生项目和评分收进同一教学链路。
+        - group [ref=e79]:
+          - generic "查看课程中心说明" [ref=e80] [cursor=pointer]

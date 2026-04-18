@@ -17,6 +17,9 @@ public record ScriptProjectCreateRequest(
         @Size(max = 20000, message = "视觉风格最长20000字")
         String visualStyle,
 
+        @Size(max = 64, message = "风格模板ID最长64字")
+        String styleTemplateId,
+
         @Size(max = 20, message = "视频比例最长20字")
         String aspectRatio,
 
@@ -26,6 +29,9 @@ public record ScriptProjectCreateRequest(
 
         @Size(max = 20, message = "语言最长20字")
         String language,
+
+        @Size(max = 64, message = "课程ID最长64字")
+        String courseId,
 
         @Size(max = 120, message = "文本模型最长120字")
         String explicitTextModel,

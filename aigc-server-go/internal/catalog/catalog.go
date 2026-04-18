@@ -12,6 +12,7 @@ const (
 	AuthBearer AuthMode = iota
 	AuthXAPIKey
 	AuthAPIKeyHeader
+	AuthToken
 	AuthNone
 )
 
@@ -24,6 +25,8 @@ func (m AuthMode) JavaName() string {
 		return "X_API_KEY"
 	case AuthAPIKeyHeader:
 		return "API_KEY_HEADER"
+	case AuthToken:
+		return "TOKEN"
 	case AuthNone:
 		return "NONE"
 	default:
@@ -126,7 +129,8 @@ func New() *Catalog {
 		APIFormat: "openai", ChatPath: "/v1/chat/completions", ModelsPath: "/v1/models",
 		AuthMode: AuthBearer, TextProxySupported: true, Kind: KindOpenAICompat,
 		StaticModels: []string{"gpt-4o", "gpt-4o-mini", "claude-sonnet-4-6", "gemini-2.5-pro", "gemini-2.5-flash",
-			"wanx-v1", "MiniMax-M2.1", "viduq3-turbo", "viduq3-pro", "viduq2", "viduq1"},
+			"wanx-v1", "MiniMax-M2.1", "viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"viduq2", "viduq1", "viduq1-classic", "vidu2.0"},
 	}, "onelink", "onelink-ai", "一键ai")
 
 	reg(Provider{
@@ -224,6 +228,17 @@ func New() *Catalog {
 		Kind: KindMoarkI2V, StaticModels: []string{"Wan2.1-I2V-14B-720P"},
 		VideoTaskStatusBaseURL: "https://moark.com", VideoSubmitMultipart: true,
 	})
+
+	reg(Provider{
+		Key: "vidu", DisplayName: "Vidu", DefaultBaseURL: "https://api.vidu.cn",
+		APIFormat: "vidu", AuthMode: AuthToken, TextProxySupported: false,
+		VideoSubmitPath: "/ent/v2/img2video", VideoResultPath: "/ent/v2/tasks/{taskId}/creations",
+		Kind: KindOpenAICompat,
+		StaticModels: []string{
+			"viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"viduq2", "viduq1", "viduq1-classic", "vidu2.0",
+		},
+	}, "viduai")
 
 	return &Catalog{byKey: by, aliasMap: aliases}
 }

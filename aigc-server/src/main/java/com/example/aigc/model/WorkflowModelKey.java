@@ -55,4 +55,8 @@ public final class WorkflowModelKey {
     public static final String SHOT_VISUAL_PROMPT = "shot_visual_prompt";
     /** 视频生成 (video generation) */
     public static final String VIDEO_GENERATION = "video_generation";
+    /** 配音 / TTS 生成 (tts dubbing generation) */
+    public static final String TTS_DUBBING = "tts_dubbing";
+    /** 口型同步 (lip sync generation) */
+    public static final String LIP_SYNC = "lip_sync";
 }

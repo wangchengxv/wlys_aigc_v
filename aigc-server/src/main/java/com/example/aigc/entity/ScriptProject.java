@@ -1,5 +1,6 @@
 package com.example.aigc.entity;
 
+import com.example.aigc.enums.ContentReviewStatus;
 import com.example.aigc.enums.ProjectStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,6 +17,14 @@ public class ScriptProject {
     @Id
     @Column(name = "project_id")
     public String projectId;
+    @Column(name = "owner_id")
+    public String ownerId;
+    @Column(name = "owner_name")
+    public String ownerName;
+    @Column(name = "org_unit_id")
+    public String orgUnitId;
+    @Column(name = "course_id")
+    public String courseId;
     public String name;
     @Enumerated(EnumType.STRING)
     public ProjectStatus status = ProjectStatus.DRAFT;
@@ -33,6 +42,8 @@ public class ScriptProject {
     public String scriptSummary;
     @Column(name = "visual_style", columnDefinition = "LONGTEXT")
     public String visualStyle;
+    @Column(name = "style_template_id")
+    public String styleTemplateId;
     @Column(name = "aspect_ratio")
     public String aspectRatio;
     @Column(name = "target_duration")
@@ -44,6 +55,14 @@ public class ScriptProject {
     public String explicitImageModel;
     @Column(name = "explicit_video_model")
     public String explicitVideoModel;
+    @Column(name = "explicit_tts_model")
+    public String explicitTtsModel;
+    @Column(name = "dubbing_voice")
+    public String dubbingVoice;
+    @Column(name = "dubbing_language")
+    public String dubbingLanguage;
+    @Column(name = "dubbing_speed")
+    public Double dubbingSpeed;
     @Column(name = "art_direction_json", columnDefinition = "LONGTEXT")
     public String artDirectionJson;
     /**
@@ -56,6 +75,23 @@ public class ScriptProject {
     /** JSON 对象：classpath 模板路径 -> 覆盖正文（仅存储与默认不同的项） */
     @Column(name = "prompt_template_overrides", columnDefinition = "LONGTEXT")
     public String promptTemplateOverrides;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "content_review_status")
+    public ContentReviewStatus contentReviewStatus = ContentReviewStatus.NOT_SUBMITTED;
+    @Column(name = "current_review_id")
+    public String currentReviewId;
+    @Column(name = "latest_review_comment", columnDefinition = "LONGTEXT")
+    public String latestReviewComment;
+    @Column(name = "review_resubmit_count")
+    public Integer reviewResubmitCount = 0;
+    @Column(name = "review_submitted_at")
+    public Instant reviewSubmittedAt;
+    @Column(name = "reviewed_at")
+    public Instant reviewedAt;
+    @Column(name = "reviewer_user_id")
+    public String reviewerUserId;
+    @Column(name = "reviewer_user_name")
+    public String reviewerUserName;
     @Column(name = "created_at")
     public Instant createdAt;
     @Column(name = "updated_at")

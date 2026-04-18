@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createConnection,
@@ -12,12 +12,15 @@ import {
   updateConnection,
   updateModel,
 } from '@/api'
+import { EmptyState } from '@/components/common/EmptyState'
+import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { PageBackLink } from '@/components/common/PageBackLink'
 import { ConnectionForm } from '@/components/model/ConnectionForm'
 import { ModelForm } from '@/components/model/ModelForm'
 import { QuickModelForm } from '@/components/model/QuickModelForm'
 import { useToast } from '@/context/ToastContext'
+import { useAuthStore } from '@/stores/authStore'
 import type {
   ConnectionConfig,
   ConnectionConfigCreateRequest,
@@ -29,6 +32,9 @@ import type {
 export function ModelConfigPage() {
   const { showToast } = useToast()
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const initialized = useAuthStore((s) => s.initialized)
+  const authLoading = useAuthStore((s) => s.loading)
   const [searchParams, setSearchParams] = useSearchParams()
   const [configMode, setConfigMode] = useState<'quick' | 'advanced'>('quick')
   const [activeTab, setActiveTab] = useState<'connections' | 'models'>('connections')
@@ -50,7 +56,7 @@ export function ModelConfigPage() {
   const [deletingId, setDeletingId] = useState('')
   const [deletingType, setDeletingType] = useState<'connection' | 'model'>('connection')
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [conns, mods] = await Promise.all([getConnections(), getModels()])
@@ -61,11 +67,11 @@ export function ModelConfigPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showToast])
 
   useEffect(() => {
     void loadData()
-  }, [])
+  }, [loadData])
 
   useEffect(() => {
     void getProviderCatalog()
@@ -246,6 +252,28 @@ export function ModelConfigPage() {
 
   const orderedForQuickEdit = models
 
+  if (!initialized || authLoading) {
+    return (
+      <section className="model-config-page">
+        <div className="model-config-page__nav">
+          <PageBackLink to="/settings">返回设置</PageBackLink>
+        </div>
+        <LoadingSpinner />
+      </section>
+    )
+  }
+
+  if (user?.role !== 'ADMIN') {
+    return (
+      <section className="model-config-page">
+        <div className="model-config-page__nav">
+          <PageBackLink to="/settings">返回设置</PageBackLink>
+        </div>
+        <EmptyState title="仅管理员可访问" description="模型配置用于维护系统级连接、模型能力与默认策略，请使用管理员账号登录后再进入。" />
+      </section>
+    )
+  }
+
   return (
     <section className="model-config-page">
       <header className="page-header">
@@ -253,11 +281,12 @@ export function ModelConfigPage() {
           <PageBackLink />
         </div>
         <div className="mode-toggle">
-          <button type="button" className={`mode-btn${configMode === 'quick' ? ' active' : ''}`} onClick={() => setConfigMode('quick')}>
-            快捷模式
-          </button>
-          <button type="button" className={`mode-btn${configMode === 'advanced' ? ' active' : ''}`} onClick={() => setConfigMode('advanced')}>
-            高级模式
+          <button
+            type="button"
+            className="mode-btn active"
+            onClick={() => setConfigMode((mode) => (mode === 'quick' ? 'advanced' : 'quick'))}
+          >
+            {configMode === 'quick' ? '切换到高级模式' : '返回快捷模式'}
           </button>
         </div>
         {configMode === 'quick' ? (

@@ -14,12 +14,15 @@ import {
   updateConnection,
   updateModel,
 } from '@/api'
+import { EmptyState } from '@/components/common/EmptyState'
+import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { PageBackLink } from '@/components/common/PageBackLink'
 import { ConnectionForm } from '@/components/model/ConnectionForm'
 import { ModelForm } from '@/components/model/ModelForm'
 import { AddProviderWizard } from '@/components/provider/AddProviderWizard'
 import { useToast } from '@/context/ToastContext'
+import { useAuthStore } from '@/stores/authStore'
 import type {
   ConnectionConfig,
   ConnectionConfigCreateRequest,
@@ -40,6 +43,9 @@ function hasCapabilityIssue(mod: ModelConfig): boolean {
 
 export function ProviderHubPage() {
   const { showToast } = useToast()
+  const user = useAuthStore((s) => s.user)
+  const initialized = useAuthStore((s) => s.initialized)
+  const authLoading = useAuthStore((s) => s.loading)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [connections, setConnections] = useState<ConnectionConfig[]>([])
@@ -155,7 +161,10 @@ export function ProviderHubPage() {
   }, [connections, listFilter])
 
   const selectedConn = connections.find((c) => c.id === selectedId) ?? null
-  const modelsForConn = selectedConn ? models.filter((m) => m.connectionId === selectedConn.id) : []
+  const modelsForConn = useMemo(
+    () => (selectedConn ? models.filter((m) => m.connectionId === selectedConn.id) : []),
+    [models, selectedConn],
+  )
   const filteredModelsForConn = useMemo(() => {
     const q = modelListFilter.trim().toLowerCase()
     if (!q) return modelsForConn
@@ -315,6 +324,28 @@ export function ProviderHubPage() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : '删除失败', 'error')
     }
+  }
+
+  if (!initialized || authLoading) {
+    return (
+      <section className="provider-hub model-config-page">
+        <div className="model-config-page__nav">
+          <PageBackLink to="/settings">返回设置</PageBackLink>
+        </div>
+        <LoadingSpinner />
+      </section>
+    )
+  }
+
+  if (user?.role !== 'ADMIN') {
+    return (
+      <section className="provider-hub model-config-page">
+        <div className="model-config-page__nav">
+          <PageBackLink to="/settings">返回设置</PageBackLink>
+        </div>
+        <EmptyState title="仅管理员可访问" description="服务商中心用于维护系统级 Base URL、代理连接与模型绑定，请使用管理员账号登录后再进入。" />
+      </section>
+    )
   }
 
   return (
@@ -484,14 +515,19 @@ export function ProviderHubPage() {
                       onChange={(e) => setModelListFilter(e.target.value)}
                       aria-label="筛选模型"
                     />
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      disabled={filteredModelsForConn.length === 0 || healthRunning}
-                      onClick={() => void handleBatchHealthCheck()}
-                    >
-                      {healthRunning ? '健康检查中…' : '批量健康检查'}
-                    </button>
+                    <details className="provider-hub__more-actions">
+                      <summary>更多操作</summary>
+                      <div className="provider-hub__more-actions-menu">
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          disabled={filteredModelsForConn.length === 0 || healthRunning}
+                          onClick={() => void handleBatchHealthCheck()}
+                        >
+                          {healthRunning ? '健康检查中…' : '批量健康检查'}
+                        </button>
+                      </div>
+                    </details>
                     <button
                       type="button"
                       className="btn-primary"

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   applyStoryboardFirstFrame,
   applyRewriteScriptProject,
+  approveScriptProjectContentReview,
   appendScriptProjectPreview,
   confirmProjectKeyframe,
   createScriptProject,
@@ -10,8 +11,12 @@ import {
   generateArtDirection,
   generateAssetKeyframes,
   generateAssetVisualPrompt,
+  generateScriptProjectDubbing,
+  generateScriptProjectFinalComposition,
+  generateScriptProjectLipSync,
   generateGroupScene,
   generateThreeView,
+  generateScriptProjectExportPackage,
   generateShotVisualPrompt,
   generateStoryboardImage,
   generateStoryboardPlan,
@@ -24,11 +29,18 @@ import {
   generateScriptProjectVideos,
   getProjectKeyframes,
   getScriptAssets,
+  getScriptProjectContentReviewStatus,
+  getScriptProjectDubbingTasks,
+  getScriptProjectExportPackageTasks,
+  getScriptProjectFinalCompositionTasks,
   getScriptProject,
+  getScriptProjectVideoEditingDraft,
+  getScriptProjectVideoEditingRenderTasks,
   getScriptProjectDocument,
   getScriptProjectPipelineStatus,
   getScriptProjectShots,
   getScriptProjectVideoTasks,
+  getScriptProjectLipSyncTasks,
   importScriptToProject,
   listScriptProjects,
   listScriptRevisions,
@@ -37,12 +49,23 @@ import {
   optimizeScriptScenes,
   refineScriptProject,
   refineScriptProjectWithPrompt,
+  rejectScriptProjectContentReview,
   rewriteScriptProjectPreview,
   regenerateProjectKeyframe,
   restoreScriptProject,
   restoreScriptRevision,
   retryScriptProjectVideoTask,
+  retryScriptProjectDubbingTask,
+  retryScriptProjectExportPackageTask,
+  retryScriptProjectFinalCompositionTask,
+  retryScriptProjectLipSyncTask,
+  retryScriptProjectVideoEditingRenderTask,
   splitScriptProjectShots,
+  submitScriptProjectContentReview,
+  saveScriptProjectVideoEditingDraft,
+  resetScriptProjectVideoEditingDraft,
+  renderScriptProjectVideoEditingPreview,
+  publishScriptProjectVideoEditingResult,
   updateScriptProjectShot,
   updateScriptAsset,
   updateScriptProjectDocument,
@@ -56,10 +79,17 @@ import type {
   ArtDirectionResponse,
   ApplyStoryboardFirstFrameRequest,
   BatchVisualPromptResponse,
+  ContentReviewDecisionRequest,
+  ContentReviewStatusResponse,
+  ContentReviewSubmitRequest,
+  DubbingTask,
+  ExportPackageTask,
   ExtractedAsset,
+  FinalCompositionTask,
   GenerateGroupSceneRequest,
   GroupSceneResponse,
   KeyframeRecord,
+  LipSyncTask,
   PipelineStatus,
   RewriteScriptApplyRequest,
   RewriteScriptPreviewRequest,
@@ -84,6 +114,13 @@ import type {
   UpdateShotRequest,
   UpdateScriptRequest,
   VideoSegmentTask,
+  VideoEditingDraft,
+  VideoEditingDraftSegment,
+  VideoEditingDraftSegmentInput,
+  VideoEditingPublishRequest,
+  VideoEditingRenderRequest,
+  VideoEditingSaveDraftRequest,
+  VideoEditingSourceOption,
   VisualPromptResponse,
   WorkflowModelSettings,
   WorkflowModelSettingsUpdateRequest,
@@ -94,9 +131,187 @@ let pollToken = 0
 let pollingInFlight = false
 let pollFailureCount = 0
 let activeProjectId: string | null = null
+const VIDEO_EDITING_DRAFT_STORAGE_KEY = 'aigc_video_editing_drafts_v1'
 
 function shouldApplyProjectState(projectId: string) {
   return activeProjectId === null || activeProjectId === projectId
+}
+
+function readPersistedVideoEditingDraftMap(): Record<string, VideoEditingDraft> {
+  if (typeof window === 'undefined') return {}
+  const raw = window.localStorage.getItem(VIDEO_EDITING_DRAFT_STORAGE_KEY)
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw) as Record<string, VideoEditingDraft>
+  } catch {
+    return {}
+  }
+}
+
+function persistVideoEditingDraftMap(map: Record<string, VideoEditingDraft>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(VIDEO_EDITING_DRAFT_STORAGE_KEY, JSON.stringify(map))
+}
+
+function getPersistedVideoEditingDraft(projectId: string): VideoEditingDraft | null {
+  return readPersistedVideoEditingDraftMap()[projectId] ?? null
+}
+
+function setPersistedVideoEditingDraft(draft: VideoEditingDraft) {
+  const map = readPersistedVideoEditingDraftMap()
+  map[draft.projectId] = draft
+  persistVideoEditingDraftMap(map)
+}
+
+function inferSegmentDuration(shot?: StoryboardShot, candidate?: number | null) {
+  if (candidate && candidate > 0) return candidate
+  if (shot?.targetDurationSec && shot.targetDurationSec > 0) return shot.targetDurationSec
+  return 6
+}
+
+function buildVideoEditingSourceOptions(
+  shot: StoryboardShot,
+  videoTasks: VideoSegmentTask[],
+  lipSyncTasks: LipSyncTask[],
+): VideoEditingSourceOption[] {
+  const options: VideoEditingSourceOption[] = []
+  const lipSync = lipSyncTasks.find((task) => task.shotId === shot.shotId && task.status === 'SUCCESS' && task.resultVideoFileId)
+  const video = videoTasks.find((task) => task.shotId === shot.shotId && task.status === 'SUCCESS' && task.resultVideoFileId)
+  if (lipSync?.resultVideoFileId) {
+    options.push({
+      sourceType: 'LIP_SYNC',
+      sourceFileId: lipSync.resultVideoFileId,
+      sourceTaskId: lipSync.lipSyncTaskId,
+      label: '口型同步结果',
+      durationSeconds: inferSegmentDuration(shot),
+      available: true,
+    })
+  }
+  if (video?.resultVideoFileId) {
+    options.push({
+      sourceType: 'VIDEO',
+      sourceFileId: video.resultVideoFileId,
+      sourceTaskId: video.segmentTaskId,
+      label: '镜头视频结果',
+      durationSeconds: inferSegmentDuration(shot),
+      available: true,
+    })
+  }
+  return options
+}
+
+function normalizeVideoEditingSegment(
+  segment: Partial<VideoEditingDraftSegment>,
+  shot: StoryboardShot,
+  availableSources: VideoEditingSourceOption[],
+): VideoEditingDraftSegment {
+  const preferredSource =
+    availableSources.find(
+      (item) => item.sourceFileId === segment.sourceFileId && item.sourceType === segment.sourceType,
+    ) ?? availableSources[0]
+  const fallbackDuration = inferSegmentDuration(shot, preferredSource?.durationSeconds)
+  let trimInSeconds = Number.isFinite(segment.trimInSeconds) ? Math.max(0, Number(segment.trimInSeconds)) : 0
+  let trimOutSeconds = Number.isFinite(segment.trimOutSeconds) ? Number(segment.trimOutSeconds) : fallbackDuration
+  if (trimInSeconds >= fallbackDuration) {
+    trimInSeconds = 0
+  }
+  trimOutSeconds = Math.min(Math.max(trimOutSeconds, trimInSeconds + 0.5), fallbackDuration)
+
+  return {
+    segmentId: segment.segmentId || `seg_${shot.shotId}`,
+    shotId: shot.shotId,
+    sequenceNo: segment.sequenceNo ?? shot.sequenceNo,
+    enabled: segment.enabled ?? true,
+    sourceType: preferredSource?.sourceType ?? 'VIDEO',
+    sourceFileId: preferredSource?.sourceFileId ?? '',
+    sourceTaskId: preferredSource?.sourceTaskId ?? null,
+    sourceDurationSeconds: fallbackDuration,
+    trimInSeconds,
+    trimOutSeconds,
+    transitionMode: segment.transitionMode ?? 'CUT',
+    transitionDurationSeconds: segment.transitionDurationSeconds ?? (segment.transitionMode === 'FADE' ? 0.3 : 0),
+    notes: segment.notes ?? null,
+    extension: segment.extension ?? null,
+    availableSources,
+  }
+}
+
+function reconcileVideoEditingDraft(
+  projectId: string,
+  shots: StoryboardShot[],
+  videoTasks: VideoSegmentTask[],
+  lipSyncTasks: LipSyncTask[],
+  draft?: VideoEditingDraft | null,
+): VideoEditingDraft {
+  const byShotId = new Map((draft?.segments ?? []).map((segment) => [segment.shotId, segment]))
+  const segments = shots
+    .slice()
+    .sort((a, b) => a.sequenceNo - b.sequenceNo)
+    .filter((shot) => buildVideoEditingSourceOptions(shot, videoTasks, lipSyncTasks).length > 0)
+    .map((shot) => {
+      const availableSources = buildVideoEditingSourceOptions(shot, videoTasks, lipSyncTasks)
+      return normalizeVideoEditingSegment(byShotId.get(shot.shotId) ?? {}, shot, availableSources)
+    })
+
+  return {
+    draftId: draft?.draftId || `draft_${projectId}`,
+    projectId,
+    version: draft?.version ?? 1,
+    hasUnpublishedChanges: draft?.hasUnpublishedChanges ?? false,
+    lastSavedAt: draft?.lastSavedAt ?? null,
+    publishedAt: draft?.publishedAt ?? null,
+    publishedRenderTaskId: draft?.publishedRenderTaskId ?? null,
+    latestPreviewRenderTaskId: draft?.latestPreviewRenderTaskId ?? null,
+    publishedVideoFileId: draft?.publishedVideoFileId ?? null,
+    extension: draft?.extension ?? { tracks: 1, placeholders: ['audio', 'subtitles', 'template'] },
+    segments,
+    renderTasks: [...(draft?.renderTasks ?? [])].sort((a, b) => {
+      const left = new Date(b.finishedAt || b.startedAt || 0).getTime()
+      const right = new Date(a.finishedAt || a.startedAt || 0).getTime()
+      return left - right
+    }),
+  }
+}
+
+function createLocalVideoEditingDraftFromPayload(
+  projectId: string,
+  payload: { version?: number | null; segments: VideoEditingDraftSegmentInput[]; extension?: Record<string, unknown> | null },
+  previousDraft: VideoEditingDraft | null,
+  shots: StoryboardShot[],
+  videoTasks: VideoSegmentTask[],
+  lipSyncTasks: LipSyncTask[],
+): VideoEditingDraft {
+  const seedDraft: VideoEditingDraft = {
+    draftId: previousDraft?.draftId || `draft_${projectId}`,
+    projectId,
+    version: Math.max(payload.version ?? previousDraft?.version ?? 0, previousDraft?.version ?? 0) + 1,
+    hasUnpublishedChanges: true,
+    lastSavedAt: new Date().toISOString(),
+    publishedAt: previousDraft?.publishedAt ?? null,
+    publishedRenderTaskId: previousDraft?.publishedRenderTaskId ?? null,
+    latestPreviewRenderTaskId: previousDraft?.latestPreviewRenderTaskId ?? null,
+    publishedVideoFileId: previousDraft?.publishedVideoFileId ?? null,
+    extension: payload.extension ?? previousDraft?.extension ?? null,
+    segments: payload.segments.map((segment) => ({
+      segmentId: segment.segmentId || `seg_${segment.shotId}`,
+      shotId: segment.shotId,
+      sequenceNo: segment.sequenceNo,
+      enabled: segment.enabled,
+      sourceType: segment.sourceType,
+      sourceFileId: segment.sourceFileId,
+      sourceTaskId: segment.sourceTaskId ?? null,
+      sourceDurationSeconds: null,
+      trimInSeconds: segment.trimInSeconds,
+      trimOutSeconds: segment.trimOutSeconds,
+      transitionMode: segment.transitionMode,
+      transitionDurationSeconds: segment.transitionDurationSeconds ?? 0,
+      notes: segment.notes ?? null,
+      extension: segment.extension ?? null,
+      availableSources: [],
+    })),
+    renderTasks: previousDraft?.renderTasks ?? [],
+  }
+  return reconcileVideoEditingDraft(projectId, shots, videoTasks, lipSyncTasks, seedDraft)
 }
 
 type ScriptProjectState = {
@@ -107,6 +322,12 @@ type ScriptProjectState = {
   keyframes: KeyframeRecord[]
   shots: StoryboardShot[]
   videoTasks: VideoSegmentTask[]
+  dubbingTasks: DubbingTask[]
+  lipSyncTasks: LipSyncTask[]
+  videoEditingDraft: VideoEditingDraft | null
+  finalCompositionTasks: FinalCompositionTask[]
+  exportPackageTasks: ExportPackageTask[]
+  contentReviewStatus: ContentReviewStatusResponse | null
   pipelineStatus: PipelineStatus | null
   listLoading: boolean
   detailLoading: boolean
@@ -131,6 +352,18 @@ type ScriptProjectState = {
   shotSaving: boolean
   shotLoading: boolean
   videoLoading: boolean
+  dubbingLoading: boolean
+  lipSyncLoading: boolean
+  videoEditingLoading: boolean
+  videoEditingSaving: boolean
+  videoEditingResetting: boolean
+  videoEditingRendering: boolean
+  videoEditingPublishing: boolean
+  finalCompositionLoading: boolean
+  exportPackageLoading: boolean
+  contentReviewLoading: boolean
+  contentReviewSubmitting: boolean
+  contentReviewProcessing: boolean
   listDeletedMode: boolean
   deletingProjectIds: string[]
   restoringProjectIds: string[]
@@ -193,9 +426,31 @@ type ScriptProjectState = {
   loadShots: (projectId: string) => Promise<StoryboardShot[]>
   splitShots: (projectId: string) => Promise<StoryboardShot[]>
   loadVideoTasks: (projectId: string) => Promise<VideoSegmentTask[]>
+  loadDubbingTasks: (projectId: string) => Promise<DubbingTask[]>
+  loadLipSyncTasks: (projectId: string) => Promise<LipSyncTask[]>
+  loadVideoEditingDraft: (projectId: string) => Promise<VideoEditingDraft>
+  saveVideoEditingDraft: (projectId: string, payload: VideoEditingSaveDraftRequest) => Promise<VideoEditingDraft>
+  resetVideoEditingDraft: (projectId: string) => Promise<VideoEditingDraft>
+  renderVideoEditingPreview: (projectId: string, payload?: VideoEditingRenderRequest) => Promise<VideoEditingDraft>
+  publishVideoEditingComposition: (projectId: string, payload?: VideoEditingPublishRequest) => Promise<VideoEditingDraft>
+  retryVideoEditingRenderTask: (projectId: string, renderTaskId: string) => Promise<VideoEditingDraft>
+  loadFinalCompositionTasks: (projectId: string) => Promise<FinalCompositionTask[]>
+  loadExportPackageTasks: (projectId: string) => Promise<ExportPackageTask[]>
+  loadContentReviewStatus: (projectId: string) => Promise<ContentReviewStatusResponse>
   loadPipelineStatus: (projectId: string) => Promise<PipelineStatus>
   startVideoGeneration: (projectId: string) => Promise<PipelineStatus>
   retryVideoTask: (projectId: string, segmentTaskId: string) => Promise<PipelineStatus>
+  startDubbingGeneration: (projectId: string) => Promise<PipelineStatus>
+  retryDubbingTask: (projectId: string, dubbingTaskId: string) => Promise<PipelineStatus>
+  startLipSyncGeneration: (projectId: string) => Promise<PipelineStatus>
+  retryLipSyncTask: (projectId: string, lipSyncTaskId: string) => Promise<PipelineStatus>
+  startFinalComposition: (projectId: string) => Promise<PipelineStatus>
+  retryFinalCompositionTask: (projectId: string, finalCompositionTaskId: string) => Promise<PipelineStatus>
+  startExportPackage: (projectId: string) => Promise<PipelineStatus>
+  retryExportPackageTask: (projectId: string, exportPackageTaskId: string) => Promise<PipelineStatus>
+  submitContentReview: (projectId: string, payload?: ContentReviewSubmitRequest) => Promise<ContentReviewStatusResponse>
+  approveContentReview: (projectId: string, payload?: ContentReviewDecisionRequest) => Promise<ContentReviewStatusResponse>
+  rejectContentReview: (projectId: string, payload?: ContentReviewDecisionRequest) => Promise<ContentReviewStatusResponse>
   hydrate: (projectId: string) => Promise<void>
   startPolling: (projectId: string) => void
   stopPolling: () => void
@@ -211,6 +466,12 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
   keyframes: [],
   shots: [],
   videoTasks: [],
+  dubbingTasks: [],
+  lipSyncTasks: [],
+  videoEditingDraft: null,
+  finalCompositionTasks: [],
+  exportPackageTasks: [],
+  contentReviewStatus: null,
   pipelineStatus: null,
   listLoading: false,
   detailLoading: false,
@@ -235,6 +496,18 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
   shotSaving: false,
   shotLoading: false,
   videoLoading: false,
+  dubbingLoading: false,
+  lipSyncLoading: false,
+  videoEditingLoading: false,
+  videoEditingSaving: false,
+  videoEditingResetting: false,
+  videoEditingRendering: false,
+  videoEditingPublishing: false,
+  finalCompositionLoading: false,
+  exportPackageLoading: false,
+  contentReviewLoading: false,
+  contentReviewSubmitting: false,
+  contentReviewProcessing: false,
   listDeletedMode: false,
   deletingProjectIds: [],
   restoringProjectIds: [],
@@ -260,7 +533,15 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
     try {
       const p = await getScriptProject(projectId)
       if (shouldApplyProjectState(projectId)) {
-        set({ currentProject: p })
+        set({
+          currentProject: p,
+          videoTasks: p.videoTasks ?? [],
+          dubbingTasks: p.dubbingTasks ?? [],
+          lipSyncTasks: p.lipSyncTasks ?? [],
+          videoEditingDraft: p.videoEditingDraft ?? get().videoEditingDraft,
+          finalCompositionTasks: p.finalCompositionTasks ?? [],
+          exportPackageTasks: p.exportPackageTasks ?? [],
+        })
       }
       return p
     } finally {
@@ -766,6 +1047,217 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
     return list
   },
 
+  loadDubbingTasks: async (projectId) => {
+    const list = await getScriptProjectDubbingTasks(projectId)
+    if (shouldApplyProjectState(projectId)) {
+      set({ dubbingTasks: list })
+    }
+    return list
+  },
+
+  loadLipSyncTasks: async (projectId) => {
+    const list = await getScriptProjectLipSyncTasks(projectId)
+    if (shouldApplyProjectState(projectId)) {
+      set({ lipSyncTasks: list })
+    }
+    return list
+  },
+
+  loadVideoEditingDraft: async (projectId) => {
+    set({ videoEditingLoading: true })
+    try {
+      const state = get()
+      try {
+        const [remoteDraft, renderTasks] = await Promise.all([
+          getScriptProjectVideoEditingDraft(projectId),
+          getScriptProjectVideoEditingRenderTasks(projectId).catch(() => []),
+        ])
+        const draft = reconcileVideoEditingDraft(
+          projectId,
+          state.shots,
+          state.videoTasks,
+          state.lipSyncTasks,
+          {
+            ...remoteDraft,
+            renderTasks,
+          },
+        )
+        if (shouldApplyProjectState(projectId)) {
+          set({ videoEditingDraft: draft })
+        }
+        setPersistedVideoEditingDraft(draft)
+        return draft
+      } catch {
+        const fallbackDraft = reconcileVideoEditingDraft(
+          projectId,
+          state.shots,
+          state.videoTasks,
+          state.lipSyncTasks,
+          getPersistedVideoEditingDraft(projectId),
+        )
+        if (shouldApplyProjectState(projectId)) {
+          set({ videoEditingDraft: fallbackDraft })
+        }
+        setPersistedVideoEditingDraft(fallbackDraft)
+        return fallbackDraft
+      }
+    } finally {
+      set({ videoEditingLoading: false })
+    }
+  },
+
+  saveVideoEditingDraft: async (projectId, payload) => {
+    set({ videoEditingSaving: true })
+    try {
+      try {
+        const savedDraft = await saveScriptProjectVideoEditingDraft(projectId, payload)
+        const draft = reconcileVideoEditingDraft(
+          projectId,
+          get().shots,
+          get().videoTasks,
+          get().lipSyncTasks,
+          {
+            ...savedDraft,
+            renderTasks: get().videoEditingDraft?.renderTasks ?? savedDraft.renderTasks,
+          },
+        )
+        set({ videoEditingDraft: draft })
+        setPersistedVideoEditingDraft(draft)
+        return draft
+      } catch {
+        const localDraft = createLocalVideoEditingDraftFromPayload(
+          projectId,
+          payload,
+          get().videoEditingDraft,
+          get().shots,
+          get().videoTasks,
+          get().lipSyncTasks,
+        )
+        set({ videoEditingDraft: localDraft })
+        setPersistedVideoEditingDraft(localDraft)
+        return localDraft
+      }
+    } finally {
+      set({ videoEditingSaving: false })
+    }
+  },
+
+  resetVideoEditingDraft: async (projectId) => {
+    set({ videoEditingResetting: true })
+    try {
+      try {
+        const resetDraft = await resetScriptProjectVideoEditingDraft(projectId)
+        const draft = reconcileVideoEditingDraft(
+          projectId,
+          get().shots,
+          get().videoTasks,
+          get().lipSyncTasks,
+          {
+            ...resetDraft,
+            renderTasks: get().videoEditingDraft?.renderTasks ?? resetDraft.renderTasks,
+          },
+        )
+        set({ videoEditingDraft: draft })
+        setPersistedVideoEditingDraft(draft)
+        return draft
+      } catch {
+        const localDraft = reconcileVideoEditingDraft(
+          projectId,
+          get().shots,
+          get().videoTasks,
+          get().lipSyncTasks,
+          {
+            ...get().videoEditingDraft,
+            draftId: get().videoEditingDraft?.draftId || `draft_${projectId}`,
+            projectId,
+            version: (get().videoEditingDraft?.version ?? 0) + 1,
+            hasUnpublishedChanges: true,
+            lastSavedAt: new Date().toISOString(),
+            renderTasks: get().videoEditingDraft?.renderTasks ?? [],
+            segments: [],
+          } as VideoEditingDraft,
+        )
+        set({ videoEditingDraft: localDraft })
+        setPersistedVideoEditingDraft(localDraft)
+        return localDraft
+      }
+    } finally {
+      set({ videoEditingResetting: false })
+    }
+  },
+
+  renderVideoEditingPreview: async (projectId, payload) => {
+    set({ videoEditingRendering: true })
+    try {
+      const status = await renderScriptProjectVideoEditingPreview(projectId, payload)
+      set({ pipelineStatus: status })
+      const draft = await get().loadVideoEditingDraft(projectId)
+      setPersistedVideoEditingDraft(draft)
+      get().startPolling(projectId)
+      return draft
+    } finally {
+      set({ videoEditingRendering: false })
+    }
+  },
+
+  publishVideoEditingComposition: async (projectId, payload) => {
+    set({ videoEditingPublishing: true })
+    try {
+      const status = await publishScriptProjectVideoEditingResult(projectId, payload)
+      set({ pipelineStatus: status })
+      const draft = await get().loadVideoEditingDraft(projectId)
+      setPersistedVideoEditingDraft(draft)
+      await get().loadPipelineStatus(projectId)
+      return draft
+    } finally {
+      set({ videoEditingPublishing: false })
+    }
+  },
+
+  retryVideoEditingRenderTask: async (projectId, renderTaskId) => {
+    set({ videoEditingRendering: true })
+    try {
+      const status = await retryScriptProjectVideoEditingRenderTask(projectId, renderTaskId)
+      set({ pipelineStatus: status })
+      const nextDraft = await get().loadVideoEditingDraft(projectId)
+      set({ videoEditingDraft: nextDraft })
+      setPersistedVideoEditingDraft(nextDraft)
+      get().startPolling(projectId)
+      return nextDraft
+    } finally {
+      set({ videoEditingRendering: false })
+    }
+  },
+
+  loadFinalCompositionTasks: async (projectId) => {
+    const list = await getScriptProjectFinalCompositionTasks(projectId)
+    if (shouldApplyProjectState(projectId)) {
+      set({ finalCompositionTasks: list })
+    }
+    return list
+  },
+
+  loadExportPackageTasks: async (projectId) => {
+    const list = await getScriptProjectExportPackageTasks(projectId)
+    if (shouldApplyProjectState(projectId)) {
+      set({ exportPackageTasks: list })
+    }
+    return list
+  },
+
+  loadContentReviewStatus: async (projectId) => {
+    set({ contentReviewLoading: true })
+    try {
+      const status = await getScriptProjectContentReviewStatus(projectId)
+      if (shouldApplyProjectState(projectId)) {
+        set({ contentReviewStatus: status })
+      }
+      return status
+    } finally {
+      set({ contentReviewLoading: false })
+    }
+  },
+
   loadPipelineStatus: async (projectId) => {
     const st = await getScriptProjectPipelineStatus(projectId)
     if (shouldApplyProjectState(projectId)) {
@@ -801,6 +1293,157 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
     }
   },
 
+  startDubbingGeneration: async (projectId) => {
+    set({ dubbingLoading: true })
+    try {
+      const status = await generateScriptProjectDubbing(projectId)
+      set({ pipelineStatus: status })
+      await get().loadDubbingTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ dubbingLoading: false })
+    }
+  },
+
+  retryDubbingTask: async (projectId, dubbingTaskId) => {
+    set({ dubbingLoading: true })
+    try {
+      const status = await retryScriptProjectDubbingTask(projectId, dubbingTaskId)
+      set({ pipelineStatus: status })
+      await get().loadDubbingTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ dubbingLoading: false })
+    }
+  },
+
+  startLipSyncGeneration: async (projectId) => {
+    set({ lipSyncLoading: true })
+    try {
+      const status = await generateScriptProjectLipSync(projectId)
+      set({ pipelineStatus: status })
+      await get().loadLipSyncTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ lipSyncLoading: false })
+    }
+  },
+
+  retryLipSyncTask: async (projectId, lipSyncTaskId) => {
+    set({ lipSyncLoading: true })
+    try {
+      const status = await retryScriptProjectLipSyncTask(projectId, lipSyncTaskId)
+      set({ pipelineStatus: status })
+      await get().loadLipSyncTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ lipSyncLoading: false })
+    }
+  },
+
+  startFinalComposition: async (projectId) => {
+    set({ finalCompositionLoading: true })
+    try {
+      const status = await generateScriptProjectFinalComposition(projectId)
+      set({ pipelineStatus: status })
+      await get().loadFinalCompositionTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ finalCompositionLoading: false })
+    }
+  },
+
+  retryFinalCompositionTask: async (projectId, finalCompositionTaskId) => {
+    set({ finalCompositionLoading: true })
+    try {
+      const status = await retryScriptProjectFinalCompositionTask(projectId, finalCompositionTaskId)
+      set({ pipelineStatus: status })
+      await get().loadFinalCompositionTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ finalCompositionLoading: false })
+    }
+  },
+
+  startExportPackage: async (projectId) => {
+    set({ exportPackageLoading: true })
+    try {
+      const status = await generateScriptProjectExportPackage(projectId)
+      set({ pipelineStatus: status })
+      await get().loadExportPackageTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ exportPackageLoading: false })
+    }
+  },
+
+  retryExportPackageTask: async (projectId, exportPackageTaskId) => {
+    set({ exportPackageLoading: true })
+    try {
+      const status = await retryScriptProjectExportPackageTask(projectId, exportPackageTaskId)
+      set({ pipelineStatus: status })
+      await get().loadExportPackageTasks(projectId)
+      await get().loadProject(projectId)
+      get().startPolling(projectId)
+      return status
+    } finally {
+      set({ exportPackageLoading: false })
+    }
+  },
+
+  submitContentReview: async (projectId, payload) => {
+    set({ contentReviewSubmitting: true })
+    try {
+      const status = await submitScriptProjectContentReview(projectId, payload)
+      set({ contentReviewStatus: status })
+      await get().loadProject(projectId)
+      await get().loadPipelineStatus(projectId)
+      return status
+    } finally {
+      set({ contentReviewSubmitting: false })
+    }
+  },
+
+  approveContentReview: async (projectId, payload) => {
+    set({ contentReviewProcessing: true })
+    try {
+      const status = await approveScriptProjectContentReview(projectId, payload)
+      set({ contentReviewStatus: status })
+      await get().loadProject(projectId)
+      await get().loadPipelineStatus(projectId)
+      return status
+    } finally {
+      set({ contentReviewProcessing: false })
+    }
+  },
+
+  rejectContentReview: async (projectId, payload) => {
+    set({ contentReviewProcessing: true })
+    try {
+      const status = await rejectScriptProjectContentReview(projectId, payload)
+      set({ contentReviewStatus: status })
+      await get().loadProject(projectId)
+      await get().loadPipelineStatus(projectId)
+      return status
+    } finally {
+      set({ contentReviewProcessing: false })
+    }
+  },
+
   hydrate: async (projectId) => {
     activeProjectId = projectId
     await Promise.all([
@@ -810,8 +1453,14 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
       get().loadKeyframes(projectId),
       get().loadShots(projectId),
       get().loadVideoTasks(projectId),
+      get().loadDubbingTasks(projectId),
+      get().loadLipSyncTasks(projectId),
+      get().loadFinalCompositionTasks(projectId),
+      get().loadExportPackageTasks(projectId),
+      get().loadContentReviewStatus(projectId),
       get().loadPipelineStatus(projectId),
     ])
+    await get().loadVideoEditingDraft(projectId)
   },
 
   startPolling: (projectId) => {
@@ -831,10 +1480,27 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
       }
       pollingInFlight = true
       try {
-        await Promise.all([get().loadVideoTasks(projectId), get().loadPipelineStatus(projectId), get().loadProject(projectId)])
+        await Promise.all([
+          get().loadVideoTasks(projectId),
+          get().loadDubbingTasks(projectId),
+          get().loadLipSyncTasks(projectId),
+          get().loadVideoEditingDraft(projectId),
+          get().loadFinalCompositionTasks(projectId),
+          get().loadExportPackageTasks(projectId),
+          get().loadPipelineStatus(projectId),
+          get().loadProject(projectId),
+        ])
         pollFailureCount = 0
         const status = get().pipelineStatus?.projectStatus
-        if (status && status !== 'VIDEO_GENERATING') {
+        if (
+          status &&
+          status !== 'VIDEO_GENERATING' &&
+          status !== 'DUBBING_GENERATING' &&
+          status !== 'LIP_SYNC_GENERATING' &&
+          status !== 'VIDEO_EDITING_RENDERING' &&
+          status !== 'FINAL_COMPOSITION_GENERATING' &&
+          status !== 'EXPORT_PACKAGE_GENERATING'
+        ) {
           get().stopPolling()
           return
         }

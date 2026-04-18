@@ -27,6 +27,435 @@ export interface VideoStylePreset {
   fullPrompt: string
 }
 
+export type StyleTemplateScope = 'SYSTEM' | 'COURSE' | 'PERSONAL'
+
+export interface StyleTemplate {
+  templateId: string
+  scope: StyleTemplateScope
+  name: string
+  category?: string | null
+  traits?: string | null
+  fullPrompt: string
+  styleKey?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  orgUnitId?: string | null
+  courseId?: string | null
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StyleTemplateCreateRequest {
+  scope?: StyleTemplateScope
+  name: string
+  category?: string
+  traits?: string
+  fullPrompt: string
+  styleKey?: string
+  courseId?: string
+}
+
+export interface StyleTemplateUpdateRequest {
+  name?: string
+  category?: string
+  traits?: string
+  fullPrompt?: string
+  styleKey?: string
+  enabled?: boolean
+}
+
+export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT'
+
+export interface CurrentUser {
+  userId: string
+  username: string
+  displayName: string
+  role: UserRole
+  orgUnitId?: string | null
+  classroomId?: string | null
+  enabled: boolean
+  permissions?: string[]
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface LoginResponse {
+  accessToken: string
+  tokenType: string
+  expiresAt: string
+  user: CurrentUser
+}
+
+export type OrgUnitType = 'ORGANIZATION' | 'CLASSROOM'
+
+export interface OrgUnit {
+  unitId: string
+  name: string
+  code?: string | null
+  type: OrgUnitType
+  parentUnitId?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface OrgUnitCreateRequest {
+  name: string
+  code?: string
+  type: OrgUnitType
+  parentUnitId?: string
+}
+
+export interface AdminUser {
+  userId: string
+  username: string
+  displayName: string
+  role: UserRole
+  orgUnitId?: string | null
+  classroomId?: string | null
+  enabled: boolean
+  locked?: boolean
+  lockReason?: string | null
+  lockedAt?: string | null
+  failedLoginCount?: number
+  lastLoginAt?: string | null
+  lastLoginIp?: string | null
+  passwordUpdatedAt?: string | null
+  forcePasswordChange?: boolean
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface AdminUserCreateRequest {
+  username: string
+  password: string
+  displayName: string
+  role: UserRole
+  orgUnitId?: string
+  classroomId?: string
+  enabled?: boolean
+}
+
+export interface AdminUserUpdateRequest {
+  displayName?: string
+  role?: UserRole
+  orgUnitId?: string
+  classroomId?: string
+  enabled?: boolean
+  password?: string
+}
+
+export interface AdminUserLockUpdateRequest {
+  locked: boolean
+  reason?: string
+}
+
+export interface AdminUserPasswordResetRequest {
+  password: string
+  forcePasswordChange?: boolean
+}
+
+export interface AdminUserBatchOperationResponse {
+  total: number
+  success: number
+  failed: number
+  failedUserIds: string[]
+}
+
+export interface AdminUserImportErrorItem {
+  rowNumber: number
+  username: string
+  message: string
+}
+
+export interface AdminUserImportResult {
+  taskId: string
+  totalRows: number
+  successRows: number
+  failedRows: number
+  errors: AdminUserImportErrorItem[]
+}
+
+export interface AdminUserImportTask {
+  taskId: string
+  status: string
+  sourceFileName?: string | null
+  operatorUserId?: string | null
+  operatorUserName?: string | null
+  totalRows: number
+  successRows: number
+  failedRows: number
+  createdAt?: string | null
+  finishedAt?: string | null
+  errors: AdminUserImportErrorItem[]
+}
+
+export interface AdminUserBatchStatsItem {
+  action: string
+  operatorUserId?: string | null
+  operatorUserName?: string | null
+  createdAt?: string | null
+  total: number
+  success: number
+  failed: number
+  failedUserIds: string[]
+}
+
+export interface AdminUserBatchStatsResponse {
+  items: AdminUserBatchStatsItem[]
+  totalRequested: number
+  totalSuccess: number
+  totalFailed: number
+}
+
+export interface PagedResult<T> {
+  list: T[]
+  total: number
+}
+
+export type StorageProvider = 'LOCAL'
+
+export interface MediaResource {
+  fileId: string
+  projectId?: string | null
+  fileName?: string | null
+  relativePath?: string | null
+  storageProvider?: StorageProvider | null
+  bucketName?: string | null
+  objectKey?: string | null
+  publicUrl?: string | null
+  mediaType?: string | null
+  sizeBytes: number
+  createdAt?: string | null
+}
+
+export interface AuditLogRecord {
+  id: number
+  entityType: string
+  entityId: string
+  action: string
+  actorUserId?: string | null
+  actorUserName?: string | null
+  orgUnitId?: string | null
+  courseId?: string | null
+  detailsJson?: string | null
+  createdAt: string
+}
+
+export interface OperationsDashboardMetric {
+  key: string
+  label: string
+  value: number
+  entityType?: string | null
+  link?: string | null
+  summary?: string | null
+}
+
+export interface OperationsDashboardStatusBucket {
+  key: string
+  label: string
+  count: number
+  entityType?: string | null
+  link?: string | null
+  summary?: string | null
+}
+
+export interface OperationsDashboardActivity {
+  key: string
+  action: string
+  label: string
+  summary: string
+  entityType?: string | null
+  entityId?: string | null
+  link?: string | null
+  occurredAt?: string | null
+}
+
+export interface OperationsDashboardResponse {
+  generatedAt: string
+  overviewCards: OperationsDashboardMetric[]
+  statusDistribution: OperationsDashboardStatusBucket[]
+  recentActivities: OperationsDashboardActivity[]
+}
+
+export type AssignmentStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED'
+export type SubmissionStatus = 'SUBMITTED' | 'RETURNED' | 'REVIEWED'
+
+export interface TeachingCourse {
+  courseId: string
+  name: string
+  code?: string | null
+  description?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  orgUnitId?: string | null
+  archived: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TeachingAssignment {
+  assignmentId: string
+  courseId: string
+  title: string
+  brief?: string | null
+  styleTemplateId?: string | null
+  aspectRatio?: string | null
+  targetDuration?: number | null
+  language?: string | null
+  dueAt?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  status: AssignmentStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AssignmentSubmission {
+  submissionId: string
+  assignmentId: string
+  courseId: string
+  projectId: string
+  studentUserId: string
+  studentUserName?: string | null
+  note?: string | null
+  status: SubmissionStatus
+  score?: number | null
+  reviewComment?: string | null
+  submittedAt?: string | null
+  reviewedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReviewRecord {
+  reviewId: string
+  submissionId: string
+  assignmentId: string
+  reviewerUserId: string
+  reviewerUserName?: string | null
+  status: SubmissionStatus
+  score?: number | null
+  comment?: string | null
+  createdAt: string
+}
+
+export interface CourseCreateRequest {
+  name: string
+  code?: string
+  description?: string
+}
+
+export interface TeachingCourseArchiveRequest {
+  archived?: boolean
+}
+
+export interface AssignmentCreateRequest {
+  title: string
+  brief?: string
+  styleTemplateId?: string
+  aspectRatio?: string
+  targetDuration?: number
+  language?: string
+  dueAt: string
+}
+
+export interface TeachingAssignmentStatusUpdateRequest {
+  status: AssignmentStatus
+}
+
+export interface SubmissionCreateRequest {
+  projectId: string
+  note?: string
+}
+
+export interface SubmissionReviewRequest {
+  status: SubmissionStatus
+  score?: number
+  comment?: string
+}
+
+/** Vidu POST /ent/v2/img2video optional fields（与 model/images/prompt 互斥，由服务端合并） */
+export interface VideoViduOptions {
+  duration?: number
+  seed?: number
+  resolution?: string
+  movement_amplitude?: 'auto' | 'small' | 'medium' | 'large' | string
+  payload?: string
+  off_peak?: boolean
+  watermark?: boolean
+  wm_position?: number
+  wm_url?: string
+  meta_data?: string
+  callback_url?: string
+  audio?: boolean
+  audio_type?: 'all' | 'speech_only' | 'sound_effect_only' | string
+  voice_id?: string
+  is_rec?: boolean
+  bgm?: boolean
+}
+
+export type ImageAdvancedCapability = 'vidu_reference2image' | 'kling_multi_reference' | 'outpaint' | 'omni'
+
+export interface GenerateAdvancedImageReference2ImageRequest {
+  referenceImageUrl?: string
+  images?: string[]
+}
+
+export interface GenerateAdvancedImageKlingMultiReferenceRequest {
+  referenceImageUrls?: string[]
+  images?: string[]
+}
+
+export interface GenerateAdvancedImageOutpaintRequest {
+  sourceImageUrl?: string
+  image?: string
+  top?: number
+  right?: number
+  bottom?: number
+  left?: number
+}
+
+export interface GenerateAdvancedImageOmniRequest {
+  sourceImageUrl?: string
+  image?: string
+  mode?: string
+  subjectPrompt?: string
+}
+
+export interface GenerateAdvancedImageExtraRequest {
+  capability?: ImageAdvancedCapability
+  reference2image?: GenerateAdvancedImageReference2ImageRequest
+  klingMultiReference?: GenerateAdvancedImageKlingMultiReferenceRequest
+  outpaint?: GenerateAdvancedImageOutpaintRequest
+  omni?: GenerateAdvancedImageOmniRequest
+  [key: string]: unknown
+}
+
+export interface GenerateAdvancedImageRequest {
+  /** 单参考图入口，兼容 reference2image 等场景 */
+  referenceImageUrl?: string
+  /** 统一图片高级能力入口 */
+  extra?: GenerateAdvancedImageExtraRequest
+}
+
+export interface GenerateAdvancedVideoRequest {
+  /** 统一视频参考图入口 */
+  referenceImageUrl?: string
+  /** Vidu 图生视频高级参数 */
+  viduOptions?: VideoViduOptions
+  /** 预留其它视频供应商/能力专属字段 */
+  extra?: Record<string, unknown>
+}
+
+export interface GenerateAdvancedMediaRequest {
+  image?: GenerateAdvancedImageRequest
+  video?: GenerateAdvancedVideoRequest
+}
+
 export interface GenerateRequest {
   prompt: string
   mode: GenerateMode
@@ -36,8 +465,12 @@ export interface GenerateRequest {
   count: number
   imageModel?: string
   videoModel?: string
+  /** 统一高级媒体请求结构 */
+  advancedMedia?: GenerateAdvancedMediaRequest
   /** Moark 等图生视频：参考图 HTTP(S) URL */
   videoReferenceImageUrl?: string
+  /** Vidu 图生视频可选参数 */
+  videoViduOptions?: VideoViduOptions
 }
 
 export interface GenerateResponse {
@@ -84,9 +517,19 @@ export interface ImageModelOptions {
   options: string[]
 }
 
+export interface VideoModelOptionDetail {
+  modelName: string
+  displayName: string
+  provider: string
+  capability: string
+  enabled: boolean
+  connectionEnabled: boolean
+}
+
 export interface VideoModelOptions {
   defaultModel: string
   options: string[]
+  details?: VideoModelOptionDetail[]
 }
 
 export interface HistoryQuery {
@@ -174,7 +617,7 @@ export interface PresetModelListResponse {
   providers: string[]
 }
 
-export type ProviderCatalogAuthMode = 'BEARER' | 'X_API_KEY' | 'API_KEY_HEADER' | 'NONE'
+export type ProviderCatalogAuthMode = 'BEARER' | 'X_API_KEY' | 'API_KEY_HEADER' | 'TOKEN' | 'NONE'
 
 export type ProviderGatewayKind =
   | 'OPENAI_COMPAT'
@@ -234,18 +677,45 @@ export type ProjectStatus =
   | 'KEYFRAME_GENERATING'
   | 'KEYFRAME_READY'
   | 'VIDEO_GENERATING'
+  | 'DUBBING_GENERATING'
+  | 'LIP_SYNC_GENERATING'
+  | 'VIDEO_EDITING_RENDERING'
+  | 'FINAL_COMPOSITION_GENERATING'
+  | 'EXPORT_PACKAGE_GENERATING'
+  | 'VIDEO_READY'
+  | 'DUBBING_READY'
+  | 'LIP_SYNC_READY'
+  | 'VIDEO_EDITING_READY'
+  | 'FINAL_COMPOSITION_READY'
+  | 'EXPORT_PACKAGE_READY'
   | 'COMPLETED'
   | 'PARTIAL_FAILED'
   | 'FAILED'
+
+export type ContentReviewStatus = 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
 
 export type AssetType = 'CHARACTER' | 'BACKGROUND' | 'PROP'
 export type AssetStatus = 'PENDING' | 'EXTRACTED' | 'KEYFRAME_GENERATING' | 'KEYFRAME_READY' | 'CONFIRMED' | 'FAILED'
 export type SegmentTaskStatus = 'PENDING' | 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED'
 export type PipelineRunStatus = 'RUNNING' | 'SUCCESS' | 'PARTIAL_FAILED' | 'FAILED'
-export type PipelineType = 'REFINE' | 'ASSET_EXTRACTION' | 'KEYFRAME_GENERATION' | 'SHOT_SPLIT' | 'VIDEO_GENERATION'
+export type PipelineType =
+  | 'REFINE'
+  | 'ASSET_EXTRACTION'
+  | 'KEYFRAME_GENERATION'
+  | 'SHOT_SPLIT'
+  | 'VIDEO_GENERATION'
+  | 'DUBBING'
+  | 'LIP_SYNC'
+  | 'VIDEO_EDITING'
+  | 'FINAL_COMPOSITION'
+  | 'EXPORT_PACKAGE'
 
 export interface ScriptProject {
   projectId: string
+  ownerId?: string | null
+  ownerName?: string | null
+  orgUnitId?: string | null
+  courseId?: string | null
   name: string
   status: ProjectStatus
   sourceType: string
@@ -255,14 +725,27 @@ export interface ScriptProject {
   uploadedSourceFileId?: string | null
   scriptSummary?: string | null
   visualStyle: string
+  styleTemplateId?: string | null
   aspectRatio: string
   targetDuration: number
   language: string
   explicitTextModel?: string | null
   explicitImageModel?: string | null
   explicitVideoModel?: string | null
+  explicitTtsModel?: string | null
+  dubbingVoice?: string | null
+  dubbingLanguage?: string | null
+  dubbingSpeed?: number | null
   /** B-1 全局美术指导 JSON */
   artDirectionJson?: string | null
+  contentReviewStatus?: ContentReviewStatus
+  currentReviewId?: string | null
+  latestReviewComment?: string | null
+  reviewResubmitCount?: number | null
+  reviewSubmittedAt?: string | null
+  reviewedAt?: string | null
+  reviewerUserId?: string | null
+  reviewerUserName?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -489,6 +972,244 @@ export interface VideoSegmentTask {
   errorMessage?: string | null
 }
 
+export interface DubbingTask {
+  dubbingTaskId: string
+  projectId: string
+  shotId: string
+  requestPayloadFileId?: string | null
+  resultAudioFileId?: string | null
+  providerTaskId?: string | null
+  modelName?: string | null
+  language?: string | null
+  voiceName?: string | null
+  speechRate?: number | null
+  inputText: string
+  status: SegmentTaskStatus
+  retryCount: number
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage?: string | null
+}
+
+export interface LipSyncTask {
+  lipSyncTaskId: string
+  projectId: string
+  shotId: string
+  sourceVideoFileId?: string | null
+  sourceAudioFileId?: string | null
+  requestPayloadFileId?: string | null
+  resultVideoFileId?: string | null
+  providerTaskId?: string | null
+  modelName?: string | null
+  status: SegmentTaskStatus
+  retryCount: number
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage?: string | null
+}
+
+export type VideoEditingSourceType = 'LIP_SYNC' | 'VIDEO'
+export type VideoEditingTransitionMode = 'CUT' | 'FADE' | 'DIP_TO_BLACK'
+export type VideoEditingRenderType = 'PREVIEW' | 'PUBLISH'
+
+export interface VideoEditingSourceOption {
+  sourceType: VideoEditingSourceType
+  sourceFileId: string
+  sourceTaskId?: string | null
+  label?: string | null
+  durationSeconds?: number | null
+  available?: boolean
+}
+
+export interface VideoEditingDraftSegment {
+  segmentId: string
+  shotId: string
+  sequenceNo: number
+  enabled: boolean
+  sourceType: VideoEditingSourceType
+  sourceFileId: string
+  sourceTaskId?: string | null
+  sourceDurationSeconds?: number | null
+  trimInSeconds: number
+  trimOutSeconds: number
+  transitionMode: VideoEditingTransitionMode
+  transitionDurationSeconds?: number | null
+  notes?: string | null
+  extension?: Record<string, unknown> | null
+  availableSources?: VideoEditingSourceOption[]
+}
+
+export interface VideoEditingDraftSegmentInput {
+  segmentId?: string | null
+  shotId: string
+  sequenceNo: number
+  enabled: boolean
+  sourceType: VideoEditingSourceType
+  sourceFileId: string
+  sourceTaskId?: string | null
+  trimInSeconds: number
+  trimOutSeconds: number
+  transitionMode: VideoEditingTransitionMode
+  transitionDurationSeconds?: number | null
+  notes?: string | null
+  extension?: Record<string, unknown> | null
+}
+
+export interface VideoEditingRenderSegment {
+  segmentId: string
+  shotId: string
+  sequenceNo: number
+  sourceType: VideoEditingSourceType
+  sourceFileId: string
+  sourceTaskId?: string | null
+  trimInSeconds: number
+  trimOutSeconds: number
+  transitionMode: VideoEditingTransitionMode
+  transitionDurationSeconds?: number | null
+}
+
+export interface VideoEditingRenderTask {
+  renderTaskId: string
+  projectId: string
+  draftId?: string | null
+  draftVersion: number
+  renderType: VideoEditingRenderType
+  inputSegments: VideoEditingRenderSegment[]
+  requestPayloadFileId?: string | null
+  resultVideoFileId?: string | null
+  providerTaskId?: string | null
+  modelName?: string | null
+  status: SegmentTaskStatus
+  retryCount: number
+  published?: boolean
+  publishedAt?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage?: string | null
+}
+
+export interface VideoEditingDraft {
+  draftId: string
+  projectId: string
+  version: number
+  publishedVersion?: number | null
+  hasPublishedResult?: boolean
+  hasUnpublishedChanges: boolean
+  lastSavedAt?: string | null
+  publishedAt?: string | null
+  publishedRenderTaskId?: string | null
+  latestPreviewRenderTaskId?: string | null
+  latestPublishTaskId?: string | null
+  publishedVideoFileId?: string | null
+  extension?: Record<string, unknown> | null
+  segments: VideoEditingDraftSegment[]
+  renderTasks: VideoEditingRenderTask[]
+}
+
+export interface VideoEditingSaveDraftRequest {
+  version?: number | null
+  extension?: Record<string, unknown> | null
+  segments: VideoEditingDraftSegmentInput[]
+}
+
+export interface VideoEditingRenderRequest {
+  draftVersion?: number | null
+}
+
+export interface VideoEditingPublishRequest {
+  draftVersion?: number | null
+  renderTaskId?: string | null
+}
+
+export interface FinalCompositionInputSegment {
+  shotId: string
+  sequenceNo: number
+  sourceType: 'LIP_SYNC' | 'VIDEO'
+  sourceFileId: string
+  sourceTaskId?: string | null
+  durationSeconds?: number | null
+}
+
+export interface FinalCompositionTask {
+  finalCompositionTaskId: string
+  projectId: string
+  inputSegments: FinalCompositionInputSegment[]
+  requestPayloadFileId?: string | null
+  resultVideoFileId?: string | null
+  providerTaskId?: string | null
+  modelName?: string | null
+  status: SegmentTaskStatus
+  retryCount: number
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage?: string | null
+}
+
+export interface ExportPackageTask {
+  exportPackageTaskId: string
+  projectId: string
+  sourceVideoEditingRenderTaskId?: string | null
+  sourceVideoEditingPublishedAt?: string | null
+  sourceFinalCompositionTaskId?: string | null
+  sourceFinalVideoFileId?: string | null
+  manifestFileId?: string | null
+  resultArchiveFileId?: string | null
+  status: SegmentTaskStatus
+  retryCount: number
+  startedAt?: string | null
+  finishedAt?: string | null
+  errorMessage?: string | null
+  archiveStorageProvider?: string | null
+  archiveBucketName?: string | null
+  archiveObjectKey?: string | null
+  archivePublicUrl?: string | null
+  manifestStorageProvider?: string | null
+  manifestBucketName?: string | null
+  manifestObjectKey?: string | null
+  manifestPublicUrl?: string | null
+}
+
+export interface ContentReviewRecord {
+  reviewId: string
+  projectId: string
+  status: ContentReviewStatus
+  submitterUserId?: string | null
+  submitterUserName?: string | null
+  submissionComment?: string | null
+  reviewerUserId?: string | null
+  reviewerUserName?: string | null
+  reviewComment?: string | null
+  resubmitCount?: number | null
+  submittedAt?: string | null
+  reviewedAt?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface ContentReviewSubmitRequest {
+  comment?: string | null
+}
+
+export interface ContentReviewDecisionRequest {
+  comment?: string | null
+}
+
+export interface ContentReviewStatusResponse {
+  projectId: string
+  status: ContentReviewStatus
+  exportPackageReady: boolean
+  currentReviewId?: string | null
+  resubmitCount?: number | null
+  latestReviewComment?: string | null
+  reviewSubmittedAt?: string | null
+  reviewedAt?: string | null
+  reviewerUserId?: string | null
+  reviewerUserName?: string | null
+  canSubmit: boolean
+  canProcess: boolean
+  records: ContentReviewRecord[]
+}
+
 export interface PipelineRun {
   pipelineRunId: string
   projectId: string
@@ -526,6 +1247,7 @@ export interface ScriptRevision {
 
 export interface ScriptProjectAggregate {
   project: ScriptProject
+  contentReviewRecords?: ContentReviewRecord[]
   revisions?: ScriptRevision[]
   documents: ScriptDocumentVersion[]
   files: StoredFileRecord[]
@@ -533,17 +1255,30 @@ export interface ScriptProjectAggregate {
   keyframes: KeyframeRecord[]
   shots: StoryboardShot[]
   videoTasks: VideoSegmentTask[]
+  dubbingTasks: DubbingTask[]
+  lipSyncTasks: LipSyncTask[]
+  videoEditingDraft?: VideoEditingDraft | null
+  finalCompositionTasks?: FinalCompositionTask[]
+  exportPackageTasks?: ExportPackageTask[]
   pipelineRuns: PipelineRun[]
 }
 
 export interface ScriptProjectSummary {
   projectId: string
+  ownerId?: string | null
+  ownerName?: string | null
+  orgUnitId?: string | null
+  courseId?: string | null
   name: string
   status: ProjectStatus
   scriptSummary?: string | null
   visualStyle: string
+  styleTemplateId?: string | null
   aspectRatio: string
   targetDuration: number
+  contentReviewStatus?: ContentReviewStatus
+  reviewResubmitCount?: number | null
+  latestReviewComment?: string | null
   coverFileId?: string | null
   assetCount: number
   keyframeCount: number
@@ -570,15 +1305,60 @@ export interface PipelineStatus {
   runningCount: number
   queuedCount: number
   pendingCount: number
+  videoTaskCount?: number
+  dubbingTaskCount?: number
+  dubbingSuccessCount?: number
+  dubbingFailedCount?: number
+  dubbingRunningCount?: number
+  dubbingQueuedCount?: number
+  dubbingPendingCount?: number
+  lipSyncTaskCount?: number
+  lipSyncSuccessCount?: number
+  lipSyncFailedCount?: number
+  lipSyncRunningCount?: number
+  lipSyncQueuedCount?: number
+  lipSyncPendingCount?: number
+  videoEditingDraftVersion?: number
+  videoEditingRenderTaskCount?: number
+  videoEditingSuccessCount?: number
+  videoEditingFailedCount?: number
+  videoEditingRunningCount?: number
+  videoEditingQueuedCount?: number
+  videoEditingPendingCount?: number
+  videoEditingPublishedAt?: string | null
+  finalCompositionTaskCount?: number
+  finalCompositionSuccessCount?: number
+  finalCompositionFailedCount?: number
+  finalCompositionRunningCount?: number
+  finalCompositionQueuedCount?: number
+  finalCompositionPendingCount?: number
+  exportPackageTaskCount?: number
+  exportPackageSuccessCount?: number
+  exportPackageFailedCount?: number
+  exportPackageRunningCount?: number
+  exportPackageQueuedCount?: number
+  exportPackagePendingCount?: number
+  contentReviewStatus?: ContentReviewStatus
+  reviewResubmitCount?: number
+  currentReviewId?: string | null
+  latestReviewComment?: string | null
+  videoReady?: boolean
+  dubbingReady?: boolean
+  lipSyncReady?: boolean
+  videoEditingReady?: boolean
+  finalCompositionReady?: boolean
+  exportPackageReady?: boolean
 }
 
 export interface ScriptProjectCreateRequest {
   name: string
   sourceText: string
   visualStyle?: string
+  styleTemplateId?: string
   aspectRatio?: string
   targetDuration?: number
   language?: string
+  courseId?: string
   explicitTextModel?: string
   explicitImageModel?: string
   explicitVideoModel?: string
@@ -588,9 +1368,11 @@ export interface ScriptProjectUploadRequest {
   name: string
   file: File
   visualStyle?: string
+  styleTemplateId?: string
   aspectRatio?: string
   targetDuration?: number
   language?: string
+  courseId?: string
   explicitTextModel?: string
   explicitImageModel?: string
   explicitVideoModel?: string
@@ -653,6 +1435,10 @@ export interface WorkflowModelSettings {
   defaultTextModel: string | null
   defaultImageModel: string | null
   defaultVideoModel: string | null
+  defaultTtsModel: string | null
+  dubbingVoice: string | null
+  dubbingLanguage: string | null
+  dubbingSpeed: number | null
   overrides: Record<string, string>
 }
 
@@ -660,6 +1446,10 @@ export interface WorkflowModelSettingsUpdateRequest {
   defaultTextModel?: string | null
   defaultImageModel?: string | null
   defaultVideoModel?: string | null
+  defaultTtsModel?: string | null
+  dubbingVoice?: string | null
+  dubbingLanguage?: string | null
+  dubbingSpeed?: number | null
   overrides?: Record<string, string>
 }
 
@@ -682,6 +1472,7 @@ export const WorkflowModelKey = {
   THREE_VIEW_IMAGE: 'three_view_image',
   SHOT_VISUAL_PROMPT: 'shot_visual_prompt',
   VIDEO_GENERATION: 'video_generation',
+  TTS_DUBBING: 'tts_dubbing',
 } as const
 
 export type WorkflowModelKeyType = typeof WorkflowModelKey[keyof typeof WorkflowModelKey]
