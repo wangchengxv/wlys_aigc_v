@@ -1,10 +1,9 @@
 package com.example.aigc.controller;
 
-import com.example.aigc.entity.ScriptProjectAggregate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.exception.BizException;
+import com.example.aigc.repository.StoredFileRecordRepository;
 import com.example.aigc.service.LocalAssetFileService;
-import com.example.aigc.service.ScriptProjectService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -15,20 +14,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.file.Path;
-
 @RestController
 @RequestMapping("/api/v1/files")
 public class FileAssetController {
 
-    private final ScriptProjectService scriptProjectService;
+    private final StoredFileRecordRepository storedFileRecordRepository;
     private final LocalAssetFileService localAssetFileService;
 
     public FileAssetController(
-            ScriptProjectService scriptProjectService,
+            StoredFileRecordRepository storedFileRecordRepository,
             LocalAssetFileService localAssetFileService
     ) {
-        this.scriptProjectService = scriptProjectService;
+        this.storedFileRecordRepository = storedFileRecordRepository;
         this.localAssetFileService = localAssetFileService;
     }
 
@@ -43,12 +40,7 @@ public class FileAssetController {
     }
 
     private ResponseEntity<Resource> buildFileResponse(String fileId, boolean attachment) {
-        String projectId = localAssetFileService.extractProjectId(fileId);
-        if (projectId == null) {
-            throw new BizException(404, "文件不存在");
-        }
-        ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
-        StoredFileRecord record = scriptProjectService.findFile(aggregate, fileId);
+        StoredFileRecord record = storedFileRecordRepository.findByFileId(fileId);
         if (record == null) {
             throw new BizException(404, "文件不存在");
         }

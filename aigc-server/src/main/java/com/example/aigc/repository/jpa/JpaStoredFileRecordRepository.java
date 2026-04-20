@@ -31,4 +31,9 @@ public class JpaStoredFileRecordRepository implements StoredFileRecordRepository
         List<StoredFileRecord> rows = repository.findTop200ByOrderByCreatedAtDesc();
         return rows.size() <= limit ? rows : rows.subList(0, limit);
     }
+
+    @Override
+    public StoredFileRecord findByFileId(String fileId) {
+        return repository.findByFileId(fileId).orElse(null);
+    }
 }

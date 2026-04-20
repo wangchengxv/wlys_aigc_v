@@ -152,6 +152,8 @@ interface SpringDataStoredFileRecordRepository extends JpaRepository<StoredFileR
     List<StoredFileRecord> findTop200ByOrderByCreatedAtDesc();
 
     void deleteByProjectId(String projectId);
+
+    Optional<StoredFileRecord> findByFileId(String fileId);
 }
 
 interface SpringDataExtractedAssetRepository extends JpaRepository<ExtractedAsset, String> {

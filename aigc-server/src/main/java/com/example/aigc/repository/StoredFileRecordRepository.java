@@ -10,4 +10,6 @@ public interface StoredFileRecordRepository {
     List<StoredFileRecord> findAllByProjectId(String projectId);
 
     List<StoredFileRecord> findRecent(int limit);
+
+    StoredFileRecord findByFileId(String fileId);
 }

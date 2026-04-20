@@ -35,7 +35,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/CanvasPage'), 'CanvasPage'),
         handle: H({
           title: '无限画布',
-          eyebrow: '画布',
+          eyebrow: '',
           section: '创作工具',
           description: '预留为后续节点式创作与流程编排能力的画布空间。',
         }),
@@ -210,7 +210,7 @@ export const router = createBrowserRouter([
       {
         path: 'history',
         lazy: lazyPage(() => import('@/pages/HistoryPage'), 'HistoryPage'),
-        handle: H({ title: '历史记录', eyebrow: '历史', section: '创作工具' }),
+        handle: H({ title: '历史记录', eyebrow: '', section: '创作工具' }),
       },
       {
         path: 'login',
