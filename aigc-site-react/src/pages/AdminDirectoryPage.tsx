@@ -203,6 +203,7 @@ export function AdminDirectoryPage() {
   const [showUnitDrawer, setShowUnitDrawer] = useState(false)
   const [showUserDrawer, setShowUserDrawer] = useState(false)
   const [showLogDialog, setShowLogDialog] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailLogsLoading, setDetailLogsLoading] = useState(false)
   const [detailLogs, setDetailLogs] = useState<AuditLogRecord[]>([])
   const [pageSize, setPageSize] = useState(10)
@@ -625,9 +626,7 @@ export function AdminDirectoryPage() {
 
       <div className="teaching-page__hero panel glass">
         <div>
-          <p className="eyebrow">Directory</p>
           <h2>组织 / 班级 / 用户归属管理</h2>
-          <p className="muted">页面按钮由权限点控制，可按授权开放导入模板、导入、导出与批量处理，并提供可追踪的任务反馈。</p>
         </div>
       </div>
       <input ref={fileInputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(event) => void handleImportFileChange(event)} />
@@ -727,7 +726,6 @@ export function AdminDirectoryPage() {
                       </select>
                     </label>
                   </div>
-                  <p className="muted admin-directory-page__hint">筛选与分页已切换到服务端执行，当前页仅展示接口返回的结果。</p>
                 </div>
               </div>
 
@@ -884,7 +882,7 @@ export function AdminDirectoryPage() {
                             <td>{fmt(item.user.passwordUpdatedAt)}</td>
                             <td onClick={(event) => event.stopPropagation()}>
                               <div className="admin-directory-page__row-actions">
-                                <button type="button" className="pill" onClick={() => setActiveUserId(item.user.userId)}>
+                                <button type="button" className="pill" onClick={() => { setActiveUserId(item.user.userId); setShowDetailModal(true); }}>
                                   查看详情
                                 </button>
                                 {canUpdateUserStatus ? (
@@ -1059,131 +1057,7 @@ export function AdminDirectoryPage() {
               </div>
             </div>
 
-            <aside className="teaching-stack admin-directory-page__aside">
-              <div className="panel glass teaching-panel admin-directory-page__detail">
-                <div className="teaching-panel__head">
-                  <div>
-                    <p className="eyebrow">Detail Drawer</p>
-                    <h3>详情区</h3>
-                  </div>
-                  <div className="teaching-actions">
-                    {activeRow ? (
-                      <button type="button" className="pill" onClick={() => setShowLogDialog(true)}>
-                        查看日志
-                      </button>
-                    ) : null}
-                    {activeRow ? (
-                      <Link className="pill" to={`/audit-logs?actorUserId=${encodeURIComponent(activeRow.user.userId)}`}>
-                        完整审计
-                      </Link>
-                    ) : null}
-                  </div>
-                </div>
 
-                {activeRow ? (
-                  <div className="teaching-form">
-                    <div className="admin-directory-page__detail-hero">
-                      <div>
-                        <h3>{activeRow.user.displayName}</h3>
-                        <p className="muted">
-                          {roleLabel(activeRow.user.role)} ｜ {activeRow.identity}
-                        </p>
-                      </div>
-                      <span
-                        className={`pill small ${
-                          activeRow.user.enabled ? 'admin-directory-page__pill--success' : 'admin-directory-page__pill--danger'
-                        }`}
-                      >
-                        {activeRow.user.enabled ? '启用中' : '已停用'}
-                      </span>
-                    </div>
-
-                    <section className="admin-directory-page__detail-section">
-                      <h4>基础信息</h4>
-                      <div className="admin-directory-page__kv-grid">
-                        <div>
-                          <span>用户名</span>
-                          <strong>{activeRow.user.username}</strong>
-                        </div>
-                        <div>
-                          <span>显示名称</span>
-                          <strong>{activeRow.user.displayName}</strong>
-                        </div>
-                        <div>
-                          <span>账号状态</span>
-                          <strong>{activeRow.user.enabled ? '启用中' : '已停用'}</strong>
-                        </div>
-                        <div>
-                          <span>锁定状态</span>
-                          <strong>{activeRow.user.locked ? '已锁定' : '未锁定'}</strong>
-                        </div>
-                        <div>
-                          <span>失败次数</span>
-                          <strong>{activeRow.user.failedLoginCount ?? 0}</strong>
-                        </div>
-                        <div>
-                          <span>最近登录</span>
-                          <strong>{fmt(activeRow.user.lastLoginAt)}</strong>
-                        </div>
-                        <div>
-                          <span>密码更新时间</span>
-                          <strong>{fmt(activeRow.user.passwordUpdatedAt)}</strong>
-                        </div>
-                        <div>
-                          <span>创建时间</span>
-                          <strong>{fmt(activeRow.user.createdAt)}</strong>
-                        </div>
-                        <div>
-                          <span>更新时间</span>
-                          <strong>{fmt(activeRow.user.updatedAt)}</strong>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="admin-directory-page__detail-section">
-                      <h4>校园身份</h4>
-                      <div className="admin-directory-page__kv-grid">
-                        <div>
-                          <span>角色</span>
-                          <strong>{roleLabel(activeRow.user.role)}</strong>
-                        </div>
-                        <div>
-                          <span>院系</span>
-                          <strong>{activeRow.department}</strong>
-                        </div>
-                        <div>
-                          <span>专业方向</span>
-                          <strong>{activeRow.major}</strong>
-                        </div>
-                        <div>
-                          <span>班级</span>
-                          <strong>{activeRow.classroom?.name || '未分班'}</strong>
-                        </div>
-                        <div>
-                          <span>校园身份说明</span>
-                          <strong>{activeRow.identity}</strong>
-                        </div>
-                      </div>
-                    </section>
-
-                    <div className="teaching-actions">
-                      {canUpdateUserStatus ? (
-                        <AppButton size="sm" variant={activeRow.user.enabled ? 'danger' : 'primary'} onClick={() => void toggleUserEnabled(activeRow.user)}>
-                          {activeRow.user.enabled ? '停用当前账号' : '启用当前账号'}
-                        </AppButton>
-                      ) : null}
-                      {hasBatchActionPermission ? (
-                        <button type="button" className="pill" onClick={() => toggleSelectedUser(activeRow.user.userId)}>
-                          {selectedUserIds.includes(activeRow.user.userId) ? '取消批量选择' : '加入批量操作'}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : (
-                  <EmptyState title="未选择用户" description="点击左侧表格行即可在这里查看基础信息与校园身份，操作日志改为按钮弹窗查看。" />
-                )}
-              </div>
-            </aside>
           </div>
         </div>
       )}
@@ -1325,6 +1199,122 @@ export function AdminDirectoryPage() {
             )}
             <div className="dialog-actions">
               <button type="button" className="btn-cancel" onClick={() => setShowLogDialog(false)}>
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDetailModal && activeRow ? (
+        <div className="dialog-overlay" role="dialog" aria-modal onClick={(event) => { if (event.currentTarget === event.target) { setShowDetailModal(false); setActiveUserId(''); } }}>
+          <div className="dialog glass modal-form-dialog admin-directory-page__detail-modal">
+            <div className="dialog-title-row">
+              <h3 className="dialog-title">{activeRow.user.displayName} · 详情</h3>
+              <button type="button" className="dialog-close-btn" aria-label="关闭详情" onClick={() => { setShowDetailModal(false); setActiveUserId(''); }}>
+                ×
+              </button>
+            </div>
+            <div className="teaching-form">
+              <div className="admin-directory-page__detail-hero">
+                <div>
+                  <h3>{activeRow.user.displayName}</h3>
+                  <p className="muted">
+                    {roleLabel(activeRow.user.role)} ｜ {activeRow.identity}
+                  </p>
+                </div>
+                <span
+                  className={`pill small ${
+                    activeRow.user.enabled ? 'admin-directory-page__pill--success' : 'admin-directory-page__pill--danger'
+                  }`}
+                >
+                  {activeRow.user.enabled ? '启用中' : '已停用'}
+                </span>
+              </div>
+
+              <section className="admin-directory-page__detail-section">
+                <h4>基础信息</h4>
+                <div className="admin-directory-page__kv-grid">
+                  <div>
+                    <span>用户名</span>
+                    <strong>{activeRow.user.username}</strong>
+                  </div>
+                  <div>
+                    <span>显示名称</span>
+                    <strong>{activeRow.user.displayName}</strong>
+                  </div>
+                  <div>
+                    <span>账号状态</span>
+                    <strong>{activeRow.user.enabled ? '启用中' : '已停用'}</strong>
+                  </div>
+                  <div>
+                    <span>锁定状态</span>
+                    <strong>{activeRow.user.locked ? '已锁定' : '未锁定'}</strong>
+                  </div>
+                  <div>
+                    <span>失败次数</span>
+                    <strong>{activeRow.user.failedLoginCount ?? 0}</strong>
+                  </div>
+                  <div>
+                    <span>最近登录</span>
+                    <strong>{fmt(activeRow.user.lastLoginAt)}</strong>
+                  </div>
+                  <div>
+                    <span>密码更新时间</span>
+                    <strong>{fmt(activeRow.user.passwordUpdatedAt)}</strong>
+                  </div>
+                  <div>
+                    <span>创建时间</span>
+                    <strong>{fmt(activeRow.user.createdAt)}</strong>
+                  </div>
+                  <div>
+                    <span>更新时间</span>
+                    <strong>{fmt(activeRow.user.updatedAt)}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="admin-directory-page__detail-section">
+                <h4>校园身份</h4>
+                <div className="admin-directory-page__kv-grid">
+                  <div>
+                    <span>角色</span>
+                    <strong>{roleLabel(activeRow.user.role)}</strong>
+                  </div>
+                  <div>
+                    <span>院系</span>
+                    <strong>{activeRow.department}</strong>
+                  </div>
+                  <div>
+                    <span>专业方向</span>
+                    <strong>{activeRow.major}</strong>
+                  </div>
+                  <div>
+                    <span>班级</span>
+                    <strong>{activeRow.classroom?.name || '未分班'}</strong>
+                  </div>
+                  <div>
+                    <span>校园身份说明</span>
+                    <strong>{activeRow.identity}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <div className="teaching-actions">
+                {canUpdateUserStatus ? (
+                  <AppButton size="sm" variant={activeRow.user.enabled ? 'danger' : 'primary'} onClick={() => void toggleUserEnabled(activeRow.user)}>
+                    {activeRow.user.enabled ? '停用当前账号' : '启用当前账号'}
+                  </AppButton>
+                ) : null}
+                {hasBatchActionPermission ? (
+                  <button type="button" className="pill" onClick={() => toggleSelectedUser(activeRow.user.userId)}>
+                    {selectedUserIds.includes(activeRow.user.userId) ? '取消批量选择' : '加入批量操作'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="dialog-actions">
+              <button type="button" className="btn-cancel" onClick={() => { setShowDetailModal(false); setActiveUserId(''); }}>
                 关闭
               </button>
             </div>

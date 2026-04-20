@@ -7,8 +7,11 @@ import com.example.aigc.dto.LoginResponse;
 import com.example.aigc.service.AuthService;
 import com.example.aigc.service.RequestAuthService;
 import com.example.aigc.service.RequestUserContext;
+import com.example.aigc.service.SocialAuthService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,10 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final RequestAuthService requestAuthService;
+    private final SocialAuthService socialAuthService;
 
-    public AuthController(AuthService authService, RequestAuthService requestAuthService) {
+    public AuthController(
+            AuthService authService,
+            RequestAuthService requestAuthService,
+            SocialAuthService socialAuthService
+    ) {
         this.authService = authService;
         this.requestAuthService = requestAuthService;
+        this.socialAuthService = socialAuthService;
     }
 
     @PostMapping("/login")
@@ -55,6 +64,21 @@ public class AuthController {
     @PostMapping("/logout")
     public ApiResponse<Void> logout() {
         return ApiResponse.ok(null);
+    }
+
+    @GetMapping("/social/{provider}")
+    public ApiResponse<com.example.aigc.dto.SocialAuthUrlResponse> socialAuthUrl(@PathVariable("provider") String provider) {
+        return ApiResponse.ok(socialAuthService.buildAuthUrl(provider));
+    }
+
+    @GetMapping("/social/callback/{provider}")
+    public ApiResponse<LoginResponse> socialCallback(
+            @PathVariable("provider") String provider,
+            @RequestParam("code") String code,
+            @RequestParam("state") String state,
+            HttpServletRequest httpServletRequest
+    ) {
+        return ApiResponse.ok(socialAuthService.handleCallback(provider, code, state, resolveClientIp(httpServletRequest)));
     }
 
     private String resolveClientIp(HttpServletRequest request) {

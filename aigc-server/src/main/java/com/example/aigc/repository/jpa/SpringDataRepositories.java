@@ -19,6 +19,7 @@ import com.example.aigc.entity.ReviewRecord;
 import com.example.aigc.entity.ScriptDocumentVersion;
 import com.example.aigc.entity.ScriptProject;
 import com.example.aigc.entity.ScriptRevision;
+import com.example.aigc.entity.SocialAccount;
 import com.example.aigc.entity.StyleTemplate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.entity.StoryboardShot;
@@ -91,7 +92,15 @@ interface SpringDataAccountImportTaskRepository extends JpaRepository<AccountImp
 interface SpringDataAppUserRepository extends JpaRepository<AppUser, String> {
     Optional<AppUser> findByUsername(String username);
 
+    Optional<AppUser> findByProviderAndProviderUserId(String provider, String providerUserId);
+
     List<AppUser> findAllByUserIdIn(List<String> userIds);
+}
+
+interface SpringDataSocialAccountRepository extends JpaRepository<SocialAccount, Long> {
+    Optional<SocialAccount> findByProviderAndProviderUserId(String provider, String providerUserId);
+
+    List<SocialAccount> findAllByUserId(String userId);
 }
 
 interface SpringDataOrgUnitRepository extends JpaRepository<OrgUnit, String> {

@@ -12,6 +12,8 @@ public interface AppUserRepository {
 
     Optional<AppUser> findByUsername(String username);
 
+    Optional<AppUser> findByProviderAndProviderUserId(String provider, String providerUserId);
+
     List<AppUser> findAll();
 
     List<AppUser> findAllByIds(List<String> userIds);

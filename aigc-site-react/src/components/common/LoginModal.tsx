@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { AppButton } from '@/components/common/AppButton'
 import { AppInput } from '@/components/common/AppInput'
+import { getSocialAuthUrl } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
 
 const presets = [
@@ -22,6 +23,7 @@ export function LoginModal({ visible, onClose, onSuccess }: Props) {
   const [username, setUsername] = useState('teacher')
   const [password, setPassword] = useState('Teacher@123')
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [socialLoading, setSocialLoading] = useState(false)
 
   useEffect(() => {
     if (!visible) return
@@ -60,6 +62,18 @@ export function LoginModal({ visible, onClose, onSuccess }: Props) {
       onSuccess?.()
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : '登录失败，请稍后重试')
+    }
+  }
+
+  async function handleOnelinkLogin() {
+    setSubmitError(null)
+    setSocialLoading(true)
+    try {
+      const payload = await getSocialAuthUrl('onelinkai')
+      window.location.href = payload.authUrl
+    } catch (error) {
+      setSocialLoading(false)
+      setSubmitError(error instanceof Error ? error.message : '发起 OneLinkAI 登录失败')
     }
   }
 
@@ -123,6 +137,12 @@ export function LoginModal({ visible, onClose, onSuccess }: Props) {
             </AppButton>
             <AppButton variant="primary" type="submit" loading={loggingIn}>
               登录平台
+            </AppButton>
+          </div>
+          <div className="login-modal__social">
+            <span>或使用第三方账号</span>
+            <AppButton variant="ghost" type="button" loading={socialLoading} disabled={loggingIn || socialLoading} onClick={handleOnelinkLogin}>
+              使用 OneLinkAI 登录
             </AppButton>
           </div>
         </form>

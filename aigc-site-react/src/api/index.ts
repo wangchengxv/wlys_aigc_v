@@ -63,6 +63,7 @@ import type {
   PromptTemplateCatalogItem,
   PagedResult,
   PresetModelListResponse,
+  SocialAuthUrlResponse,
   OrgUnit,
   OrgUnitCreateRequest,
   MediaResource,
@@ -496,6 +497,26 @@ export async function login(request: LoginRequest): Promise<LoginResponse> {
       displayName: request.username || user.displayName,
     },
   }
+}
+
+export async function getSocialAuthUrl(provider: string): Promise<SocialAuthUrlResponse> {
+  if (!USE_MOCK) {
+    const { data } = await http.get<ApiEnvelope<SocialAuthUrlResponse>>(`/api/v1/auth/social/${encodeURIComponent(provider)}`)
+    return unwrapApiData(data, '获取第三方登录地址失败')
+  }
+  throw new Error('Mock 模式下不支持第三方登录')
+}
+
+export async function socialLoginCallback(provider: string, code: string, state: string): Promise<LoginResponse> {
+  if (!USE_MOCK) {
+    const { data } = await http.get<ApiEnvelope<LoginResponse>>(`/api/v1/auth/social/callback/${encodeURIComponent(provider)}`, {
+      params: { code, state },
+    })
+    const payload = unwrapApiData(data, '第三方登录失败')
+    setStoredAccessToken(payload.accessToken)
+    return payload
+  }
+  throw new Error('Mock 模式下不支持第三方登录')
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {

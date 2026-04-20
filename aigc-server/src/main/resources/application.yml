@@ -43,6 +43,16 @@ aigc:
     login-failure-threshold: ${AIGC_LOGIN_FAILURE_THRESHOLD:5}
     lock-duration-minutes: ${AIGC_LOCK_DURATION_MINUTES:30}
     force-password-change-on-reset: ${AIGC_FORCE_PASSWORD_CHANGE_ON_RESET:false}
+    social:
+      onelinkai:
+        enabled: ${AIGC_AUTH_SOCIAL_ONELINKAI_ENABLED:false}
+        client-id: ${AIGC_AUTH_SOCIAL_ONELINKAI_CLIENT_ID:}
+        client-secret: ${AIGC_AUTH_SOCIAL_ONELINKAI_CLIENT_SECRET:}
+        authorize-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_AUTHORIZE_URI:https://open.onelinkai.com/oauth/authorize}
+        token-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_TOKEN_URI:https://open.onelinkai.com/oauth/token}
+        user-info-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_USER_INFO_URI:https://open.onelinkai.com/oauth/userinfo}
+        redirect-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_REDIRECT_URI:http://localhost:5173/social/callback/onelinkai}
+        scope: ${AIGC_AUTH_SOCIAL_ONELINKAI_SCOPE:openid profile}
     seed-users:
       - user-id: admin-001
         username: admin

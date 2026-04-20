@@ -18,6 +18,7 @@ public class AuthProperties {
     private long lockDurationMinutes = 30;
     private boolean forcePasswordChangeOnReset = false;
     private List<SeedUser> seedUsers = new ArrayList<>();
+    private SocialProperties social = new SocialProperties();
 
     public String getAccessToken() {
         return accessToken;
@@ -97,6 +98,101 @@ public class AuthProperties {
 
     public void setSeedUsers(List<SeedUser> seedUsers) {
         this.seedUsers = seedUsers == null ? new ArrayList<>() : seedUsers;
+    }
+
+    public SocialProperties getSocial() {
+        return social;
+    }
+
+    public void setSocial(SocialProperties social) {
+        this.social = social == null ? new SocialProperties() : social;
+    }
+
+    public static class SocialProperties {
+        private OnelinkaiProperties onelinkai = new OnelinkaiProperties();
+
+        public OnelinkaiProperties getOnelinkai() {
+            return onelinkai;
+        }
+
+        public void setOnelinkai(OnelinkaiProperties onelinkai) {
+            this.onelinkai = onelinkai == null ? new OnelinkaiProperties() : onelinkai;
+        }
+    }
+
+    public static class OnelinkaiProperties {
+        private boolean enabled = false;
+        private String clientId = "";
+        private String clientSecret = "";
+        private String authorizeUri = "https://open.onelinkai.com/oauth/authorize";
+        private String tokenUri = "https://open.onelinkai.com/oauth/token";
+        private String userInfoUri = "https://open.onelinkai.com/oauth/userinfo";
+        private String redirectUri = "http://localhost:5173/social/callback/onelinkai";
+        private String scope = "openid profile";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getClientId() {
+            return clientId;
+        }
+
+        public void setClientId(String clientId) {
+            this.clientId = clientId;
+        }
+
+        public String getClientSecret() {
+            return clientSecret;
+        }
+
+        public void setClientSecret(String clientSecret) {
+            this.clientSecret = clientSecret;
+        }
+
+        public String getAuthorizeUri() {
+            return authorizeUri;
+        }
+
+        public void setAuthorizeUri(String authorizeUri) {
+            this.authorizeUri = authorizeUri;
+        }
+
+        public String getTokenUri() {
+            return tokenUri;
+        }
+
+        public void setTokenUri(String tokenUri) {
+            this.tokenUri = tokenUri;
+        }
+
+        public String getUserInfoUri() {
+            return userInfoUri;
+        }
+
+        public void setUserInfoUri(String userInfoUri) {
+            this.userInfoUri = userInfoUri;
+        }
+
+        public String getRedirectUri() {
+            return redirectUri;
+        }
+
+        public void setRedirectUri(String redirectUri) {
+            this.redirectUri = redirectUri;
+        }
+
+        public String getScope() {
+            return scope;
+        }
+
+        public void setScope(String scope) {
+            this.scope = scope;
+        }
     }
 
     public static class SeedUser {

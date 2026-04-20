@@ -36,6 +36,15 @@ public class AppUser {
     @Column(name = "classroom_id")
     public String classroomId;
 
+    @Column(name = "provider")
+    public String provider;
+
+    @Column(name = "provider_user_id")
+    public String providerUserId;
+
+    @Column(name = "linked_at")
+    public Instant linkedAt;
+
     @Column(nullable = false)
     public boolean enabled;
 

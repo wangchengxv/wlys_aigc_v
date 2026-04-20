@@ -33,6 +33,11 @@ public class JpaAppUserRepository implements AppUserRepository {
     }
 
     @Override
+    public Optional<AppUser> findByProviderAndProviderUserId(String provider, String providerUserId) {
+        return repository.findByProviderAndProviderUserId(provider, providerUserId);
+    }
+
+    @Override
     public List<AppUser> findAll() {
         return repository.findAll();
     }

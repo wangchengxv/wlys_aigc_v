@@ -112,8 +112,8 @@ export function WorkspacePage() {
         <div className="workspace-route-switch__head">
           <div>
             <h3>统一工作台入口</h3>
-            <p className="eyebrow">工作台模式</p>
-            <p className="muted">四个地址继续保留，但都复用同一套输入、结果与下载结构。</p>
+            <p className="eyebrow"></p>
+            <p className="muted"></p>
           </div>
         </div>
         <SectionTabs

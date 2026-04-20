@@ -90,6 +90,11 @@ export interface LoginResponse {
   user: CurrentUser
 }
 
+export interface SocialAuthUrlResponse {
+  provider: string
+  authUrl: string
+}
+
 export type OrgUnitType = 'ORGANIZATION' | 'CLASSROOM'
 
 export interface OrgUnit {

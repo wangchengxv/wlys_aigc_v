@@ -223,11 +223,21 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'social/callback/onelinkai',
+        lazy: lazyPage(() => import('@/pages/SocialLoginCallbackPage'), 'SocialLoginCallbackPage'),
+        handle: H({
+          title: '第三方登录回调',
+          eyebrow: '认证',
+          section: '认证中心',
+          description: '接收 OneLinkAI 授权回调并完成登录。',
+        }),
+      },
+      {
         path: 'admin/directory',
         lazy: lazyPage(() => import('@/pages/AdminDirectoryPage'), 'AdminDirectoryPage'),
         handle: H({
           title: '组织与用户',
-          eyebrow: '治理',
+          eyebrow: '',
           section: '组织与用户',
           description: '维护组织、班级和用户归属，支撑高校后台中的账号治理能力。',
         }),
