@@ -128,7 +128,6 @@ export function WorkspacePage() {
 
       <FixedPanelDock
         title="统一工作台"
-        description="PromptPanel 与 ResultPanel 在所有工作台入口中保持一致，减少同一任务在多个页面重复出现。"
         items={dockItems}
         activeId={activePanel}
         onChange={(id) => setActivePanel(id as 'prompt' | 'result')}

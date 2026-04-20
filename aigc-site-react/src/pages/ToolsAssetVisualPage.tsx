@@ -152,8 +152,6 @@ export function ToolsAssetVisualPage() {
     <section className="tools-asset-visual-page">
       <div className="head panel glass">
         <div>
-          <p className="eyebrow">工具</p>
-          <h2>三视图与九宫格</h2>
           <p className="muted">绑定工程为可选项。可直接使用免绑定快速模式生成示意图；如选择工程与资产，则结果会写回项目资产页。</p>
         </div>
         {projectId ? (

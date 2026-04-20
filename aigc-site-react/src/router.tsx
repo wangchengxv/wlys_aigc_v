@@ -25,7 +25,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/HomePage'), 'HomePage'),
         handle: H({
           title: '平台首页',
-          eyebrow: '概览',
+          eyebrow: '',
           section: '概览',
           description: '查看平台入口、功能概览与常用创作能力导航。',
         }),
@@ -43,7 +43,7 @@ export const router = createBrowserRouter([
       {
         path: 'workflow/script-story',
         lazy: lazyPage(() => import('@/pages/workflow/WorkflowScriptStoryPage'), 'WorkflowScriptStoryPage'),
-        handle: H({ title: '剧本与故事', eyebrow: '流程', section: '项目与作品' }),
+        handle: H({ title: '剧本与故事', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'workflow/scenes-props',
@@ -82,7 +82,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
         handle: H({
           title: '文生图',
-          eyebrow: '工具',
+          eyebrow: '',
           section: '创作工具',
           workspaceMode: 'image',
           workspaceVariant: 'image',
@@ -93,7 +93,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
         handle: H({
           title: '文生视频',
-          eyebrow: '工具',
+          eyebrow: '',
           section: '创作工具',
           workspaceMode: 'video',
           workspaceVariant: 'video',
@@ -104,7 +104,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
         handle: H({
           title: '图生视频',
-          eyebrow: '工具',
+          eyebrow: '',
           section: '创作工具',
           workspaceMode: 'video',
           workspaceVariant: 'image-to-video',
@@ -113,14 +113,14 @@ export const router = createBrowserRouter([
       {
         path: 'tools/asset-visual',
         lazy: lazyPage(() => import('@/pages/ToolsAssetVisualPage'), 'ToolsAssetVisualPage'),
-        handle: H({ title: '三视图 / 九宫格', eyebrow: '工具', section: '创作工具' }),
+        handle: H({ title: '三视图 / 九宫格', eyebrow: '', section: '创作工具' }),
       },
       {
         path: 'workspace',
         lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
         handle: H({
           title: '创作工作台',
-          eyebrow: '创作',
+          eyebrow: '',
           section: '创作工具',
           description: '快速发起图像、视频等 AIGC 生成任务。',
           workspaceMode: 'both',
@@ -132,7 +132,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/TeachingCoursesPage'), 'TeachingCoursesPage'),
         handle: H({
           title: '课程工作台',
-          eyebrow: '教学',
+          eyebrow: '',
           section: '课程与实训',
           description: '查看课程、作业、提交与实训进度，承载教师与学生的教学主入口。',
         }),
@@ -152,7 +152,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/ScriptProjectListPage'), 'ScriptProjectListPage'),
         handle: H({
           title: '剧本工程',
-          eyebrow: '项目',
+          eyebrow: '',
           section: '项目与作品',
           description: '按课程、提交人与项目状态统一管理 AIGC 实训项目。',
         }),
@@ -245,7 +245,7 @@ export const router = createBrowserRouter([
       {
         path: 'admin/media-resources',
         lazy: lazyPage(() => import('@/pages/MediaResourcesPage'), 'MediaResourcesPage'),
-        handle: H({ title: '媒体资源中心', eyebrow: '资源', section: '资源与模型' }),
+        handle: H({ title: '媒体资源中心', eyebrow: '', section: '资源与模型' }),
       },
       {
         path: 'audit-logs',
@@ -267,7 +267,7 @@ export const router = createBrowserRouter([
         lazy: lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage'),
         handle: H({
           title: '设置中心',
-          eyebrow: '设置',
+          eyebrow: '',
           section: '系统设置',
           description: '保留账号、系统、模型与创作默认配置，不再承担高校业务总入口。',
         }),

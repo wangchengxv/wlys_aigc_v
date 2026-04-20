@@ -29,7 +29,6 @@ export function FixedPanelDock({ title, description, items, activeId, onChange, 
       <div className="fixed-panel-dock__head">
         <div>
           <h3>{title}</h3>
-          <p className="fixed-panel-dock__eyebrow">工作台面板</p>
           {description ? <p className="fixed-panel-dock__description">{description}</p> : null}
         </div>
         {activeItem.badge ? <span className="fixed-panel-dock__panel-badge">{activeItem.badge}</span> : null}
