@@ -31,4 +31,19 @@ public class JpaSocialAccountRepository implements SocialAccountRepository {
     public List<SocialAccount> findAllByUserId(String userId) {
         return repository.findAllByUserId(userId);
     }
+
+    @Override
+    public Optional<SocialAccount> findByUserIdAndProvider(String userId, String provider) {
+        return repository.findByUserIdAndProvider(userId, provider);
+    }
+
+    @Override
+    public long countByUserId(String userId) {
+        return repository.countByUserId(userId);
+    }
+
+    @Override
+    public void delete(SocialAccount socialAccount) {
+        repository.delete(socialAccount);
+    }
 }

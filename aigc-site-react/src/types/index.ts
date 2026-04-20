@@ -95,6 +95,12 @@ export interface SocialAuthUrlResponse {
   authUrl: string
 }
 
+export interface SocialLinkItem {
+  provider: string
+  providerUserId: string
+  linkedAt: string | null
+}
+
 export type OrgUnitType = 'ORGANIZATION' | 'CLASSROOM'
 
 export interface OrgUnit {

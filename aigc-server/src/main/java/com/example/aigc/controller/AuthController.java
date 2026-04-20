@@ -4,6 +4,9 @@ import com.example.aigc.dto.ApiResponse;
 import com.example.aigc.dto.CurrentUserResponse;
 import com.example.aigc.dto.LoginRequest;
 import com.example.aigc.dto.LoginResponse;
+import com.example.aigc.dto.SocialAuthUrlResponse;
+import com.example.aigc.dto.SocialLinkItemResponse;
+import com.example.aigc.dto.SocialUnbindRequest;
 import com.example.aigc.service.AuthService;
 import com.example.aigc.service.RequestAuthService;
 import com.example.aigc.service.RequestUserContext;
@@ -18,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -67,7 +72,7 @@ public class AuthController {
     }
 
     @GetMapping("/social/{provider}")
-    public ApiResponse<com.example.aigc.dto.SocialAuthUrlResponse> socialAuthUrl(@PathVariable("provider") String provider) {
+    public ApiResponse<SocialAuthUrlResponse> socialAuthUrl(@PathVariable("provider") String provider) {
         return ApiResponse.ok(socialAuthService.buildAuthUrl(provider));
     }
 
@@ -79,6 +84,26 @@ public class AuthController {
             HttpServletRequest httpServletRequest
     ) {
         return ApiResponse.ok(socialAuthService.handleCallback(provider, code, state, resolveClientIp(httpServletRequest)));
+    }
+
+    @GetMapping("/social/links")
+    public ApiResponse<List<SocialLinkItemResponse>> socialLinks(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "x-aigc-token", required = false) String xAigcToken
+    ) {
+        String userId = requestAuthService.requireUserId(authorization, xAigcToken, null);
+        return ApiResponse.ok(socialAuthService.getLinks(userId));
+    }
+
+    @PostMapping("/social/unbind")
+    public ApiResponse<Void> socialUnbind(
+            @Valid @RequestBody SocialUnbindRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "x-aigc-token", required = false) String xAigcToken
+    ) {
+        String userId = requestAuthService.requireUserId(authorization, xAigcToken, null);
+        socialAuthService.unbind(userId, request.provider());
+        return ApiResponse.ok(null);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

@@ -11,4 +11,10 @@ public interface SocialAccountRepository {
     Optional<SocialAccount> findByProviderAndProviderUserId(String provider, String providerUserId);
 
     List<SocialAccount> findAllByUserId(String userId);
+
+    Optional<SocialAccount> findByUserIdAndProvider(String userId, String provider);
+
+    long countByUserId(String userId);
+
+    void delete(SocialAccount socialAccount);
 }

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QuickActionGrid } from '@/components/common/QuickActionGrid'
 import { StatStrip } from '@/components/common/StatStrip'
-import { getApiBaseUrl, healthCheck } from '@/api'
+import { getApiBaseUrl, getSocialAuthUrl, getSocialLinks, healthCheck, unbindSocialLink } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
+import type { SocialLinkItem } from '@/types'
 
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -11,6 +12,10 @@ export function SettingsPage() {
   const signOut = useAuthStore((s) => s.signOut)
   const [status, setStatus] = useState<'loading' | 'ok' | 'fail'>('loading')
   const [mode, setMode] = useState('unknown')
+  const [socialLinks, setSocialLinks] = useState<SocialLinkItem[]>([])
+  const [socialLoading, setSocialLoading] = useState(false)
+  const [socialError, setSocialError] = useState<string | null>(null)
+  const [unbindLoading, setUnbindLoading] = useState(false)
   const envMode = import.meta.env.MODE
   const apiBaseUrl = getApiBaseUrl()
   const isAdmin = user?.role === 'ADMIN'
@@ -34,6 +39,53 @@ export function SettingsPage() {
       }
     })()
   }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setSocialLinks([])
+      setSocialError(null)
+      return
+    }
+    setSocialLoading(true)
+    setSocialError(null)
+    void (async () => {
+      try {
+        const links = await getSocialLinks()
+        setSocialLinks(links)
+      } catch (error) {
+        setSocialError(error instanceof Error ? error.message : '获取第三方账号绑定失败')
+      } finally {
+        setSocialLoading(false)
+      }
+    })()
+  }, [user])
+
+  async function handleBindOnelinkai() {
+    setSocialError(null)
+    try {
+      const payload = await getSocialAuthUrl('onelinkai')
+      window.location.href = payload.authUrl
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : '发起 OneLinkAI 绑定失败')
+    }
+  }
+
+  async function handleUnbindOnelinkai() {
+    setUnbindLoading(true)
+    setSocialError(null)
+    try {
+      await unbindSocialLink('onelinkai')
+      const links = await getSocialLinks()
+      setSocialLinks(links)
+    } catch (error) {
+      setSocialError(error instanceof Error ? error.message : '解绑 OneLinkAI 失败')
+    } finally {
+      setUnbindLoading(false)
+    }
+  }
+
+  const onelinkBound = socialLinks.some((item) => item.provider.toLowerCase() === 'onelinkai')
+  const onelinkLink = socialLinks.find((item) => item.provider.toLowerCase() === 'onelinkai') || null
 
   return (
     <section className="settings-page settings-page--revamp">
@@ -101,6 +153,40 @@ export function SettingsPage() {
           <div><span>接口地址</span><strong>{apiBaseUrl}</strong></div>
           <div><span>主题策略</span><strong>浅色工作台</strong></div>
         </div>
+      </section>
+
+      <section className="content-card">
+        <div className="section-heading">
+          <h3>第三方账号绑定</h3>
+          <span>支持 OneLinkAI 统一账号体系</span>
+        </div>
+        {!user ? <p className="muted">请先登录，再管理第三方账号绑定。</p> : null}
+        {user ? (
+          <div className="settings-page__list">
+            <div>
+              <span>OneLinkAI</span>
+              <strong>{socialLoading ? '加载中...' : onelinkBound ? '已绑定' : '未绑定'}</strong>
+            </div>
+            <div>
+              <span>绑定账号</span>
+              <strong>{onelinkLink?.providerUserId || '-'}</strong>
+            </div>
+          </div>
+        ) : null}
+        {socialError ? <p className="hint-error">{socialError}</p> : null}
+        {user ? (
+          <div className="inline-actions">
+            {!onelinkBound ? (
+              <button type="button" className="app-btn v-ghost s-md" onClick={handleBindOnelinkai}>
+                绑定 OneLinkAI
+              </button>
+            ) : (
+              <button type="button" className="app-btn v-ghost s-md" disabled={unbindLoading} onClick={handleUnbindOnelinkai}>
+                {unbindLoading ? '解绑中...' : '解绑 OneLinkAI'}
+              </button>
+            )}
+          </div>
+        ) : null}
       </section>
 
     </section>

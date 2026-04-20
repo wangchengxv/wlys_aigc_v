@@ -64,6 +64,7 @@ import type {
   PagedResult,
   PresetModelListResponse,
   SocialAuthUrlResponse,
+  SocialLinkItem,
   OrgUnit,
   OrgUnitCreateRequest,
   MediaResource,
@@ -517,6 +518,23 @@ export async function socialLoginCallback(provider: string, code: string, state:
     return payload
   }
   throw new Error('Mock 模式下不支持第三方登录')
+}
+
+export async function getSocialLinks(): Promise<SocialLinkItem[]> {
+  if (!USE_MOCK) {
+    const { data } = await http.get<ApiEnvelope<SocialLinkItem[]>>('/api/v1/auth/social/links')
+    return unwrapApiData(data, '获取第三方账号绑定列表失败')
+  }
+  return []
+}
+
+export async function unbindSocialLink(provider: string): Promise<void> {
+  if (!USE_MOCK) {
+    const { data } = await http.post<ApiEnvelope<null>>('/api/v1/auth/social/unbind', { provider })
+    unwrapApiVoid(data, '解绑第三方账号失败')
+    return
+  }
+  throw new Error('Mock 模式下不支持第三方解绑')
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {

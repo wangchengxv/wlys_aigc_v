@@ -101,6 +101,10 @@ interface SpringDataSocialAccountRepository extends JpaRepository<SocialAccount,
     Optional<SocialAccount> findByProviderAndProviderUserId(String provider, String providerUserId);
 
     List<SocialAccount> findAllByUserId(String userId);
+
+    Optional<SocialAccount> findByUserIdAndProvider(String userId, String provider);
+
+    long countByUserId(String userId);
 }
 
 interface SpringDataOrgUnitRepository extends JpaRepository<OrgUnit, String> {

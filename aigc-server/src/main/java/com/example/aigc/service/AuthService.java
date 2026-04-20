@@ -7,25 +7,30 @@ import com.example.aigc.dto.LoginResponse;
 import com.example.aigc.entity.AppUser;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.repository.AppUserRepository;
+import com.example.aigc.repository.SocialAccountRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 @Service
 public class AuthService {
     private final AppUserRepository appUserRepository;
+    private final SocialAccountRepository socialAccountRepository;
     private final PasswordCodec passwordCodec;
     private final JwtTokenService jwtTokenService;
     private final AuthProperties authProperties;
 
     public AuthService(
             AppUserRepository appUserRepository,
+            SocialAccountRepository socialAccountRepository,
             PasswordCodec passwordCodec,
             JwtTokenService jwtTokenService,
             AuthProperties authProperties
     ) {
         this.appUserRepository = appUserRepository;
+        this.socialAccountRepository = socialAccountRepository;
         this.passwordCodec = passwordCodec;
         this.jwtTokenService = jwtTokenService;
         this.authProperties = authProperties;
@@ -84,6 +89,44 @@ public class AuthService {
         return toCurrentUser(user);
     }
 
+    public LoginResponse socialLogin(String provider, String providerUserId, String clientIp) {
+        String normalizedProvider = normalizeProvider(provider);
+        String normalizedProviderUserId = providerUserId == null ? "" : providerUserId.trim();
+        if (normalizedProviderUserId.isBlank()) {
+            throw new BizException(400, "第三方用户标识不能为空");
+        }
+        AppUser user = appUserRepository.findByProviderAndProviderUserId(normalizedProvider, normalizedProviderUserId)
+                .orElseGet(() -> socialAccountRepository.findByProviderAndProviderUserId(normalizedProvider, normalizedProviderUserId)
+                        .flatMap(account -> appUserRepository.findById(account.userId))
+                        .orElseThrow(() -> new BizException(401, "第三方账号未绑定本地用户")));
+        return issueLoginToken(user, clientIp);
+    }
+
+    private LoginResponse issueLoginToken(AppUser user, String clientIp) {
+        Instant now = Instant.now();
+        if (!user.enabled) {
+            throw new BizException(403, "当前账号已被停用");
+        }
+        if (isLocked(user, now)) {
+            throw new BizException(403, "当前账号已被锁定");
+        }
+        user.failedLoginCount = 0;
+        user.locked = false;
+        user.lockReason = null;
+        user.lockedAt = null;
+        user.lastLoginAt = now;
+        user.lastLoginIp = clientIp;
+        user.updatedAt = now;
+        AppUser saved = appUserRepository.save(user);
+        JwtTokenService.TokenPayload tokenPayload = jwtTokenService.createToken(saved);
+        return new LoginResponse(
+                tokenPayload.accessToken(),
+                "Bearer",
+                tokenPayload.expiresAt(),
+                toCurrentUser(saved)
+        );
+    }
+
     private CurrentUserResponse toCurrentUser(AppUser user) {
         return new CurrentUserResponse(
                 user.userId,
@@ -115,5 +158,13 @@ public class AuthService {
         user.updatedAt = now;
         appUserRepository.save(user);
         return false;
+    }
+
+    private String normalizeProvider(String provider) {
+        String normalized = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            throw new BizException(400, "第三方 provider 不能为空");
+        }
+        return normalized;
     }
 }

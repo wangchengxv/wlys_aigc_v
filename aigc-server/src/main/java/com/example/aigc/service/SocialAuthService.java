@@ -4,6 +4,8 @@ import com.example.aigc.config.AuthProperties;
 import com.example.aigc.dto.CurrentUserResponse;
 import com.example.aigc.dto.LoginResponse;
 import com.example.aigc.dto.SocialAuthUrlResponse;
+import com.example.aigc.dto.SocialLinkItemResponse;
+import com.example.aigc.dto.SocialUserInfo;
 import com.example.aigc.entity.AppUser;
 import com.example.aigc.entity.SocialAccount;
 import com.example.aigc.enums.UserRole;
@@ -23,6 +25,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -92,6 +96,36 @@ public class SocialAuthService {
         );
     }
 
+    public List<SocialLinkItemResponse> getLinks(String userId) {
+        return socialAccountRepository.findAllByUserId(userId).stream()
+                .sorted(Comparator.comparing((SocialAccount account) -> account.linkedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .map(account -> new SocialLinkItemResponse(account.provider, account.providerUserId, account.linkedAt))
+                .toList();
+    }
+
+    public void unbind(String userId, String provider) {
+        String normalizedProvider = normalizeProvider(provider);
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new BizException(404, "用户不存在"));
+        SocialAccount linked = socialAccountRepository.findByUserIdAndProvider(userId, normalizedProvider)
+                .orElseThrow(() -> new BizException(404, "未找到已绑定的第三方账号"));
+        long linkCount = socialAccountRepository.countByUserId(userId);
+        boolean socialOnlyUser = normalizedProvider.equals(normalizeText(user.provider).toLowerCase(Locale.ROOT))
+                && normalizeText(user.providerUserId).equals(linked.providerUserId);
+        if (socialOnlyUser && linkCount <= 1) {
+            throw new BizException(400, "当前账号仅绑定 OneLinkAI，请先设置密码后再解绑");
+        }
+        socialAccountRepository.delete(linked);
+        if (normalizedProvider.equals(normalizeText(user.provider).toLowerCase(Locale.ROOT))
+                && normalizeText(user.providerUserId).equals(linked.providerUserId)) {
+            user.provider = null;
+            user.providerUserId = null;
+            user.linkedAt = null;
+            user.updatedAt = Instant.now();
+            appUserRepository.save(user);
+        }
+    }
+
     private String exchangeCodeForToken(AuthProperties.OnelinkaiProperties config, String code) {
         String formBody = "grant_type=authorization_code"
                 + "&client_id=" + encode(config.getClientId())
@@ -127,16 +161,23 @@ public class SocialAuthService {
         }
         String username = firstText(payload, "preferred_username", "username", "name", "data.username", "data.name");
         String displayName = firstText(payload, "nickname", "display_name", "name", "data.nickname", "data.display_name");
-        return new SocialUserInfo(providerUserId.trim(), normalizeText(username), normalizeText(displayName));
+        return new SocialUserInfo(
+                providerUserId.trim(),
+                normalizeText(username),
+                normalizeText(displayName),
+                normalizeText(firstText(payload, "email", "data.email")),
+                normalizeText(firstText(payload, "avatar_url", "avatar", "picture", "data.avatar_url", "data.avatar")),
+                PROVIDER_ONELINKAI
+        );
     }
 
     private AppUser resolveOrCreateUser(SocialUserInfo socialUserInfo, String clientIp) {
         Instant now = Instant.now();
-        AppUser existing = appUserRepository.findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.providerUserId())
+        AppUser existing = appUserRepository.findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.id())
                 .orElse(null);
         if (existing == null) {
             SocialAccount linked = socialAccountRepository
-                    .findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.providerUserId())
+                    .findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.id())
                     .orElse(null);
             if (linked != null) {
                 existing = appUserRepository.findById(linked.userId).orElse(null);
@@ -161,7 +202,7 @@ public class SocialAuthService {
         user.forcePasswordChange = false;
         user.sessionVersion = 0L;
         user.provider = PROVIDER_ONELINKAI;
-        user.providerUserId = socialUserInfo.providerUserId();
+        user.providerUserId = socialUserInfo.id();
         user.linkedAt = now;
         user.lastLoginAt = now;
         user.lastLoginIp = clientIp;
@@ -173,7 +214,7 @@ public class SocialAuthService {
         SocialAccount account = new SocialAccount();
         account.userId = saved.userId;
         account.provider = PROVIDER_ONELINKAI;
-        account.providerUserId = socialUserInfo.providerUserId();
+        account.providerUserId = socialUserInfo.id();
         account.linkedAt = now;
         socialAccountRepository.save(account);
 
@@ -183,7 +224,7 @@ public class SocialAuthService {
     private String buildUniqueUsername(SocialUserInfo socialUserInfo) {
         String base = !socialUserInfo.username().isBlank()
                 ? sanitizeUsername(socialUserInfo.username())
-                : ("onelinkai_" + sanitizeUsername(socialUserInfo.providerUserId()));
+                : ("onelinkai_" + sanitizeUsername(socialUserInfo.id()));
         if (base.isBlank()) {
             base = "onelinkai_user";
         }
@@ -300,6 +341,4 @@ public class SocialAuthService {
         return value == null || value.isBlank();
     }
 
-    private record SocialUserInfo(String providerUserId, String username, String displayName) {
-    }
 }
