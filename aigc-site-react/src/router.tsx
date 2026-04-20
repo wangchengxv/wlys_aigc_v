@@ -5,13 +5,13 @@ import type { RouteHandle } from '@/routes/types'
 
 const H = (h: RouteHandle) => h
 
-function lazyPage<T extends Record<string, ComponentType<object>>>(
+function lazyPage<T extends object>(
   loader: () => Promise<T>,
-  exportName: keyof T,
+  exportName: string,
 ) {
   return async () => {
     const mod = await loader()
-    return { Component: mod[exportName] as ComponentType<object> }
+    return { Component: (mod as Record<string, unknown>)[exportName] as ComponentType<object> }
   }
 }
 
@@ -250,14 +250,14 @@ export const router = createBrowserRouter([
       {
         path: 'audit-logs',
         lazy: lazyPage(() => import('@/pages/AuditLogsPage'), 'AuditLogsPage'),
-        handle: H({ title: '审计日志', eyebrow: '治理', section: '审核与审计' }),
+        handle: H({ title: '审计日志', eyebrow: '', section: '审核与审计' }),
       },
       {
         path: 'operations-dashboard',
         lazy: lazyPage(() => import('@/pages/OperationsDashboardPage'), 'OperationsDashboardPage'),
         handle: H({
           title: '平台概览',
-          eyebrow: '概览',
+          eyebrow: '',
           section: '概览',
           description: '汇总课程、提交、项目、审核与导出状态，形成高校实训后台首页的驾驶舱视图。',
         }),
@@ -275,22 +275,22 @@ export const router = createBrowserRouter([
       {
         path: 'global-settings',
         lazy: lazyPage(() => import('@/pages/GlobalSettingsPage'), 'GlobalSettingsPage'),
-        handle: H({ title: '全局设定', eyebrow: '设置', section: '系统设置' }),
+        handle: H({ title: '全局设定', eyebrow: '', section: '系统设置' }),
       },
       {
         path: 'models/hub',
         lazy: lazyPage(() => import('@/pages/ProviderHubPage'), 'ProviderHubPage'),
-        handle: H({ title: '服务商中心', eyebrow: '服务商', section: '资源与模型' }),
+        handle: H({ title: '服务商中心', eyebrow: '', section: '资源与模型' }),
       },
       {
         path: 'models',
         lazy: lazyPage(() => import('@/pages/ModelConfigPage'), 'ModelConfigPage'),
-        handle: H({ title: '模型配置', eyebrow: '管理', section: '资源与模型' }),
+        handle: H({ title: '模型配置', eyebrow: '', section: '资源与模型' }),
       },
       {
         path: '*',
         lazy: lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPage'),
-        handle: H({ title: '页面不存在', eyebrow: '异常', section: '异常页面' }),
+        handle: H({ title: '页面不存在', eyebrow: '', section: '异常页面' }),
       },
     ],
   },
