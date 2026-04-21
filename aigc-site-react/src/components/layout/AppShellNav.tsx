@@ -56,6 +56,7 @@ const SHELL_NAV: ShellNavGroup[] = [
     title: '工作台',
     items: [
       { label: '首页', to: '/', patterns: ['/'] },
+      { label: '全局设定', to: '/global-settings' },
       { label: '创作工作台', to: '/workspace', patterns: ['/workspace', '/tools/image', '/tools/video', '/tools/image-to-video', '/canvas'] },
       { label: '无限画布', to: '/canvas' },
       { label: '历史记录', to: '/history' },

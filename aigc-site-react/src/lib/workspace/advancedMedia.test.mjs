@@ -128,3 +128,33 @@ test('Vidu 图生视频会同时生成结构化 advancedMedia 与兼容旧字段
     },
   )
 })
+
+test('非图生视频入口会拦截需参考图的视频模型并引导切换入口', () => {
+  assert.equal(
+    getWorkspaceAdvancedValidationError({
+      needImg: false,
+      needVid: true,
+      imageAdvancedCapability: undefined,
+      imageAdvancedForm: emptyImageAdvancedForm(),
+      finalVideoModel: 'viduq3-standard',
+      videoReferenceImageUrl: '',
+      allowVideoFirstFrameImage: false,
+    }),
+    '该视频模型为图生视频模型，请切换到「图生视频」入口',
+  )
+})
+
+test('图生视频入口在缺少参考图时会要求补齐参考图', () => {
+  assert.equal(
+    getWorkspaceAdvancedValidationError({
+      needImg: false,
+      needVid: true,
+      imageAdvancedCapability: undefined,
+      imageAdvancedForm: emptyImageAdvancedForm(),
+      finalVideoModel: 'viduq3-standard',
+      videoReferenceImageUrl: '',
+      allowVideoFirstFrameImage: true,
+    }),
+    '图生视频需填写参考图：可访问的 http(s) 图片地址，或 data:image/...;base64,...（Moark / Vidu）',
+  )
+})

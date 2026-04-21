@@ -62,6 +62,7 @@ type WorkspaceAdvancedValidationParams = {
   imageAdvancedForm: ImageAdvancedFormState
   finalVideoModel: string
   videoReferenceImageUrl: string
+  allowVideoFirstFrameImage?: boolean
 }
 
 export function workspaceVideoNeedsFirstFrameImage(videoModel: string): boolean {
@@ -291,6 +292,7 @@ export function getWorkspaceAdvancedValidationError({
   imageAdvancedForm,
   finalVideoModel,
   videoReferenceImageUrl,
+  allowVideoFirstFrameImage,
 }: WorkspaceAdvancedValidationParams): string | undefined {
   if (needImg && imageAdvancedCapability === 'vidu_reference2image') {
     if (!isValidWorkspaceReferenceImage(imageAdvancedForm.reference2imageUrl)) {
@@ -336,8 +338,13 @@ export function getWorkspaceAdvancedValidationError({
       return 'Omni 需填写主体描述'
     }
   }
-  if (needVid && workspaceVideoNeedsFirstFrameImage(finalVideoModel) && !isValidWorkspaceReferenceImage(videoReferenceImageUrl)) {
-    return '图生视频需填写参考图：可访问的 http(s) 图片地址，或 data:image/...;base64,...（Moark / Vidu）'
+  if (needVid && workspaceVideoNeedsFirstFrameImage(finalVideoModel)) {
+    if (allowVideoFirstFrameImage !== true) {
+      return '该视频模型为图生视频模型，请切换到「图生视频」入口'
+    }
+    if (!isValidWorkspaceReferenceImage(videoReferenceImageUrl)) {
+      return '图生视频需填写参考图：可访问的 http(s) 图片地址，或 data:image/...;base64,...（Moark / Vidu）'
+    }
   }
   return undefined
 }

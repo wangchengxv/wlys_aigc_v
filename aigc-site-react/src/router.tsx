@@ -160,52 +160,52 @@ export const router = createBrowserRouter([
       {
         path: 'script-projects/new',
         lazy: lazyPage(() => import('@/pages/ScriptProjectCreatePage'), 'ScriptProjectCreatePage'),
-        handle: H({ title: '新建剧本工程', eyebrow: '项目', section: '项目与作品' }),
+        handle: H({ title: '新建剧本工程', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId',
         lazy: lazyPage(() => import('@/pages/ScriptProjectDetailPage'), 'ScriptProjectDetailPage'),
-        handle: H({ title: '项目详情', eyebrow: '项目', section: '项目与作品' }),
+        handle: H({ title: '项目详情', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/preview',
         lazy: lazyPage(() => import('@/pages/ScriptProjectPreviewPage'), 'ScriptProjectPreviewPage'),
-        handle: H({ title: '剧本预览', eyebrow: '剧本', section: '项目与作品' }),
+        handle: H({ title: '剧本预览', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/assets',
         lazy: lazyPage(() => import('@/pages/ScriptProjectAssetsPage'), 'ScriptProjectAssetsPage'),
-        handle: H({ title: '资产与关键帧', eyebrow: '资产', section: '项目与作品' }),
+        handle: H({ title: '资产与关键帧', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/dubbing',
         lazy: lazyPage(() => import('@/pages/ScriptProjectDubbingPage'), 'ScriptProjectDubbingPage'),
-        handle: H({ title: '配音管理', eyebrow: '音频', section: '项目与作品' }),
+        handle: H({ title: '配音管理', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/lip-sync',
         lazy: lazyPage(() => import('@/pages/ScriptProjectLipSyncPage'), 'ScriptProjectLipSyncPage'),
-        handle: H({ title: '口型同步', eyebrow: '视频', section: '项目与作品' }),
+        handle: H({ title: '口型同步', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/final-composition',
         lazy: lazyPage(() => import('@/pages/ScriptProjectFinalCompositionPage'), 'ScriptProjectFinalCompositionPage'),
-        handle: H({ title: '视频剪辑工作台', eyebrow: '视频', section: '项目与作品' }),
+        handle: H({ title: '视频剪辑工作台', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/export',
         lazy: lazyPage(() => import('@/pages/ScriptProjectExportPage'), 'ScriptProjectExportPage'),
-        handle: H({ title: '剪辑成片与导出', eyebrow: '项目', section: '项目与作品' }),
+        handle: H({ title: '剪辑成片与导出', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/video',
         lazy: lazyPage(() => import('@/pages/ScriptProjectVideoPage'), 'ScriptProjectVideoPage'),
-        handle: H({ title: '视频生成', eyebrow: '视频', section: '项目与作品' }),
+        handle: H({ title: '视频生成', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/prompt-templates',
         lazy: lazyPage(() => import('@/pages/ScriptProjectPromptTemplatesPage'), 'ScriptProjectPromptTemplatesPage'),
-        handle: H({ title: '提示词模板', eyebrow: '项目', section: '项目与作品' }),
+        handle: H({ title: '提示词模板', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'history',

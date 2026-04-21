@@ -97,97 +97,99 @@ export function SettingsPage() {
         ]}
       />
 
-      <div className="content-card-grid">
+      <div className="settings-page__focus-zone">
+        <div className="content-card-grid">
+          <section className="content-card">
+            <div className="section-heading">
+              <h3>账号与访问</h3>
+              <span>只保留常用操作</span>
+            </div>
+            {user ? (
+              <div className="settings-page__list">
+                <div><span>显示名称</span><strong>{user.displayName}</strong></div>
+                <div><span>用户名</span><strong>{user.username}</strong></div>
+                <div><span>组织</span><strong>{user.orgUnitId || '未设置'}</strong></div>
+                <div><span>班级</span><strong>{user.classroomId || '未设置'}</strong></div>
+              </div>
+            ) : (
+              <p className="muted">当前为访客模式，登录后可查看角色相关后台入口。</p>
+            )}
+            <div className="inline-actions">
+              <button type="button" className="app-btn v-ghost s-md" onClick={() => navigate('/login')}>
+                {user ? '切换账号' : '去登录'}
+              </button>
+              {user ? (
+                <button
+                  type="button"
+                  className="app-btn v-ghost s-md"
+                  onClick={() => {
+                    void signOut().then(() => navigate('/login'))
+                  }}
+                >
+                  退出登录
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="content-card">
+            <div className="section-heading">
+              <h3>系统入口</h3>
+              <span>按角色收起复杂配置</span>
+            </div>
+            <QuickActionGrid
+              items={systemEntries}
+            />
+            {!canAccessGlobalSettings ? <p className="muted">登录后可访问全局设定。</p> : null}
+          </section>
+        </div>
+
         <section className="content-card">
           <div className="section-heading">
-            <h3>账号与访问</h3>
-            <span>只保留常用操作</span>
+            <h3>环境信息</h3>
+            <span>轻量展示，便于联调</span>
           </div>
+          <div className="settings-page__list">
+            <div><span>前端模式</span><strong>{envMode}</strong></div>
+            <div><span>接口地址</span><strong>{apiBaseUrl}</strong></div>
+            <div><span>主题策略</span><strong>浅色工作台</strong></div>
+          </div>
+        </section>
+
+        <section className="content-card">
+          <div className="section-heading">
+            <h3>第三方账号绑定</h3>
+            <span>支持 OneLinkAI 统一账号体系</span>
+          </div>
+          {!user ? <p className="muted">请先登录，再管理第三方账号绑定。</p> : null}
           {user ? (
             <div className="settings-page__list">
-              <div><span>显示名称</span><strong>{user.displayName}</strong></div>
-              <div><span>用户名</span><strong>{user.username}</strong></div>
-              <div><span>组织</span><strong>{user.orgUnitId || '未设置'}</strong></div>
-              <div><span>班级</span><strong>{user.classroomId || '未设置'}</strong></div>
+              <div>
+                <span>OneLinkAI</span>
+                <strong>{socialLoading ? '加载中...' : onelinkBound ? '已绑定' : '未绑定'}</strong>
+              </div>
+              <div>
+                <span>绑定账号</span>
+                <strong>{onelinkLink?.providerUserId || '-'}</strong>
+              </div>
             </div>
-          ) : (
-            <p className="muted">当前为访客模式，登录后可查看角色相关后台入口。</p>
-          )}
-          <div className="inline-actions">
-            <button type="button" className="app-btn v-ghost s-md" onClick={() => navigate('/login')}>
-              {user ? '切换账号' : '去登录'}
-            </button>
-            {user ? (
-              <button
-                type="button"
-                className="app-btn v-ghost s-md"
-                onClick={() => {
-                  void signOut().then(() => navigate('/login'))
-                }}
-              >
-                退出登录
-              </button>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="content-card">
-          <div className="section-heading">
-            <h3>系统入口</h3>
-            <span>按角色收起复杂配置</span>
-          </div>
-          <QuickActionGrid
-            items={systemEntries}
-          />
-          {!canAccessGlobalSettings ? <p className="muted">登录后可访问全局设定。</p> : null}
+          ) : null}
+          {socialError ? <p className="hint-error">{socialError}</p> : null}
+          {user ? (
+            <div className="inline-actions">
+              {!onelinkBound ? (
+                <button type="button" className="app-btn v-ghost s-md" onClick={handleBindOnelinkai}>
+                  绑定 OneLinkAI
+                </button>
+              ) : (
+                <button type="button" className="app-btn v-ghost s-md" disabled={unbindLoading} onClick={handleUnbindOnelinkai}>
+                  {unbindLoading ? '解绑中...' : '解绑 OneLinkAI'}
+                </button>
+              )}
+            </div>
+          ) : null}
         </section>
       </div>
-
-      <section className="content-card">
-        <div className="section-heading">
-          <h3>环境信息</h3>
-          <span>轻量展示，便于联调</span>
-        </div>
-        <div className="settings-page__list">
-          <div><span>前端模式</span><strong>{envMode}</strong></div>
-          <div><span>接口地址</span><strong>{apiBaseUrl}</strong></div>
-          <div><span>主题策略</span><strong>浅色工作台</strong></div>
-        </div>
-      </section>
-
-      <section className="content-card">
-        <div className="section-heading">
-          <h3>第三方账号绑定</h3>
-          <span>支持 OneLinkAI 统一账号体系</span>
-        </div>
-        {!user ? <p className="muted">请先登录，再管理第三方账号绑定。</p> : null}
-        {user ? (
-          <div className="settings-page__list">
-            <div>
-              <span>OneLinkAI</span>
-              <strong>{socialLoading ? '加载中...' : onelinkBound ? '已绑定' : '未绑定'}</strong>
-            </div>
-            <div>
-              <span>绑定账号</span>
-              <strong>{onelinkLink?.providerUserId || '-'}</strong>
-            </div>
-          </div>
-        ) : null}
-        {socialError ? <p className="hint-error">{socialError}</p> : null}
-        {user ? (
-          <div className="inline-actions">
-            {!onelinkBound ? (
-              <button type="button" className="app-btn v-ghost s-md" onClick={handleBindOnelinkai}>
-                绑定 OneLinkAI
-              </button>
-            ) : (
-              <button type="button" className="app-btn v-ghost s-md" disabled={unbindLoading} onClick={handleUnbindOnelinkai}>
-                {unbindLoading ? '解绑中...' : '解绑 OneLinkAI'}
-              </button>
-            )}
-          </div>
-        ) : null}
-      </section>
 
     </section>
   )

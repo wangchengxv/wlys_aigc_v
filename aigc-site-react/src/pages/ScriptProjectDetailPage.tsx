@@ -419,7 +419,6 @@ export function ScriptProjectDetailPage() {
 
   return (
     <div className="script-project-workflow-layout">
-      <ScriptProjectWorkflowNav projectId={projectId} />
       <div className="script-project-workflow-layout__main">
         <section className="script-detail-page delivery-showcase-page">
           <div className="delivery-hero panel glass">
@@ -480,6 +479,8 @@ export function ScriptProjectDetailPage() {
               </div>
             </aside>
           </div>
+
+          <ScriptProjectWorkflowNav projectId={projectId} />
 
           <ConfirmDialog
             visible={showDeleteConfirm}

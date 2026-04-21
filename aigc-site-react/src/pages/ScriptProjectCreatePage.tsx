@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getModels } from '@/api'
 import { ActionDrawer } from '@/components/common/ActionDrawer'
@@ -10,7 +10,10 @@ import { getPresetById, groupPresetsByCategory, presetDescriptor, resolveVisualS
 import { useGlobalSettingsStore } from '@/stores/globalSettingsStore'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
 import { useStyleTemplateStore } from '@/stores/styleTemplateStore'
+import { ScriptAppendPreviewDialog } from '@/components/script/ScriptAppendPreviewDialog'
+import { ScriptRewriteDialog } from '@/components/script/ScriptRewriteDialog'
 import type { GlobalAspectRatio, ModelConfig } from '@/types'
+import type { RewriteDiffMode } from '@/components/script/ScriptRewriteDiffPanel'
 
 const ASPECT_PRESETS: GlobalAspectRatio[] = ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9']
 
@@ -31,6 +34,19 @@ export function ScriptProjectCreatePage() {
   const createFromText = useScriptProjectStore((s) => s.createFromText)
   const createFromUpload = useScriptProjectStore((s) => s.createFromUpload)
   const createLoading = useScriptProjectStore((s) => s.createLoading)
+  const refineLoading = useScriptProjectStore((s) => s.refineLoading)
+  const appendLoading = useScriptProjectStore((s) => s.appendLoading)
+  const rewriteLoading = useScriptProjectStore((s) => s.rewriteLoading)
+  const refine = useScriptProjectStore((s) => s.refine)
+  const appendPreview = useScriptProjectStore((s) => s.appendPreview)
+  const rewritePreview = useScriptProjectStore((s) => s.rewritePreview)
+  const applyRewrite = useScriptProjectStore((s) => s.applyRewrite)
+  const importScript = useScriptProjectStore((s) => s.importScript)
+  const loadProject = useScriptProjectStore((s) => s.loadProject)
+  const loadScript = useScriptProjectStore((s) => s.loadScript)
+  const saveScript = useScriptProjectStore((s) => s.saveScript)
+  const scriptPayload = useScriptProjectStore((s) => s.scriptPayload)
+  const currentProject = useScriptProjectStore((s) => s.currentProject)
   const loadTemplates = useStyleTemplateStore((s) => s.loadTemplates)
   const queryCourseId = searchParams.get('courseId')?.trim() || ''
   const queryStyleTemplateId = searchParams.get('styleTemplateId')?.trim() || ''
@@ -83,6 +99,19 @@ export function ScriptProjectCreatePage() {
   const [imageModelInputMode, setImageModelInputMode] = useState<'preset' | 'custom'>('preset')
   const [videoModelInputMode, setVideoModelInputMode] = useState<'preset' | 'custom'>('preset')
   const [createDrawerOpen, setCreateDrawerOpen] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showAppendDialog, setShowAppendDialog] = useState(false)
+  const [showRewriteDialog, setShowRewriteDialog] = useState(false)
+  const [appendPreviewText, setAppendPreviewText] = useState('')
+  const [appendPreviewMeta, setAppendPreviewMeta] = useState<{ existingLength: number; maxAppendChars: number; baseUsed: string } | null>(null)
+  const [rewriteInstruction, setRewriteInstruction] = useState('')
+  const [rewriteTargetStyle, setRewriteTargetStyle] = useState('')
+  const [rewriteMaxOutputChars, setRewriteMaxOutputChars] = useState('')
+  const [rewritePreviewText, setRewritePreviewText] = useState('')
+  const [rewriteDiffMode, setRewriteDiffMode] = useState<RewriteDiffMode>('split')
+  const [rewritePreviewMeta, setRewritePreviewMeta] = useState<{ baseUsed: string; sourceLength: number; maxOutputChars?: number | null } | null>(null)
+  const [refinedPreviewText, setRefinedPreviewText] = useState('')
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const presetGroups = useMemo(() => groupPresetsByCategory(templates), [templates])
   const selectedPreset = useMemo(() => getPresetById(selectedPresetId, templates), [selectedPresetId, templates])
   const courseLinked = !!queryCourseId
@@ -196,9 +225,144 @@ export function ScriptProjectCreatePage() {
         result = await createFromUpload({ ...base, file: uploadFile })
       }
       showToast('项目创建成功', 'success')
-      navigate(`/script-projects/${result.project.projectId}/preview`)
+      setCreatedProjectId(result.project.projectId)
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建项目失败')
+    }
+  }
+
+  async function handleCreateAndGoToPreview() {
+    if (!createdProjectId) {
+      showToast('请先创建项目', 'error')
+      return
+    }
+    navigate(`/script-projects/${createdProjectId}/preview`)
+  }
+
+  function onPickImport() {
+    fileInputRef.current?.click()
+  }
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!createdProjectId) {
+      showToast('请先创建项目', 'error')
+      return
+    }
+    try {
+      await importScript(createdProjectId, file, { autoRefine: false })
+      await loadProject(createdProjectId)
+      await loadScript(createdProjectId)
+      if (scriptPayload?.originalText) {
+        setSourceText(scriptPayload.originalText)
+      }
+      showToast('剧本已导入', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '导入失败', 'error')
+    }
+  }
+
+  async function handleRefine() {
+    if (!createdProjectId) {
+      showToast('请先创建项目', 'error')
+      return
+    }
+    try {
+      const doc = await refine(createdProjectId)
+      setRefinedPreviewText(doc.refinedMarkdown || doc.originalText || '')
+      if (doc.refinedMarkdown) {
+        setSourceText(doc.refinedMarkdown)
+      }
+      showToast('剧本完善完成', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '完善剧本失败', 'error')
+    }
+  }
+
+  async function handleAppendPreview() {
+    if (!createdProjectId) {
+      showToast('请先创建项目', 'error')
+      return
+    }
+    try {
+      const res = await appendPreview(createdProjectId, {})
+      setAppendPreviewText(res.appendText || '')
+      setAppendPreviewMeta({ existingLength: res.existingLength, maxAppendChars: res.maxAppendChars, baseUsed: res.baseUsed })
+      setShowAppendDialog(true)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '续写预览失败', 'error')
+    }
+  }
+
+  async function handleAppendConfirm() {
+    if (!createdProjectId) return
+    try {
+      const base = refinedPreviewText || sourceText
+      const combined = `${base}${base.endsWith('\n') ? '' : '\n'}${appendPreviewText}`.trim()
+      await saveScript(createdProjectId, {
+        refinedMarkdown: combined,
+        structuredScript: scriptPayload?.structuredScript || {},
+      })
+      setSourceText(combined)
+      setRefinedPreviewText(combined)
+      showToast('续写已追加并保存', 'success')
+      setShowAppendDialog(false)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '保存失败', 'error')
+    }
+  }
+
+  async function handleRewritePreview() {
+    if (!createdProjectId) {
+      showToast('请先创建项目', 'error')
+      return
+    }
+    const instruction = rewriteInstruction.trim()
+    if (!instruction) {
+      showToast('请先输入改写要求', 'error')
+      return
+    }
+    const maxOutputChars = rewriteMaxOutputChars.trim() ? Number(rewriteMaxOutputChars.trim()) : undefined
+    if (maxOutputChars != null && (!Number.isFinite(maxOutputChars) || maxOutputChars <= 0)) {
+      showToast('字数上限必须为正整数', 'error')
+      return
+    }
+    try {
+      const result = await rewritePreview(createdProjectId, {
+        rewriteInstruction: instruction,
+        targetStyle: rewriteTargetStyle.trim() || undefined,
+        maxOutputChars,
+        language: currentProject?.project.language || undefined,
+      })
+      setRewritePreviewText(result.rewrittenText || '')
+      setRewritePreviewMeta({
+        baseUsed: result.baseUsed,
+        sourceLength: result.sourceLength,
+        maxOutputChars: result.maxOutputChars,
+      })
+      showToast('改写预览生成成功', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '改写预览失败', 'error')
+    }
+  }
+
+  async function handleApplyRewrite() {
+    if (!createdProjectId) return
+    if (!rewritePreviewText.trim()) {
+      showToast('请先生成改写预览', 'error')
+      return
+    }
+    try {
+      await applyRewrite(createdProjectId, { rewrittenText: rewritePreviewText })
+      setRefinedPreviewText(rewritePreviewText)
+      setSourceText(rewritePreviewText)
+      setShowRewriteDialog(false)
+      setRewriteDiffMode('split')
+      showToast('改写结果已应用并保存', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '应用改写失败', 'error')
     }
   }
 
@@ -233,6 +397,15 @@ export function ScriptProjectCreatePage() {
           上传文件
         </button>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,.md,.docx"
+        style={{ display: 'none' }}
+        aria-hidden
+        onChange={(e) => void onImportFile(e)}
+      />
 
       <ActionDrawer
         open={createDrawerOpen}
@@ -380,6 +553,25 @@ export function ScriptProjectCreatePage() {
             </label>
           )}
 
+          {createdProjectId && (
+            <div className="script-create-page__ai-actions panel glass">
+              <div className="script-create-page__ai-actions-row">
+                <AppButton variant="ghost" onClick={() => onPickImport()}>
+                  导入剧本
+                </AppButton>
+                <AppButton variant="primary" loading={refineLoading} onClick={() => void handleRefine()}>
+                  完善剧本
+                </AppButton>
+                <AppButton variant="primary" loading={appendLoading} onClick={() => void handleAppendPreview()}>
+                  AI 续写剧本
+                </AppButton>
+                <AppButton variant="primary" loading={rewriteLoading} onClick={() => setShowRewriteDialog(true)}>
+                  AI 剧本改写
+                </AppButton>
+              </div>
+            </div>
+          )}
+
           {error ? <p className="error">{error}</p> : null}
           {warnings.map((item) => (
             <p key={item} className="warning">
@@ -388,13 +580,63 @@ export function ScriptProjectCreatePage() {
           ))}
 
           <div className="actions">
-            <AppButton type="submit" variant="primary" loading={createLoading}>
-              创建并进入剧本预览
-            </AppButton>
+            {!createdProjectId ? (
+              <AppButton type="submit" variant="primary" loading={createLoading}>
+                创建项目
+              </AppButton>
+            ) : (
+              <>
+                <AppButton variant="primary" onClick={() => void handleRefine()}>
+                  完善剧本
+                </AppButton>
+                <AppButton onClick={() => void handleCreateAndGoToPreview()}>
+                  进入预览页面
+                </AppButton>
+              </>
+            )}
             <AppButton onClick={() => setCreateDrawerOpen(false)}>关闭抽屉</AppButton>
           </div>
         </form>
       </ActionDrawer>
+
+      <ScriptAppendPreviewDialog
+        visible={showAppendDialog}
+        appendText={appendPreviewText}
+        loading={appendLoading}
+        subtitle={
+          appendPreviewMeta
+            ? `基于：${appendPreviewMeta.baseUsed}｜已有 ${appendPreviewMeta.existingLength} 字符｜本次上限 ${appendPreviewMeta.maxAppendChars} 字符`
+            : undefined
+        }
+        onCancel={() => setShowAppendDialog(false)}
+        onConfirmAppend={() => void handleAppendConfirm()}
+      />
+
+      <ScriptRewriteDialog
+        visible={showRewriteDialog}
+        instruction={rewriteInstruction}
+        targetStyle={rewriteTargetStyle}
+        maxOutputChars={rewriteMaxOutputChars}
+        originalText={sourceText}
+        previewText={rewritePreviewText}
+        diffMode={rewriteDiffMode}
+        loading={rewriteLoading}
+        applying={rewriteLoading}
+        previewSubtitle={
+          rewritePreviewMeta
+            ? `基于：${rewritePreviewMeta.baseUsed}｜原文长度 ${rewritePreviewMeta.sourceLength} 字符${
+                rewritePreviewMeta.maxOutputChars ? `｜本次上限 ${rewritePreviewMeta.maxOutputChars} 字符` : ''
+              }`
+            : undefined
+        }
+        onChangeInstruction={setRewriteInstruction}
+        onChangeTargetStyle={setRewriteTargetStyle}
+        onChangeMaxOutputChars={setRewriteMaxOutputChars}
+        onChangeDiffMode={setRewriteDiffMode}
+        onCancel={() => setShowRewriteDialog(false)}
+        onPreview={() => void handleRewritePreview()}
+        onApply={() => void handleApplyRewrite()}
+      />
     </section>
   )
 }

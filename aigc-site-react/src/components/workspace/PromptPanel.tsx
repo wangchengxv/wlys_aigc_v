@@ -98,6 +98,7 @@ export function PromptPanel({
   const needsImageModel = mode === 'image' || mode === 'both'
   const needsVideoModel = mode === 'video'
   const needsTextLength = mode === 'text' || mode === 'both'
+  const isImageToVideoEntry = workspaceVariant === 'image-to-video'
 
   const finalImageModel = useMemo(
     () => (imageModelInputMode === 'custom' ? customImageModel.trim() : imageModel),
@@ -166,15 +167,18 @@ export function PromptPanel({
       }
 
       if (videoRes.status === 'fulfilled') {
-        const opts = Array.isArray(videoRes.value?.options) ? videoRes.value.options : []
+        const rawOpts = Array.isArray(videoRes.value?.options) ? videoRes.value.options : []
+        const opts = isImageToVideoEntry ? rawOpts : rawOpts.filter((id) => !workspaceVideoNeedsFirstFrameImage(id))
         const det = videoRes.value?.details
         setVideoModelDetails(Array.isArray(det) ? det : [])
         setVideoModelOptions(opts)
-        let sel = videoRes.value?.defaultModel || opts[0] || DEFAULT_VIDEO_MODEL
-        if (workspaceVariant === 'image-to-video') {
-          sel = pickDefaultVideoForImageToVideo(opts, sel)
-        }
-        setVideoModel(sel)
+        const serverDefault = videoRes.value?.defaultModel || rawOpts[0] || DEFAULT_VIDEO_MODEL
+        const sel = isImageToVideoEntry
+          ? pickDefaultVideoForImageToVideo(opts, serverDefault)
+          : opts.includes(serverDefault)
+            ? serverDefault
+            : opts[0] || DEFAULT_VIDEO_MODEL
+        setVideoModel(sel || DEFAULT_VIDEO_MODEL)
       } else {
         setVideoModelOptions([DEFAULT_VIDEO_MODEL])
         setVideoModel(DEFAULT_VIDEO_MODEL)
@@ -187,7 +191,13 @@ export function PromptPanel({
     return () => {
       cancelled = true
     }
-  }, [workspaceVariant])
+  }, [isImageToVideoEntry, workspaceVariant])
+
+  useEffect(() => {
+    if (!isImageToVideoEntry) {
+      setVideoReferenceImageUrl('')
+    }
+  }, [isImageToVideoEntry])
 
   async function runGenerate(overrideMode?: GenerateMode, styleOverride?: string) {
     if (store.loading) return
@@ -240,6 +250,7 @@ export function PromptPanel({
       imageAdvancedForm,
       finalVideoModel,
       videoReferenceImageUrl,
+      allowVideoFirstFrameImage: isImageToVideoEntry,
     })
     if (advancedValidationError) {
       setError(advancedValidationError)
@@ -596,16 +607,22 @@ export function PromptPanel({
             )}
           </div>
           <p className="hint muted" style={{ marginTop: 'calc(-1 * var(--space-xs))' }}>
-            可随时切换：方舟文生视频、OneLink Kling 文/图生视频、OneLink Vidu 图生视频、Moark 等；文档：{' '}
-            <a href="https://docs.onelinkai.cloud/440769864e0" target="_blank" rel="noopener noreferrer">
-              OneLink 图生视频 API
-            </a>
-            。
+            {isImageToVideoEntry ? (
+              <>
+                图生视频文档：{' '}
+                <a href="https://docs.onelinkai.cloud/440769864e0" target="_blank" rel="noopener noreferrer">
+                  OneLink 图生视频 API
+                </a>
+                。
+              </>
+            ) : (
+              <>如需图生视频（上传参考图/首帧图），请切换到上方「图生视频」入口。</>
+            )}
           </p>
         </>
       ) : null}
 
-      {mode === 'video' ? (
+      {mode === 'video' && isImageToVideoEntry ? (
         <VideoReferenceImageField
           value={videoReferenceImageUrl}
           onChange={(v) => setVideoReferenceImageUrl(v)}
