@@ -92,6 +92,7 @@ import type {
   StyleTemplateUpdateRequest,
   SubmissionCreateRequest,
   SubmissionReviewRequest,
+  SubmissionStatus,
   TeachingAssignment,
   TeachingCourse,
   ThreeViewResponse,
@@ -1977,4 +1978,83 @@ export async function restoreAssetHistory(projectId: string, historyId: number):
     `/api/v1/script-projects/${encodeURIComponent(projectId)}/asset-history/${historyId}/restore`,
   )
   return unwrapApiData(data, '恢复历史版本失败')
+}
+
+// ── Teaching Assignment Stats ────────────────────────────────────────────
+export interface AssignmentStats {
+  assignmentId: string
+  assignmentTitle: string
+  totalStudents: number
+  submittedCount: number
+  pendingReviewCount: number
+  reviewedCount: number
+  returnedCount: number
+  averageScore: number | null
+  maxScore: number
+  minScore: number
+  scoreDistribution: Record<number, number>
+  scoreBuckets: Array<{ label: string; minScore: number; maxScore: number; count: number }>
+}
+
+export async function getAssignmentStats(assignmentId: string): Promise<AssignmentStats> {
+  const { data } = await http.get<ApiEnvelope<AssignmentStats>>(
+    `/api/v1/assignments/${encodeURIComponent(assignmentId)}/stats`,
+  )
+  return unwrapApiData(data, '获取作业统计失败')
+}
+
+export interface BatchReviewRequest {
+  submissionIds: string[]
+  status: SubmissionStatus
+  score: number
+  comment?: string
+}
+
+export interface BatchReviewResponse {
+  totalRequested: number
+  successCount: number
+  failedCount: number
+  failedItems: Array<{ submissionId: string; reason: string }>
+}
+
+export async function batchReviewSubmissions(assignmentId: string, request: BatchReviewRequest): Promise<BatchReviewResponse> {
+  const { data } = await http.post<ApiEnvelope<BatchReviewResponse>>(
+    `/api/v1/assignments/${encodeURIComponent(assignmentId)}/batch-review`,
+    request,
+  )
+  return unwrapApiData(data, '批量评分失败')
+}
+
+export async function exportAssignmentGrades(assignmentId: string): Promise<void> {
+  const url = `${API_BASE_URL || ''}/api/v1/assignments/${encodeURIComponent(assignmentId)}/export`.replace(/^\/+/, '/')
+  const fullUrl = url.startsWith('http') ? url : window.location.origin + url
+
+  const token = getStoredAccessToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+    headers['x-aigc-token'] = token
+  }
+
+  const response = await fetch(fullUrl, { headers })
+  if (!response.ok) {
+    throw new Error('导出成绩失败')
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  let filename = `assignment-${assignmentId}-grades.csv`
+  const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+  if (match && match[1]) {
+    filename = match[1].replace(/['"]/g, '')
+  }
+
+  const urlBlob = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = urlBlob
+  a.download = decodeURIComponent(filename)
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(urlBlob)
 }

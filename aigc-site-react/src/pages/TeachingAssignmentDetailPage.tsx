@@ -8,17 +8,22 @@ import { PageBackLink } from '@/components/common/PageBackLink'
 import { useToast } from '@/context/ToastContext'
 import { presetDescriptor } from '@/data/videoStylePresets'
 import {
+  batchReviewSubmissions,
   createAssignmentSubmission,
+  exportAssignmentGrades,
   getAdminUsers,
+  getAssignmentStats,
   getAssignmentSubmissions,
   getCourseAssignments,
   getCourses,
   getOrgUnits,
   getSubmissionReviews,
   listScriptProjects,
+  resolveScriptFileUrl,
   reviewAssignmentSubmission,
   updateCourseAssignmentStatus,
 } from '@/api'
+import type { AssignmentStats } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
 import { useStyleTemplateStore } from '@/stores/styleTemplateStore'
 import type {
@@ -122,6 +127,7 @@ export function TeachingAssignmentDetailPage() {
   const user = useAuthStore((s) => s.user)
   const [course, setCourse] = useState<TeachingCourse | null>(null)
   const [assignment, setAssignment] = useState<TeachingAssignment | null>(null)
+  const [assignmentStats, setAssignmentStats] = useState<AssignmentStats | null>(null)
   const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([])
   const [projects, setProjects] = useState<ScriptProjectSummary[]>([])
   const [directoryUsers, setDirectoryUsers] = useState<AdminUser[]>([])
@@ -132,6 +138,7 @@ export function TeachingAssignmentDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [reviewingId, setReviewingId] = useState('')
   const [closing, setClosing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [submissionNote, setSubmissionNote] = useState('')
   const [submissionKeyword, setSubmissionKeyword] = useState('')
@@ -139,6 +146,9 @@ export function TeachingAssignmentDetailPage() {
   const [submissionOwnerFilter, setSubmissionOwnerFilter] = useState('ALL')
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState<'ALL' | SubmissionStatus>('ALL')
   const [showMinorSections, setShowMinorSections] = useState(false)
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set())
+  const [batchScore, setBatchScore] = useState(90)
+  const [batchComment, setBatchComment] = useState('')
   const templates = useStyleTemplateStore((s) => s.templates)
   const loadTemplates = useStyleTemplateStore((s) => s.loadTemplates)
   const canReviewSubmissions = user?.role === 'ADMIN' || user?.role === 'TEACHER'
@@ -257,16 +267,20 @@ export function TeachingAssignmentDetailPage() {
         listScriptProjects(),
       ])
       if (canReviewSubmissions) {
-        const [usersResult, orgUnitsResult] = await Promise.allSettled([getAdminUsers(), getOrgUnits()])
+        const [usersResult, orgUnitsResult, statsResult] = await Promise.allSettled([getAdminUsers(), getOrgUnits(), getAssignmentStats(assignmentId)])
         if (usersResult.status === 'fulfilled') {
           setDirectoryUsers(usersResult.value)
         }
         if (orgUnitsResult.status === 'fulfilled') {
           setOrgUnits(orgUnitsResult.value)
         }
+        if (statsResult.status === 'fulfilled') {
+          setAssignmentStats(statsResult.value)
+        }
       } else {
         setDirectoryUsers([])
         setOrgUnits([])
+        setAssignmentStats(null)
       }
       const currentCourse = courses.find((item) => item.courseId === courseId) ?? null
       const currentAssignment = assignments.find((item) => item.assignmentId === assignmentId) ?? null
@@ -369,6 +383,65 @@ export function TeachingAssignmentDetailPage() {
       showToast(error instanceof Error ? error.message : '更新作业状态失败', 'error')
     } finally {
       setClosing(false)
+    }
+  }
+
+  async function handleExportGrades() {
+    try {
+      showToast('正在导出成绩...', 'info')
+      setExporting(true)
+      await exportAssignmentGrades(assignmentId)
+      showToast('成绩已导出', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '导出失败', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleBatchReview() {
+    if (selectedSubmissionIds.size === 0) {
+      showToast('请先选择要评分的提交', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await batchReviewSubmissions(assignmentId, {
+        submissionIds: Array.from(selectedSubmissionIds),
+        status: 'REVIEWED',
+        score: batchScore,
+        comment: batchComment.trim() || undefined,
+      })
+      setSelectedSubmissionIds(new Set())
+      showToast(`成功评分 ${selectedSubmissionIds.size} 份提交`, 'success')
+      await loadAssignmentDetail()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '批量评分失败', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function toggleSubmissionSelection(submissionId: string) {
+    setSelectedSubmissionIds((current) => {
+      const next = new Set(current)
+      if (next.has(submissionId)) {
+        next.delete(submissionId)
+      } else {
+        next.add(submissionId)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    const selectableIds = filteredSubmissions
+      .filter((s) => s.status === 'SUBMITTED' || s.status === 'RETURNED')
+      .map((s) => s.submissionId)
+    if (selectedSubmissionIds.size === selectableIds.length) {
+      setSelectedSubmissionIds(new Set())
+    } else {
+      setSelectedSubmissionIds(new Set(selectableIds))
     }
   }
 
@@ -475,8 +548,123 @@ export function TeachingAssignmentDetailPage() {
         </article>
       </div>
 
+      {canReviewSubmissions && assignmentStats ? (
+        <div className="assignment-stats-panel panel glass">
+          <div className="assignment-stats-panel__header">
+            <h3>作业统计</h3>
+          </div>
+          <div className="assignment-stats-panel__grid">
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">提交率</span>
+              <div className="assignment-stats-panel__progress-wrap">
+                <div className="assignment-stats-panel__progress-bar">
+                  <div
+                    className="assignment-stats-panel__progress-fill"
+                    style={{ width: `${assignmentStats.totalStudents > 0 ? (assignmentStats.submittedCount / assignmentStats.totalStudents) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="assignment-stats-panel__progress-text">
+                  {assignmentStats.submittedCount} / {assignmentStats.totalStudents}
+                </span>
+              </div>
+            </div>
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">平均分</span>
+              <span className="assignment-stats-panel__metric-value">{assignmentStats.averageScore != null ? assignmentStats.averageScore.toFixed(1) : '--'}</span>
+            </div>
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">最高分</span>
+              <span className="assignment-stats-panel__metric-value">{assignmentStats.maxScore > 0 ? assignmentStats.maxScore : '--'}</span>
+            </div>
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">最低分</span>
+              <span className="assignment-stats-panel__metric-value">{assignmentStats.minScore > 0 ? assignmentStats.minScore : '--'}</span>
+            </div>
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">待评分</span>
+              <span className="assignment-stats-panel__metric-value">{assignmentStats.pendingReviewCount}</span>
+            </div>
+            <div className="assignment-stats-panel__metric">
+              <span className="assignment-stats-panel__metric-label">已评分</span>
+              <span className="assignment-stats-panel__metric-value">{assignmentStats.reviewedCount}</span>
+            </div>
+          </div>
+          {assignmentStats.scoreBuckets && assignmentStats.scoreBuckets.length > 0 ? (
+            <div className="assignment-stats-panel__distribution">
+              <span className="assignment-stats-panel__metric-label">分数分布</span>
+              <div className="assignment-stats-panel__buckets">
+                {assignmentStats.scoreBuckets.map((bucket) => {
+                  const maxCount = Math.max(...assignmentStats.scoreBuckets.map((b) => b.count), 1)
+                  return (
+                    <div key={bucket.label} className="assignment-stats-panel__bucket">
+                      <span className="assignment-stats-panel__bucket-label">{bucket.label}</span>
+                      <div className="assignment-stats-panel__bucket-bar-wrap">
+                        <div
+                          className="assignment-stats-panel__bucket-bar"
+                          style={{ width: `${(bucket.count / maxCount) * 100}%` }}
+                        />
+                      </div>
+                      <span className="assignment-stats-panel__bucket-count">{bucket.count}人</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="teaching-grid">
         <div className="teaching-stack">
+          {canReviewSubmissions && filteredSubmissions.length > 0 ? (
+            <div className="panel glass teaching-panel batch-operations-panel">
+              <div className="batch-operations-toolbar">
+                <label className="batch-select-all">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedSubmissionIds.size > 0 &&
+                      selectedSubmissionIds.size === filteredSubmissions.filter((s) => s.status === 'SUBMITTED' || s.status === 'RETURNED').length
+                    }
+                    onChange={() => void toggleSelectAll()}
+                  />
+                  <span>全选/取消全选</span>
+                </label>
+                <span className="batch-selected-count">已选中 {selectedSubmissionIds.size} 项</span>
+                <div className="batch-quick-scores">
+                  <span className="batch-quick-scores__label">快捷分数：</span>
+                  {[60, 70, 80, 90, 100].map((score) => (
+                    <button
+                      key={score}
+                      type="button"
+                      className={`batch-quick-score batch-quick-score--${score}`}
+                      onClick={() => setBatchScore(score)}
+                      style={{ fontWeight: batchScore === score ? 'bold' : 'normal' }}
+                    >
+                      {score}
+                    </button>
+                  ))}
+                </div>
+                <AppInput
+                  label="批量评语"
+                  as="textarea"
+                  rows={2}
+                  value={batchComment}
+                  onChange={(value) => setBatchComment(String(value))}
+                  placeholder="可选填统一评语"
+                />
+                <AppButton
+                  variant="primary"
+                  size="sm"
+                  loading={submitting}
+                  disabled={selectedSubmissionIds.size === 0}
+                  onClick={() => void handleBatchReview()}
+                >
+                  批量评分
+                </AppButton>
+              </div>
+            </div>
+          ) : null}
           <div className="panel glass teaching-panel">
             <div className="teaching-panel__head">
               <div>
@@ -578,6 +766,14 @@ export function TeachingAssignmentDetailPage() {
                   <Link className="pill" to={`/script-projects?courseId=${encodeURIComponent(courseId)}&deliveryStatus=READY`}>
                     查看可交付作品
                   </Link>
+                  <button
+                    type="button"
+                    className="nav-btn primary"
+                    disabled={exporting}
+                    onClick={() => void handleExportGrades()}
+                  >
+                    {exporting ? '导出中...' : '导出成绩'}
+                  </button>
                 </div>
                 <div className="teaching-meta">
                   <span>作业状态：{assignmentStatusLabel(assignment.status)}</span>
@@ -672,10 +868,35 @@ export function TeachingAssignmentDetailPage() {
               const reviews = reviewMap[submission.submissionId] ?? []
               const project = projectMap[submission.projectId]
               const classroomName = classroomNameOf(submission.studentUserId, directoryUserMap, orgUnitMap)
+              const projectCoverUrl = project?.coverFileId ? resolveScriptFileUrl(project.coverFileId) : ''
+              const projectInitial = project?.name?.slice(0, 1) ?? '?'
               return (
                 <article key={submission.submissionId} className="panel glass teaching-card teaching-card--submission">
                   <div className="teaching-card__head">
-                    <div>
+                    {canReviewSubmissions ? (
+                      <label className="batch-submission-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={selectedSubmissionIds.has(submission.submissionId)}
+                          disabled={submission.status === 'REVIEWED'}
+                          onChange={() => void toggleSubmissionSelection(submission.submissionId)}
+                        />
+                      </label>
+                    ) : null}
+                    {canReviewSubmissions ? (
+                      <div className="teaching-card__head-left">
+                        {projectCoverUrl ? (
+                          <Link to={`/script-projects/${encodeURIComponent(submission.projectId)}`} className="project-preview">
+                            <img src={projectCoverUrl} alt={project?.name || '项目封面'} />
+                          </Link>
+                        ) : (
+                          <Link to={`/script-projects/${encodeURIComponent(submission.projectId)}`} className="project-preview project-preview--placeholder">
+                            <span>{projectInitial}</span>
+                          </Link>
+                        )}
+                      </div>
+                    ) : null}
+                    <div className="teaching-card__head-right">
                       <h3>{canReviewSubmissions ? submission.studentUserName || submission.studentUserId : project?.name || `我的提交 ${index + 1}`}</h3>
                     </div>
                     <span className={`pill small operations-dashboard-pill is-${submissionStatusTone(submission.status)}`}>

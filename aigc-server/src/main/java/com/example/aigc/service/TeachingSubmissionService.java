@@ -1,7 +1,6 @@
 package com.example.aigc.service;
 
-import com.example.aigc.dto.SubmissionCreateRequest;
-import com.example.aigc.dto.SubmissionReviewRequest;
+import com.example.aigc.dto.*;
 import com.example.aigc.entity.AssignmentSubmission;
 import com.example.aigc.entity.ReviewRecord;
 import com.example.aigc.entity.ScriptProjectAggregate;
@@ -13,14 +12,11 @@ import com.example.aigc.exception.BizException;
 import com.example.aigc.repository.AssignmentSubmissionRepository;
 import com.example.aigc.repository.ReviewRecordRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class TeachingSubmissionService {
@@ -137,6 +133,151 @@ public class TeachingSubmissionService {
         details.put("score", saved.score);
         auditLogService.record(userContext, "SUBMISSION_REVIEWED", "SUBMISSION", saved.submissionId, details);
         return saved;
+    }
+
+    @Transactional
+    public BatchReviewSubmissionsResponse batchReview(String assignmentId, RequestUserContext userContext, BatchReviewSubmissionsRequest request) {
+        TeachingAssignment assignment = teachingAssignmentService.requireReviewable(assignmentId, userContext);
+        if (request.status() == SubmissionStatus.SUBMITTED) {
+            throw new BizException(400, "评审状态不能设置为SUBMITTED");
+        }
+
+        List<AssignmentSubmission> submissions = assignmentSubmissionRepository.findAllById(request.submissionIds());
+        List<BatchReviewSubmissionsResponse.FailedItem> failedItems = new ArrayList<>();
+        int successCount = 0;
+
+        for (String submissionId : request.submissionIds()) {
+            try {
+                Optional<AssignmentSubmission> opt = submissions.stream()
+                        .filter(s -> s.submissionId.equals(submissionId))
+                        .findFirst();
+
+                if (opt.isEmpty()) {
+                    failedItems.add(new BatchReviewSubmissionsResponse.FailedItem(submissionId, "提交记录不存在"));
+                    continue;
+                }
+
+                AssignmentSubmission submission = opt.get();
+                if (!submission.assignmentId.equals(assignmentId)) {
+                    failedItems.add(new BatchReviewSubmissionsResponse.FailedItem(submissionId, "该提交不属于当前作业"));
+                    continue;
+                }
+
+                submission.status = request.status();
+                submission.score = request.score();
+                submission.reviewComment = blankToNull(request.comment());
+                submission.reviewedAt = Instant.now();
+                submission.updatedAt = submission.reviewedAt;
+                assignmentSubmissionRepository.save(submission);
+
+                ReviewRecord record = new ReviewRecord();
+                record.reviewId = nextReviewId();
+                record.submissionId = submission.submissionId;
+                record.assignmentId = assignment.assignmentId;
+                record.reviewerUserId = userContext.userId();
+                record.reviewerUserName = firstNonBlank(userContext.userName(), userContext.userId());
+                record.status = request.status();
+                record.score = request.score();
+                record.comment = blankToNull(request.comment());
+                record.createdAt = Instant.now();
+                reviewRecordRepository.save(record);
+
+                Map<String, Object> details = new LinkedHashMap<>();
+                details.put("assignmentId", submission.assignmentId);
+                details.put("status", submission.status.name());
+                details.put("score", submission.score);
+                auditLogService.record(userContext, "SUBMISSION_REVIEWED", "SUBMISSION", submission.submissionId, details);
+
+                successCount++;
+            } catch (Exception e) {
+                failedItems.add(new BatchReviewSubmissionsResponse.FailedItem(submissionId, e.getMessage()));
+            }
+        }
+
+        return new BatchReviewSubmissionsResponse(
+                request.submissionIds().size(),
+                successCount,
+                failedItems.size(),
+                failedItems
+        );
+    }
+
+    public AssignmentStatsResponse getAssignmentStats(String assignmentId, RequestUserContext userContext) {
+        TeachingAssignment assignment = teachingAssignmentService.requireReviewable(assignmentId, userContext);
+        List<AssignmentSubmission> submissions = assignmentSubmissionRepository.findAllByAssignmentId(assignmentId);
+
+        int totalStudents = (int) submissions.stream()
+                .map(s -> s.studentUserId)
+                .distinct()
+                .count();
+        int submittedCount = (int) submissions.stream()
+                .filter(s -> s.submittedAt != null)
+                .count();
+        int pendingReviewCount = (int) submissions.stream()
+                .filter(s -> s.status == SubmissionStatus.SUBMITTED)
+                .count();
+        int reviewedCount = (int) submissions.stream()
+                .filter(s -> s.status == SubmissionStatus.REVIEWED)
+                .count();
+        int returnedCount = (int) submissions.stream()
+                .filter(s -> s.status == SubmissionStatus.RETURNED)
+                .count();
+
+        List<Integer> scores = submissions.stream()
+                .filter(s -> s.score != null)
+                .map(s -> s.score)
+                .toList();
+
+        Double averageScore = scores.isEmpty() ? null : scores.stream()
+                .mapToInt(Integer::intValue)
+                .average()
+                .orElse(0.0);
+
+        int maxScore = scores.isEmpty() ? 0 : scores.stream().mapToInt(Integer::intValue).max().orElse(0);
+        int minScore = scores.isEmpty() ? 0 : scores.stream().mapToInt(Integer::intValue).min().orElse(0);
+
+        Map<Integer, Integer> scoreDistribution = new LinkedHashMap<>();
+        int[] ranges = {0, 60, 70, 80, 90, 100};
+        for (int i = 0; i < ranges.length - 1; i++) {
+            scoreDistribution.put(ranges[i], 0);
+        }
+
+        for (Integer score : scores) {
+            if (score < 60) {
+                scoreDistribution.merge(0, 1, Integer::sum);
+            } else if (score < 70) {
+                scoreDistribution.merge(60, 1, Integer::sum);
+            } else if (score < 80) {
+                scoreDistribution.merge(70, 1, Integer::sum);
+            } else if (score < 90) {
+                scoreDistribution.merge(80, 1, Integer::sum);
+            } else {
+                scoreDistribution.merge(90, 1, Integer::sum);
+            }
+        }
+
+        List<AssignmentStatsResponse.ScoreBucket> scoreBuckets = List.of(
+                new AssignmentStatsResponse.ScoreBucket("不及格", 0, 59, scoreDistribution.getOrDefault(0, 0)),
+                new AssignmentStatsResponse.ScoreBucket("及格", 60, 69, scoreDistribution.getOrDefault(60, 0)),
+                new AssignmentStatsResponse.ScoreBucket("中等", 70, 79, scoreDistribution.getOrDefault(70, 0)),
+                new AssignmentStatsResponse.ScoreBucket("良好", 80, 89, scoreDistribution.getOrDefault(80, 0)),
+                new AssignmentStatsResponse.ScoreBucket("优秀", 90, 100, scoreDistribution.getOrDefault(90, 0))
+        );
+
+        return new AssignmentStatsResponse(
+                assignmentId,
+                assignment.title,
+                totalStudents,
+                submittedCount,
+                pendingReviewCount,
+                reviewedCount,
+                returnedCount,
+                averageScore,
+                maxScore,
+                minScore,
+                scoreDistribution,
+                scoreBuckets
+        );
     }
 
     public List<ReviewRecord> listReviews(String submissionId, RequestUserContext userContext) {
