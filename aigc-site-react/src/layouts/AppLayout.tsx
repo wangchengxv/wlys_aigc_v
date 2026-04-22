@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom'
-import { LoginModal } from '@/components/common/LoginModal'
 import { PageToolbar } from '@/components/common/PageToolbar'
 import { AppShellNav } from '@/components/layout/AppShellNav'
 import type { RouteHandle } from '@/routes/types'
 import { useAuthStore } from '@/stores/authStore'
 import { useStyleTemplateStore } from '@/stores/styleTemplateStore'
+import { WelcomePage } from '@/pages/WelcomePage'
 
 const DEFAULT_META: RouteHandle = {
   title: '高校 AIGC 实训平台',
@@ -31,36 +31,12 @@ export function AppLayout() {
   const matches = useMatches()
   const navigate = useNavigate()
   const [navOpen, setNavOpen] = useState(false)
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const last = matches[matches.length - 1]
   const handle = (last?.handle as RouteHandle | undefined) ?? DEFAULT_META
   const initAuth = useAuthStore((s) => s.init)
   const user = useAuthStore((s) => s.user)
   const signOut = useAuthStore((s) => s.signOut)
   const loadTemplates = useStyleTemplateStore((s) => s.loadTemplates)
-
-  const updateLoginSearch = useCallback((open: boolean) => {
-    const searchParams = new URLSearchParams(location.search)
-    if (open) {
-      searchParams.set('login', '1')
-    } else {
-      searchParams.delete('login')
-    }
-    navigate(
-      {
-        pathname: location.pathname,
-        search: searchParams.toString() ? `?${searchParams.toString()}` : '',
-      },
-      { replace: true },
-    )
-  }, [location.pathname, location.search, navigate])
-
-  function closeLoginModal() {
-    setLoginModalOpen(false)
-    if (new URLSearchParams(location.search).get('login') === '1') {
-      updateLoginSearch(false)
-    }
-  }
 
   useEffect(() => {
     void initAuth()
@@ -71,23 +47,15 @@ export function AppLayout() {
   }, [loadTemplates])
 
   useEffect(() => {
-    const shouldOpenLogin = new URLSearchParams(location.search).get('login') === '1'
-    if (user) {
-      if (loginModalOpen) setLoginModalOpen(false)
-      if (shouldOpenLogin) updateLoginSearch(false)
-      return
-    }
-    if (shouldOpenLogin) {
-      setLoginModalOpen(true)
-    }
-  }, [location.search, loginModalOpen, updateLoginSearch, user])
-
-  useEffect(() => {
     setNavOpen(false)
   }, [location.pathname])
 
   function handleSignOut() {
     void signOut().then(() => navigate('/login'))
+  }
+
+  if (!user) {
+    return <WelcomePage />
   }
 
   return (
@@ -117,8 +85,6 @@ export function AppLayout() {
           </div>
         </main>
       </div>
-
-      <LoginModal visible={!user && loginModalOpen} onClose={closeLoginModal} onSuccess={closeLoginModal} />
     </div>
   )
 }

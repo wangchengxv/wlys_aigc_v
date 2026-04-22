@@ -10,6 +10,8 @@ public interface AssignmentSubmissionRepository {
 
     Optional<AssignmentSubmission> findById(String submissionId);
 
+    List<AssignmentSubmission> findAllById(List<String> submissionIds);
+
     List<AssignmentSubmission> findAllByAssignmentId(String assignmentId);
 
     List<AssignmentSubmission> findAllByProjectId(String projectId);

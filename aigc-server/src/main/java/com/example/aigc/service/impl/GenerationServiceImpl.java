@@ -342,6 +342,24 @@ public class GenerationServiceImpl implements GenerationService {
                         resolvedModel.rejectReason()
                 );
             }
+            if ("vidu_onelink".equalsIgnoreCase(resolvedModel.provider().key())) {
+                return new MediaResult(
+                        resolvedModel.model().getModelName(),
+                        generateVideosWithViduOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl, videoViduOptions),
+                        resolvedModel.source(),
+                        resolvedModel.matchedBy(),
+                        resolvedModel.rejectReason()
+                );
+            }
+            if ("kling".equalsIgnoreCase(resolvedModel.provider().key())) {
+                return new MediaResult(
+                        resolvedModel.model().getModelName(),
+                        generateVideosWithKlingOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl),
+                        resolvedModel.source(),
+                        resolvedModel.matchedBy(),
+                        resolvedModel.rejectReason()
+                );
+            }
             if ("onelinkai".equalsIgnoreCase(resolvedModel.provider().key())) {
                 if (isViduWorkspaceModel(resolvedModel.model().getModelName())) {
                     return new MediaResult(
@@ -363,7 +381,7 @@ public class GenerationServiceImpl implements GenerationService {
                 }
                 throw new BizException(400, "当前 OneLink 视频模型仅支持 Vidu 或 Kling；其它模型请改用方舟/专属连接或补充接入");
             }
-            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu) 或 OneLink+Vidu 连接");
+            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu)、Vidu OneLink(vidu_onelink)、Kling(kling) 或 OneLink+Vidu/Kling 连接");
         }
         if (requestedModel != null && !requestedModel.isBlank()) {
             throw new BizException(400, "视频模型未在可用配置中");

@@ -1327,6 +1327,57 @@ h4 {
   gap: 16px;
 }
 
+.project-subpage-shell__guard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-color: color-mix(in srgb, #c62828 25%, var(--line));
+  background: color-mix(in srgb, #c62828 8%, transparent);
+}
+
+.project-subpage-shell__guard h3,
+.project-subpage-shell__guard p {
+  margin: 0;
+}
+
+.project-subpage-shell__flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.project-subpage-shell__flow-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.project-subpage-shell__flow-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.project-subpage-shell__flow .nav-btn {
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+}
+
+.project-subpage-shell__flow .nav-btn.primary {
+  color: var(--btn-primary-fg, #141210);
+  border-color: transparent;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 92%, #fff), color-mix(in srgb, var(--secondary) 75%, var(--primary)));
+}
+
+.project-subpage-shell__flow .nav-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1410,6 +1461,20 @@ h4 {
 
   .project-subpage-shell__meta {
     justify-content: flex-start;
+  }
+
+  .project-subpage-shell__guard,
+  .project-subpage-shell__flow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-subpage-shell__flow-actions {
+    width: 100%;
+  }
+
+  .project-subpage-shell__flow-actions .nav-btn {
+    flex: 1;
   }
 
   .settings-page--revamp .settings-page__focus-zone > .content-card,

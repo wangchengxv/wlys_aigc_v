@@ -226,17 +226,18 @@ export function ScriptProjectCreatePage() {
       }
       showToast('项目创建成功', 'success')
       setCreatedProjectId(result.project.projectId)
+      navigate(`/script-projects/${result.project.projectId}/global-settings`)
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建项目失败')
     }
   }
 
-  async function handleCreateAndGoToPreview() {
+  async function handleCreateAndGoToGlobalSettings() {
     if (!createdProjectId) {
       showToast('请先创建项目', 'error')
       return
     }
-    navigate(`/script-projects/${createdProjectId}/preview`)
+    navigate(`/script-projects/${createdProjectId}/global-settings`)
   }
 
   function onPickImport() {
@@ -589,8 +590,8 @@ export function ScriptProjectCreatePage() {
                 <AppButton variant="primary" onClick={() => void handleRefine()}>
                   完善剧本
                 </AppButton>
-                <AppButton onClick={() => void handleCreateAndGoToPreview()}>
-                  进入预览页面
+                <AppButton onClick={() => void handleCreateAndGoToGlobalSettings()}>
+                  进入全局设定
                 </AppButton>
               </>
             )}

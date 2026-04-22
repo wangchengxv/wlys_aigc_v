@@ -962,6 +962,8 @@ const MOCK_PRESET_MODELS: PresetModelListResponse = {
     { provider: 'deepseek', modelName: 'deepseek-chat', baseUrl: 'https://api.deepseek.com', displayName: 'DeepSeek Chat', capabilities: ['text'] },
     { provider: 'qwen', modelName: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode', displayName: '通义千问 Plus', capabilities: ['text'] },
     { provider: 'ark', modelName: 'doubao-seedream-5-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包图片 Seedream', capabilities: ['image'] },
+    { provider: 'ark', modelName: 'doubao-seedance-2-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（标准版）', capabilities: ['video'] },
+    { provider: 'ark', modelName: 'doubao-seedance-2-0-fast-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（极速版）', capabilities: ['video'] },
     { provider: 'onelinkai', modelName: 'gpt-4o', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI GPT-4o', capabilities: ['text'] },
     { provider: 'onelinkai', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Claude Sonnet 4.6', capabilities: ['text'] },
     { provider: 'onelinkai', modelName: 'gemini-2.5-pro', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Gemini 2.5 Pro', capabilities: ['text'] },

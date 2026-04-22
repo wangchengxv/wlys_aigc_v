@@ -28,6 +28,11 @@ public class JpaAssignmentSubmissionRepository implements AssignmentSubmissionRe
     }
 
     @Override
+    public List<AssignmentSubmission> findAllById(List<String> submissionIds) {
+        return repository.findAllById(submissionIds);
+    }
+
+    @Override
     public List<AssignmentSubmission> findAllByAssignmentId(String assignmentId) {
         return repository.findAllByAssignmentIdOrderBySubmittedAtDesc(assignmentId);
     }

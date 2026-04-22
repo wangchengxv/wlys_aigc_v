@@ -363,6 +363,24 @@ public class ProviderCatalog {
                 null,
                 false
         ));
+        /** Kling text-to-video and image-to-video via OneLink; base URL comes from user's kling connection. */
+        register(new ProviderDefinition(
+                "kling",
+                "Kling (OneLink)",
+                "https://api.onelinkai.cloud",
+                "openai",
+                null,
+                null,
+                AuthMode.BEARER,
+                false,
+                null,
+                "/kling/v1/videos/text2video",
+                "/kling/v1/videos/tasks/{taskId}",
+                GatewayKind.OPENAI_COMPAT,
+                List.of("kling-v2-6", "kling-v2-1", "kling-v2", "kling-v1-6", "kling-v1"),
+                null,
+                false
+        ), "kling", "可灵", "oneLinkKling", "onelink-kling");
     }
 
     private void register(ProviderDefinition definition, String... extraAliases) {

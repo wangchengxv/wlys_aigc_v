@@ -240,5 +240,27 @@ func New() *Catalog {
 		},
 	}, "viduai")
 
+	reg(Provider{
+		Key: "vidu_onelink", DisplayName: "OneLinkAI Vidu", DefaultBaseURL: "https://api.onelinkai.cloud",
+		APIFormat: "openai", AuthMode: AuthBearer, TextProxySupported: false,
+		VideoSubmitPath: "/vidu/ent/v2/img2video", VideoResultPath: "/vidu/ent/v2/tasks/{taskId}/creations",
+		Kind: KindOpenAICompat,
+		StaticModels: []string{
+			"viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"viduq2", "viduq1", "viduq1-classic", "vidu2.0",
+		},
+	}, "onelinkvidu", "OneLinkVidu", "viduai-onelink")
+
+	reg(Provider{
+		Key: "kling", DisplayName: "Kling (OneLink)", DefaultBaseURL: "https://api.onelinkai.cloud",
+		APIFormat: "openai", AuthMode: AuthBearer, TextProxySupported: false,
+		VideoSubmitPath: "/kling/v1/videos/text2video",
+		VideoResultPath: "/kling/v1/videos/tasks/{taskId}",
+		Kind: KindOpenAICompat,
+		StaticModels: []string{
+			"kling-v2-6", "kling-v2-1", "kling-v2", "kling-v1-6", "kling-v1",
+		},
+	}, "kling", "可灵", "oneLinkKling", "onelink-kling")
+
 	return &Catalog{byKey: by, aliasMap: aliases}
 }

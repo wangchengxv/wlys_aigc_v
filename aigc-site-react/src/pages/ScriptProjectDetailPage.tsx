@@ -419,6 +419,7 @@ export function ScriptProjectDetailPage() {
 
   return (
     <div className="script-project-workflow-layout">
+      <ScriptProjectWorkflowNav projectId={projectId} />
       <div className="script-project-workflow-layout__main">
         <section className="script-detail-page delivery-showcase-page">
           <div className="delivery-hero panel glass">
@@ -459,28 +460,20 @@ export function ScriptProjectDetailPage() {
               <div className={`delivery-feedback-note${latestReviewComment ? '' : ' delivery-feedback-note--neutral'}`}>
                 {latestReviewComment ? `最新审核意见：${latestReviewComment}` : '当前没有最新审核意见，可先完成成果自检后再进入提审。'}
               </div>
-            </div>
 
-            <aside className="delivery-hero__aside">
-              <div className="delivery-section-card__head">
-                <div>
-                  <p className="eyebrow">项目快照</p>
-                  <h3>成果与治理摘要</h3>
+              <div className="delivery-kpi-section">
+                <div className="delivery-kpi-grid delivery-kpi-grid--compact">
+                  {statusCards.map((item) => (
+                    <article key={item.label} className="delivery-kpi-card">
+                      <strong>{item.value}</strong>
+                      <span>{item.label}</span>
+                      <small>{item.hint}</small>
+                    </article>
+                  ))}
                 </div>
               </div>
-              <div className="delivery-kpi-grid delivery-kpi-grid--compact">
-                {statusCards.map((item) => (
-                  <article key={item.label} className="delivery-kpi-card">
-                    <strong>{item.value}</strong>
-                    <span>{item.label}</span>
-                    <small>{item.hint}</small>
-                  </article>
-                ))}
-              </div>
-            </aside>
+            </div>
           </div>
-
-          <ScriptProjectWorkflowNav projectId={projectId} />
 
           <ConfirmDialog
             visible={showDeleteConfirm}

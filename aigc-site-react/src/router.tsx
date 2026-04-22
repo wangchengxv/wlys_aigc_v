@@ -168,6 +168,11 @@ export const router = createBrowserRouter([
         handle: H({ title: '项目详情', eyebrow: '', section: '项目与作品' }),
       },
       {
+        path: 'script-projects/:projectId/global-settings',
+        lazy: lazyPage(() => import('@/pages/ScriptProjectGlobalSettingsPage'), 'ScriptProjectGlobalSettingsPage'),
+        handle: H({ title: '全局设定', eyebrow: '', section: '项目与作品' }),
+      },
+      {
         path: 'script-projects/:projectId/preview',
         lazy: lazyPage(() => import('@/pages/ScriptProjectPreviewPage'), 'ScriptProjectPreviewPage'),
         handle: H({ title: '剧本预览', eyebrow: '', section: '项目与作品' }),

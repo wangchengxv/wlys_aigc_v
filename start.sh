@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/aigc-server"
 FRONTEND_DIR="${FRONTEND_DIR:-}"
 FRONTEND_MODE="auto"
-BACKEND_PORT="${BACKEND_PORT:-8080}"
+BACKEND_PORT="${BACKEND_PORT:-8081}"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/v1/health"
 
 LOG_DIR="$ROOT_DIR/.logs"
@@ -242,7 +242,7 @@ prepare_frontend_env() {
       cp "$FRONTEND_DIR/.env.example" "$FRONTEND_DIR/.env"
       echo "[前端] 已从 .env.example 生成 .env"
     else
-      echo "VITE_API_BASE_URL=http://localhost:8080" >"$FRONTEND_DIR/.env"
+      echo "VITE_API_BASE_URL=http://localhost:8081" >"$FRONTEND_DIR/.env"
       echo "[前端] 已创建默认 .env"
     fi
   fi

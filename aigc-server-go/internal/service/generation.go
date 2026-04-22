@@ -39,6 +39,28 @@ var viduOneLinkVideoProvider = &catalog.Provider{
 	Kind:            catalog.KindOpenAICompat,
 }
 
+// klingOneLinkVideoProvider for Kling text-to-video and image-to-video via OneLink.
+var klingOneLinkVideoProvider = &catalog.Provider{
+	Key:      "kling",
+	AuthMode: catalog.AuthBearer,
+	Kind:     catalog.KindOpenAICompat,
+}
+
+// klingImageToVideoPath returns the Kling image-to-video submit path.
+func klingImageToVideoPath() string {
+	return "/kling/v1/videos/image2video"
+}
+
+// klingTextToVideoPath returns the Kling text-to-video submit path.
+func klingTextToVideoPath() string {
+	return "/kling/v1/videos/text2video"
+}
+
+// klingResultPath returns the Kling task result query path (both T2V and I2V use the same task endpoint).
+func klingResultPath() string {
+	return "/kling/v1/videos/tasks/{taskId}"
+}
+
 type Generation struct {
 	Store   *repo.Stores
 	Script  *ScriptProject
@@ -923,6 +945,24 @@ func (g *Generation) genVideos(prompt string, count int, requested, refURL strin
 			}
 			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
 		}
+		if strings.EqualFold(rm.Provider.Key, "vidu_onelink") {
+			if !isValidViduRefImage(refURL) {
+				return nil, "", "", "", "", errs.New(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）")
+			}
+			viduPayload, err := g.buildViduPayload(rm, prompt, strings.TrimSpace(refURL), viduOpts)
+			if err != nil {
+				return nil, "", "", "", "", err
+			}
+			var vids []string
+			for i := 0; i < count; i++ {
+				u, err := g.callViduVideo(rm.Provider, rm.Conn.BaseURL, rm.APIKey, rm.Meta, viduPayload)
+				if err != nil {
+					return nil, "", "", "", "", err
+				}
+				vids = append(vids, u...)
+			}
+			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
+		}
 		if strings.EqualFold(rm.Provider.Key, "onelinkai") {
 			if isViduWorkspaceModel(rm.Model.ModelName) {
 				if !isValidViduRefImage(refURL) {
@@ -942,9 +982,31 @@ func (g *Generation) genVideos(prompt string, count int, requested, refURL strin
 				}
 				return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
 			}
-			return nil, "", "", "", "", errs.New(400, "当前 OneLink 视频模型仅支持 Vidu 图生视频（viduq* 等）；其它模型请使用方舟或等待后续接入")
+			if isKlingModel(rm.Model.ModelName) {
+				var vids []string
+				for i := 0; i < count; i++ {
+					u, err := g.callKlingVideo(rm.Conn.BaseURL, rm.APIKey, rm.Meta, prompt, rm.Model.ModelName, strings.TrimSpace(refURL))
+					if err != nil {
+						return nil, "", "", "", "", err
+					}
+					vids = append(vids, u)
+				}
+				return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
+			}
+			return nil, "", "", "", "", errs.New(400, "当前 OneLink 视频模型仅支持 Vidu 图生视频（viduq* 等）或 Kling 文生/图生视频；其它模型请使用方舟或等待后续接入")
 		}
-		return nil, "", "", "", "", errs.New(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu) 或 OneLink+Vidu 连接")
+		if strings.EqualFold(rm.Provider.Key, "kling") {
+			var vids []string
+			for i := 0; i < count; i++ {
+				u, err := g.callKlingVideo(rm.Conn.BaseURL, rm.APIKey, rm.Meta, prompt, rm.Model.ModelName, strings.TrimSpace(refURL))
+				if err != nil {
+					return nil, "", "", "", "", err
+				}
+				vids = append(vids, u)
+			}
+			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
+		}
+		return nil, "", "", "", "", errs.New(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu)、Kling(kling) 或 OneLink+Vidu/Kling 连接")
 	}
 	if strings.TrimSpace(requested) != "" {
 		return nil, "", "", "", "", errs.New(400, "视频模型未在可用配置中")
@@ -1019,12 +1081,125 @@ func (g *Generation) callMoarkVideo(def *catalog.Provider, baseURL, apiKey strin
 	return g.pollArkVideo(def, baseURL, apiKey, tid)
 }
 
+func (g *Generation) callKlingVideo(baseURL, apiKey string, meta map[string]any, prompt, modelName, refImageURL string) (string, error) {
+	imageToVideo := refImageURL != "" && strings.TrimSpace(refImageURL) != ""
+	var payload map[string]any
+	var resultPath string
+	if imageToVideo {
+		resultPath = klingResultPath()
+		payload = map[string]any{
+			"model":   modelName,
+			"prompt":  strings.TrimSpace(prompt),
+			"image":   refImageURL,
+			"duration": g.safeVideoDuration(),
+		}
+	} else {
+		resultPath = klingResultPath()
+		payload = map[string]any{
+			"model":   modelName,
+			"prompt":  strings.TrimSpace(prompt),
+			"duration": g.safeVideoDuration(),
+		}
+	}
+	var submitPath string
+	if imageToVideo {
+		submitPath = klingImageToVideoPath()
+	} else {
+		submitPath = klingTextToVideoPath()
+	}
+	submit, err := g.GW.PostJSON(context.Background(), baseURL, submitPath, klingOneLinkVideoProvider, apiKey, meta, payload, 120*time.Second)
+	if err != nil {
+		if pe, ok := err.(*gateway.ProviderError); ok {
+			return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+		}
+		return "", err
+	}
+	if u := parseArkVideoURL(submit, false); u != "" {
+		return u, nil
+	}
+	tid := parseArkVideoTaskID(submit)
+	if tid == "" {
+		return "", errs.New(502, "Kling 视频生成未返回 task_id 或视频地址")
+	}
+	return g.pollKlingVideo(klingOneLinkVideoProvider, baseURL, apiKey, tid, resultPath)
+}
+
+func (g *Generation) safeVideoDuration() string {
+	d := g.Cfg.ArkVideoDurationSeconds
+	if d < 1 {
+		d = 5
+	}
+	if d > 30 {
+		d = 30
+	}
+	return strconv.Itoa(d)
+}
+
+func (g *Generation) pollKlingVideo(def *catalog.Provider, baseURL, apiKey, taskID, resultPathTemplate string) (string, error) {
+	max := g.Cfg.ArkVideoPollMaxAttempts
+	if max < 1 {
+		max = 40
+	}
+	interval := g.Cfg.ArkVideoPollIntervalMs
+	if interval < 300 {
+		interval = 300
+	}
+	_ = resultPathTemplate
+	for attempt := 1; attempt <= max; attempt++ {
+		res, err := g.GW.QueryVideoTask(context.Background(), def, baseURL, apiKey, taskID, 30*time.Second)
+		if err != nil {
+			if pe, ok := err.(*gateway.ProviderError); ok {
+				return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+			}
+			return "", err
+		}
+		if errNode := res["error"]; errNode != nil && fmt.Sprint(errNode) != "false" && errNode != false {
+			return "", errs.New(502, parseKlingTaskError(res))
+		}
+		if u := parseArkVideoURL(res, false); u != "" {
+			return u, nil
+		}
+		st := parseArkTaskStatus(res)
+		if isFailedStatus(st) {
+			return "", errs.New(502, "视频任务失败："+parseKlingTaskError(res))
+		}
+		if attempt < max {
+			time.Sleep(time.Duration(interval) * time.Millisecond)
+		}
+	}
+	return "", errs.New(504, "视频生成超时，请稍后重试或缩短提示词")
+}
+
+func parseKlingTaskError(body map[string]any) string {
+	if body == nil {
+		return "未知错误"
+	}
+	return firstNonBlank(
+		strVal(body["message"]),
+		strVal(body["error"]),
+		strVal(body["error_message"]),
+		strVal(body["reason"]),
+		"未知错误",
+	)
+}
+
 func isViduWorkspaceModel(modelName string) bool {
 	n := strings.ToLower(strings.TrimSpace(modelName))
 	if n == "" {
 		return false
 	}
 	if strings.HasPrefix(n, "viduq") || strings.HasPrefix(n, "vidu") {
+		return true
+	}
+	return false
+}
+
+func isKlingModel(modelName string) bool {
+	n := strings.ToLower(strings.TrimSpace(modelName))
+	if n == "" {
+		return false
+	}
+	if strings.HasPrefix(n, "kling-") {
 		return true
 	}
 	return false

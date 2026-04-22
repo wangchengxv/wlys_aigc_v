@@ -1,31 +1,17 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useMemo, useCallback, memo } from 'react'
+import { useMemo, memo, useState } from 'react'
+import { scriptProjectWorkflowSteps, getScriptProjectWorkflowCurrentIndex } from '@/components/script/scriptProjectWorkflow'
+import { useGlobalSettingsStore } from '@/stores/globalSettingsStore'
 
 type Props = {
   projectId: string
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
 }
 
 type StepState = 'completed' | 'active' | 'pending'
 
-type WorkflowStep = {
-  key: string
-  label: string
-  to: (projectId: string) => string
-  hint: string
-}
-
-const workflowSteps: WorkflowStep[] = [
-  { key: 'overview', label: '总览', to: (id) => `/script-projects/${id}`, hint: '项目全局状态' },
-  { key: 'script', label: '剧本', to: (id) => `/script-projects/${id}/preview`, hint: '完善剧本内容' },
-  { key: 'assets', label: '资产', to: (id) => `/script-projects/${id}/assets`, hint: '生成角色道具' },
-  { key: 'video', label: '视频', to: (id) => `/script-projects/${id}/video`, hint: '生成视频分段' },
-  { key: 'dubbing', label: '配音', to: (id) => `/script-projects/${id}/dubbing`, hint: '添加语音旁白' },
-  { key: 'lip-sync', label: '口型', to: (id) => `/script-projects/${id}/lip-sync`, hint: '同步口型动画' },
-  { key: 'edit', label: '剪辑', to: (id) => `/script-projects/${id}/final-composition`, hint: '合成最终成片' },
-  { key: 'export', label: '导出', to: (id) => `/script-projects/${id}/export`, hint: '打包交付文件' },
-]
-
-const getStepState = (index: number, path: string, currentIndex: number): StepState => {
+const getStepState = (index: number, currentIndex: number): StepState => {
   if (currentIndex === -1) return 'pending'
   if (index < currentIndex) return 'completed'
   if (index === currentIndex) return 'active'
@@ -66,19 +52,30 @@ const ShieldIcon = memo(() => (
   </svg>
 ))
 
+const ChevronIcon = memo(() => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+))
+
 interface StepItemProps {
-  step: typeof workflowSteps[0] & { state: StepState; index: number }
+  step: typeof scriptProjectWorkflowSteps[0] & { state: StepState; index: number }
   projectId: string
+  locked: boolean
 }
 
-const StepItem = memo(function StepItem({ step, projectId }: StepItemProps) {
-  const isLast = step.index === workflowSteps.length - 1
+const StepItem = memo(function StepItem({ step, projectId, locked }: StepItemProps) {
+  const isLast = step.index === scriptProjectWorkflowSteps.length - 1
 
   return (
-    <li className={`wf-step wf-step--${step.state}`}>
+    <li className={`wf-step wf-step--${step.state}${locked ? ' wf-step--locked' : ''}`}>
       <NavLink
         to={step.to(projectId)}
-        className={({ isActive }) => `wf-step__link${isActive ? ' is-active' : ''}`}
+        className={({ isActive }) => `wf-step__link${isActive ? ' is-active' : ''}${locked ? ' is-locked' : ''}`}
+        onClick={(event) => {
+          if (!locked) return
+          event.preventDefault()
+        }}
       >
         <div className="wf-step__indicator">
           <div className="wf-step__dot">
@@ -95,9 +92,10 @@ const StepItem = memo(function StepItem({ step, projectId }: StepItemProps) {
 
         <div className="wf-step__body">
           <span className="wf-step__label">{step.label}</span>
-          {step.state === 'active' && step.hint && (
+          {step.state === 'active' && step.hint && !locked && (
             <span className="wf-step__hint">{step.hint}</span>
           )}
+          {locked ? <span className="wf-step__hint">先完成全局设定</span> : null}
         </div>
 
         <div className="wf-step__chevron">
@@ -108,36 +106,56 @@ const StepItem = memo(function StepItem({ step, projectId }: StepItemProps) {
   )
 })
 
-export function ScriptProjectWorkflowNav({ projectId }: Props) {
+export function ScriptProjectWorkflowNav({ projectId, collapsed: controlledCollapsed, onCollapsedChange }: Props) {
   const location = useLocation()
+  const [internalCollapsed, setInternalCollapsed] = useState(false)
+  const collapsed = controlledCollapsed ?? internalCollapsed
+  const setCollapsed = (value: boolean | ((prev: boolean) => boolean)) => {
+    const newValue = typeof value === 'function' ? value(internalCollapsed) : value
+    if (onCollapsedChange) {
+      onCollapsedChange(newValue)
+    } else {
+      setInternalCollapsed(newValue)
+    }
+  }
+  const toggleCollapsed = () => setCollapsed((prev) => !prev)
+  const visualStyleMode = useGlobalSettingsStore((s) => s.visualStyleMode)
+  const visualStylePresetId = useGlobalSettingsStore((s) => s.visualStylePresetId)
+  const customVisualStyle = useGlobalSettingsStore((s) => s.customVisualStyle)
+  const targetDurationSec = useGlobalSettingsStore((s) => s.targetDurationSec)
 
   const currentIndex = useMemo(() => {
-    return workflowSteps.findIndex((step) => {
-      const targetPath = step.to('').replace(/\/$/, '')
-      return location.pathname.includes(targetPath)
-    })
-  }, [location.pathname])
+    return getScriptProjectWorkflowCurrentIndex(location.pathname, projectId)
+  }, [location.pathname, projectId])
 
   const completedCount = useMemo(() => {
     return currentIndex > 0 ? currentIndex : 0
   }, [currentIndex])
 
   const progressPercent = useMemo(() => {
-    return (completedCount / (workflowSteps.length - 1)) * 100
+    return (completedCount / (scriptProjectWorkflowSteps.length - 1)) * 100
   }, [completedCount])
 
   const stepsWithState = useMemo(() => {
-    return workflowSteps.map((step, index) => ({
+    return scriptProjectWorkflowSteps.map((step, index) => ({
       ...step,
-      state: getStepState(index, location.pathname, currentIndex),
+      state: getStepState(index, currentIndex),
       index,
     }))
-  }, [location.pathname, currentIndex])
+  }, [currentIndex])
+  const isGlobalSettingsReady =
+    Number.isFinite(targetDurationSec) &&
+    targetDurationSec >= 1 &&
+    targetDurationSec <= 600 &&
+    (
+      (visualStyleMode === 'preset' && !!visualStylePresetId?.trim()) ||
+      (visualStyleMode === 'custom' && customVisualStyle.trim().length > 0)
+    )
 
   const currentStep = stepsWithState.find((s) => s.state === 'active')
 
   return (
-    <nav className="wf-sidebar">
+    <nav className={`wf-sidebar${collapsed ? ' is-collapsed' : ''}`}>
       <div className="wf-sidebar__head">
         <div className="wf-sidebar__icon">
           <LayersIcon />
@@ -146,6 +164,14 @@ export function ScriptProjectWorkflowNav({ projectId }: Props) {
           <p className="wf-sidebar__label">生产流程</p>
           <strong>项目工作区</strong>
         </div>
+        <button
+          type="button"
+          className="wf-sidebar__toggle"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? '展开导航' : '收起导航'}
+        >
+          <ChevronIcon />
+        </button>
       </div>
 
       <div className="wf-progress">
@@ -156,13 +182,13 @@ export function ScriptProjectWorkflowNav({ projectId }: Props) {
           />
         </div>
         <span className="wf-progress__count">
-          {completedCount}/{workflowSteps.length - 1}
+          {completedCount}/{scriptProjectWorkflowSteps.length - 1}
         </span>
       </div>
 
       <ol className="wf-steps">
         {stepsWithState.map((step) => (
-          <StepItem key={step.key} step={step} projectId={projectId} />
+          <StepItem key={step.key} step={step} projectId={projectId} locked={!isGlobalSettingsReady && step.index > 0} />
         ))}
       </ol>
 
