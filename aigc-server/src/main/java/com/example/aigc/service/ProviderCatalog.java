@@ -54,16 +54,18 @@ public class ProviderCatalog {
                         "gemini-2.5-pro",
                         "gemini-2.5-flash",
                         "wanx-v1",
+                        "doubao-seedance-1.5-pro",
+                        "doubao-seedance-2.0",
                         "kling-v1",
                         "kling-v1-6",
-                        "kling-v2",
-                        "kling-v2-1",
-                        "kling-v2-6",
+                        "video-kling-v3",
+                        "video-kling-v3",
+                        "video-kling-v3-6",
                         "MiniMax-M2.1",
                         "viduq3-turbo",
-                        "viduq3-pro",
-                        "viduq2-pro-fast",
-                        "viduq2-pro",
+                        "video-viduq3-pro",
+                        "image-viduq3-pro",
+                        "image-vidu-q2",
                         "viduq2-turbo",
                         "viduq2",
                         "viduq1",
@@ -127,7 +129,7 @@ public class ProviderCatalog {
                 null,
                 null,
                 GatewayKind.OPENAI_COMPAT,
-                List.of("qwen-max", "qwen-plus", "qwen-turbo", "qwen-long", "qwen2.5-72b-instruct", "qwen2.5-7b-instruct"),
+                List.of("qwen-max", "qwen-plus", "qwen-turbo", "qwen-turbo-latest", "qwen-long", "qwen2.5-72b-instruct", "qwen2.5-7b-instruct"),
                 null,
                 false
         ), "通义千问", "aliyun", "dashscope");
@@ -333,9 +335,9 @@ public class ProviderCatalog {
                 GatewayKind.OPENAI_COMPAT,
                 List.of(
                         "viduq3-turbo",
-                        "viduq3-pro",
-                        "viduq2-pro-fast",
-                        "viduq2-pro",
+                        "video-viduq3-pro",
+                        "image-viduq3-pro",
+                        "image-vidu-q2",
                         "viduq2-turbo",
                         "viduq2",
                         "viduq1",
@@ -363,9 +365,27 @@ public class ProviderCatalog {
                 null,
                 false
         ));
-        /** Kling text-to-video and image-to-video via OneLink; base URL comes from user's kling connection. */
+        /** Kling official API. */
         register(new ProviderDefinition(
                 "kling",
+                "Kling",
+                "https://api.klingai.com",
+                "openai",
+                null,
+                null,
+                AuthMode.BEARER,
+                false,
+                null,
+                "/v1/videos/text2video",
+                "/v1/videos/tasks/{taskId}",
+                GatewayKind.OPENAI_COMPAT,
+                List.of("video-kling-v3-6", "video-kling-v3", "video-kling-v3", "kling-v1-6", "kling-v1"),
+                null,
+                false
+        ), "kling", "可灵", "klingai", "kling-ai");
+        /** Internal compatibility: Kling via OneLink proxy. */
+        register(new ProviderDefinition(
+                "kling_onelink",
                 "Kling (OneLink)",
                 "https://api.onelinkai.cloud",
                 "openai",
@@ -377,10 +397,10 @@ public class ProviderCatalog {
                 "/kling/v1/videos/text2video",
                 "/kling/v1/videos/tasks/{taskId}",
                 GatewayKind.OPENAI_COMPAT,
-                List.of("kling-v2-6", "kling-v2-1", "kling-v2", "kling-v1-6", "kling-v1"),
+                List.of("video-kling-v3-6", "video-kling-v3", "video-kling-v3", "kling-v1-6", "kling-v1", "image-kling-v3", "image-kling-v3-omni"),
                 null,
                 false
-        ), "kling", "可灵", "oneLinkKling", "onelink-kling");
+        ), "oneLinkKling", "onelink-kling");
     }
 
     private void register(ProviderDefinition definition, String... extraAliases) {

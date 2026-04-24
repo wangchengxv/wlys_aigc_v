@@ -18,9 +18,9 @@
 在 `aigc-server/src/main/java/com/example/aigc/model/PresetModelRegistry.java` 中添加 `vidu_onelink` Provider 专属的预置模型条目：
 ```java
 new PresetModel("vidu_onelink", "viduq3-turbo", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q3 Turbo", List.of("video")),
-new PresetModel("vidu_onelink", "viduq3-pro", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q3 Pro", List.of("video")),
-new PresetModel("vidu_onelink", "viduq2-pro-fast", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro Fast", List.of("video")),
-new PresetModel("vidu_onelink", "viduq2-pro", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro", List.of("video")),
+new PresetModel("vidu_onelink", "video-viduq3-pro", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q3 Pro", List.of("video")),
+new PresetModel("vidu_onelink", "image-vidu-q2-fast", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro Fast", List.of("video")),
+new PresetModel("vidu_onelink", "image-vidu-q2", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Pro", List.of("video")),
 new PresetModel("vidu_onelink", "viduq2-turbo", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2 Turbo", List.of("video")),
 new PresetModel("vidu_onelink", "viduq2", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q2", List.of("video")),
 new PresetModel("vidu_onelink", "viduq1", "https://api.onelinkai.cloud", "OneLinkAI Vidu Q1", List.of("video")),

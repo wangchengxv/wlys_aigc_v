@@ -1,6 +1,6 @@
-- [x] 服务商目录可返回 `Vidu` 类型，默认 Base URL 为 `https://api.vidu.cn`
+- [x] 服务商目录可返回 `Vidu` 类型，默认 Base URL 为 `https://api.onelinkai.cloud`
 - [x] 用户可通过现有连接配置流程保存并读取 Vidu API Key
-- [x] Vidu 图生视频请求统一发送到 `POST /ent/v2/img2video`
+- [x] Vidu 图生视频请求统一发送到 `POST //vidu/vidu/ent/v2/img2video`
 - [x] 请求头使用 `Authorization: Token {api key}` 与 `Content-Type: application/json`
 - [x] `images` 仅支持单图输入，且提交前完成格式、比例、体积校验
 - [x] `model` 必填且支持官方可用模型枚举的配置与校验

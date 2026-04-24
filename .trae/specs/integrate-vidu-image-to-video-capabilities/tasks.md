@@ -16,7 +16,7 @@
   - [x] 保证模型配置导入、更新、读取时能力字段不丢失
 
 - [x] Task 4: 实现 Vidu 图生视频提交链路
-  - [x] 在视频生成流程识别 Vidu 模型并路由到 `/ent/v2/img2video`
+  - [x] 在视频生成流程识别 Vidu 模型并路由到 `//vidu/vidu/ent/v2/img2video`
   - [x] 构建请求体并完成单图、格式、比例、体积等前置校验
   - [x] 实现 `audio/audio_type/voice_id/is_rec/bgm/off_peak/watermark/wm_position` 条件参数处理
   - [x] 对参数冲突返回明确 4xx 业务错误

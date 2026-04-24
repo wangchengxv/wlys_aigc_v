@@ -136,14 +136,14 @@ AVERAGE_DURATION_VIDEO_EXTEND = 320
 MODE_TEXT2VIDEO = {
     "standard mode / 5s duration / kling-v1-6": ("std", "5", "kling-v1-6"),
     "standard mode / 10s duration / kling-v1-6": ("std", "10", "kling-v1-6"),
-    "pro mode / 5s duration / kling-v2-master": ("pro", "5", "kling-v2-master"),
-    "pro mode / 10s duration / kling-v2-master": ("pro", "10", "kling-v2-master"),
-    "standard mode / 5s duration / kling-v2-master": ("std", "5", "kling-v2-master"),
-    "standard mode / 10s duration / kling-v2-master": ("std", "10", "kling-v2-master"),
-    "pro mode / 5s duration / kling-v2-1-master": ("pro", "5", "kling-v2-1-master"),
-    "pro mode / 10s duration / kling-v2-1-master": ("pro", "10", "kling-v2-1-master"),
-    "pro mode / 5s duration / kling-v2-5-turbo": ("pro", "5", "kling-v2-5-turbo"),
-    "pro mode / 10s duration / kling-v2-5-turbo": ("pro", "10", "kling-v2-5-turbo"),
+    "pro mode / 5s duration / video-kling-v3-master": ("pro", "5", "video-kling-v3-master"),
+    "pro mode / 10s duration / video-kling-v3-master": ("pro", "10", "video-kling-v3-master"),
+    "standard mode / 5s duration / video-kling-v3-master": ("std", "5", "video-kling-v3-master"),
+    "standard mode / 10s duration / video-kling-v3-master": ("std", "10", "video-kling-v3-master"),
+    "pro mode / 5s duration / video-kling-v3-master": ("pro", "5", "video-kling-v3-master"),
+    "pro mode / 10s duration / video-kling-v3-master": ("pro", "10", "video-kling-v3-master"),
+    "pro mode / 5s duration / video-kling-v3-5-turbo": ("pro", "5", "video-kling-v3-5-turbo"),
+    "pro mode / 10s duration / video-kling-v3-5-turbo": ("pro", "10", "video-kling-v3-5-turbo"),
 }
 """
 Mapping of mode strings to their corresponding (mode, duration, model_name) tuples.
@@ -158,10 +158,10 @@ MODE_START_END_FRAME = {
     "pro mode / 10s duration / kling-v1-5": ("pro", "10", "kling-v1-5"),
     "pro mode / 5s duration / kling-v1-6": ("pro", "5", "kling-v1-6"),
     "pro mode / 10s duration / kling-v1-6": ("pro", "10", "kling-v1-6"),
-    "pro mode / 5s duration / kling-v2-1": ("pro", "5", "kling-v2-1"),
-    "pro mode / 10s duration / kling-v2-1": ("pro", "10", "kling-v2-1"),
-    "pro mode / 5s duration / kling-v2-5-turbo": ("pro", "5", "kling-v2-5-turbo"),
-    "pro mode / 10s duration / kling-v2-5-turbo": ("pro", "10", "kling-v2-5-turbo"),
+    "pro mode / 5s duration / video-kling-v3": ("pro", "5", "video-kling-v3"),
+    "pro mode / 10s duration / video-kling-v3": ("pro", "10", "video-kling-v3"),
+    "pro mode / 5s duration / video-kling-v3-5-turbo": ("pro", "5", "video-kling-v3-5-turbo"),
+    "pro mode / 10s duration / video-kling-v3-5-turbo": ("pro", "10", "video-kling-v3-5-turbo"),
 }
 """
 Returns a mapping of mode strings to their corresponding (mode, duration, model_name) tuples.
@@ -1764,7 +1764,7 @@ class KlingImage2VideoNode(IO.ComfyNode):
                 IO.Combo.Input(
                     "model_name",
                     options=KlingVideoGenModelName,
-                    default="kling-v2-master",
+                    default="video-kling-v3-master",
                 ),
                 IO.Float.Input("cfg_scale", default=0.8, min=0.0, max=1.0),
                 IO.Combo.Input("mode", options=KlingVideoGenMode, default=KlingVideoGenMode.std),
@@ -2481,7 +2481,7 @@ class KlingImageGenerationNode(IO.ComfyNode):
                     tooltip="Subject reference similarity",
                     advanced=True,
                 ),
-                IO.Combo.Input("model_name", options=["kling-v3", "kling-v2", "kling-v1-5"]),
+                IO.Combo.Input("model_name", options=["kling-v3", "video-kling-v3", "kling-v1-5"]),
                 IO.Combo.Input(
                     "aspect_ratio",
                     options=[i.value for i in KlingImageGenAspectRatio],
@@ -2590,7 +2590,7 @@ class TextToVideoWithAudio(IO.ComfyNode):
             display_name="Kling 2.6 Text to Video with Audio",
             category="api node/video/Kling",
             inputs=[
-                IO.Combo.Input("model_name", options=["kling-v2-6"]),
+                IO.Combo.Input("model_name", options=["video-kling-v3-6"]),
                 IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt."),
                 IO.Combo.Input("mode", options=["pro"]),
                 IO.Combo.Input("aspect_ratio", options=["16:9", "9:16", "1:1"]),
@@ -2658,7 +2658,7 @@ class ImageToVideoWithAudio(IO.ComfyNode):
             display_name="Kling 2.6 Image(First Frame) to Video with Audio",
             category="api node/video/Kling",
             inputs=[
-                IO.Combo.Input("model_name", options=["kling-v2-6"]),
+                IO.Combo.Input("model_name", options=["video-kling-v3-6"]),
                 IO.Image.Input("start_frame"),
                 IO.String.Input("prompt", multiline=True, tooltip="Positive text prompt."),
                 IO.Combo.Input("mode", options=["pro"]),
@@ -2748,7 +2748,7 @@ class MotionControl(IO.ComfyNode):
                     "but the character orientation matches the reference image (camera/other details via prompt).",
                 ),
                 IO.Combo.Input("mode", options=["pro", "std"]),
-                IO.Combo.Input("model", options=["kling-v3", "kling-v2-6"], optional=True),
+                IO.Combo.Input("model", options=["kling-v3", "video-kling-v3-6"], optional=True),
             ],
             outputs=[
                 IO.Video.Output(),
@@ -2779,7 +2779,7 @@ class MotionControl(IO.ComfyNode):
         keep_original_sound: bool,
         character_orientation: str,
         mode: str,
-        model: str = "kling-v2-6",
+        model: str = "video-kling-v3-6",
     ) -> IO.NodeOutput:
         validate_string(prompt, max_length=2500)
         validate_image_dimensions(reference_image, min_width=340, min_height=340)

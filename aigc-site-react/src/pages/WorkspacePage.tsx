@@ -22,6 +22,7 @@ const WORKSPACE_TABS: WorkspaceTab[] = [
   { id: 'image', label: '文生图', badge: '图像', to: '/tools/image' },
   { id: 'video', label: '文生视频', badge: '视频', to: '/tools/video' },
   { id: 'image-to-video', label: '图生视频', badge: '需参考图', to: '/tools/image-to-video' },
+  { id: 'reverse-prompt', label: '反推提示词', badge: '图像反推', to: '/tools/reverse-prompt' },
 ]
 
 function modeLabel(mode?: GenerateMode) {

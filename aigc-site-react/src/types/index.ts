@@ -389,7 +389,7 @@ export interface SubmissionReviewRequest {
   comment?: string
 }
 
-/** Vidu POST /ent/v2/img2video optional fields（与 model/images/prompt 互斥，由服务端合并） */
+/** Vidu POST //vidu/vidu/ent/v2/img2video optional fields（与 model/images/prompt 互斥，由服务端合并） */
 export interface VideoViduOptions {
   duration?: number
   seed?: number
@@ -458,8 +458,19 @@ export interface GenerateAdvancedVideoRequest {
   referenceImageUrl?: string
   /** Vidu 图生视频高级参数 */
   viduOptions?: VideoViduOptions
-  /** 预留其它视频供应商/能力专属字段 */
-  extra?: Record<string, unknown>
+  /** OneLink 豆包 Seedance 视频扩展字段 */
+  extra?: GenerateAdvancedVideoOneLinkSeedanceExtraRequest | Record<string, unknown>
+}
+
+export interface GenerateAdvancedVideoOneLinkSeedanceExtraRequest {
+  text?: string
+  referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
+  generate_audio?: boolean
+  ratio?: string
+  duration?: number
+  watermark?: boolean
 }
 
 export interface GenerateAdvancedMediaRequest {
@@ -543,6 +554,39 @@ export interface VideoModelOptions {
   details?: VideoModelOptionDetail[]
 }
 
+export interface ReversePromptModelOptionDetail {
+  modelName: string
+  displayName: string
+  provider: string
+  capability: string
+  enabled: boolean
+  connectionEnabled: boolean
+}
+
+export interface ReversePromptModelOptions {
+  defaultModel: string | null
+  options: string[]
+  details?: ReversePromptModelOptionDetail[]
+}
+
+export interface ReversePromptRequest {
+  image: string
+  model?: string
+}
+
+export interface ReversePromptResponse {
+  model: string
+  positivePrompt: string
+  negativePrompt: string
+  style: string
+  lighting: string
+  composition: string
+  camera: string
+  colorTone: string
+  parameters?: Record<string, string>
+  rawText: string
+}
+
 export interface HistoryQuery {
   page: number
   pageSize: number
@@ -616,6 +660,7 @@ export interface ModelConfigUpdateRequest {
 }
 
 export interface PresetModelDto {
+  id: string
   provider: string
   modelName: string
   baseUrl: string

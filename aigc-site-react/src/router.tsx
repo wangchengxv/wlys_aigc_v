@@ -111,6 +111,17 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'tools/reverse-prompt',
+        lazy: lazyPage(() => import('@/pages/ReversePromptPage'), 'ReversePromptPage'),
+        handle: H({
+          title: '反推提示词',
+          eyebrow: '',
+          section: '创作工具',
+          description: '上传图片并调用豆包系列模型反推结构化提示词。',
+          workspaceVariant: 'reverse-prompt',
+        }),
+      },
+      {
         path: 'tools/asset-visual',
         lazy: lazyPage(() => import('@/pages/ToolsAssetVisualPage'), 'ToolsAssetVisualPage'),
         handle: H({ title: '三视图 / 九宫格', eyebrow: '', section: '创作工具' }),

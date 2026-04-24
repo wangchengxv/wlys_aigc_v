@@ -11,7 +11,7 @@ import {
 
 test('按模型名识别工作台图片高级能力', () => {
   assert.equal(resolveImageAdvancedCapability('vidu-reference2image-v1'), 'vidu_reference2image')
-  assert.equal(resolveImageAdvancedCapability('kling-v2'), 'kling_multi_reference')
+  assert.equal(resolveImageAdvancedCapability('video-kling-v3'), 'kling_multi_reference')
   assert.equal(resolveImageAdvancedCapability('seededit-outpaint'), 'outpaint')
   assert.equal(resolveImageAdvancedCapability('doubao-omni-gen'), 'omni')
   assert.equal(resolveImageAdvancedCapability('doubao-seedream-5-0-260128'), undefined)

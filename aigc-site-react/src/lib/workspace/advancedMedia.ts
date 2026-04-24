@@ -1,6 +1,7 @@
 import type {
   GenerateAdvancedImageExtraRequest,
   GenerateAdvancedMediaRequest,
+  GenerateAdvancedVideoOneLinkSeedanceExtraRequest,
   GenerateMode,
   ImageAdvancedCapability,
   VideoViduOptions,
@@ -69,6 +70,7 @@ export function workspaceVideoNeedsFirstFrameImage(videoModel: string): boolean 
   const m = videoModel.trim().toLowerCase()
   if (!m) return false
   if (m.startsWith('vidu')) return true
+  if (m === 'kling-v1' || m === 'kling-v1-6') return true
   if (m.includes('wan') && m.includes('i2v')) return true
   if (m.includes('moark')) return true
   return false
@@ -104,7 +106,13 @@ export function pickDefaultVideoForImageToVideo(options: string[], serverDefault
   const viduFirst = options.find((id) => isWorkspaceViduModelName(id))
   if (viduFirst) return viduFirst
   if (options.includes('viduq3-turbo')) return 'viduq3-turbo'
-  return serverDefault || options[0] || 'doubao-seedance-1-5-pro-251215'
+  return serverDefault || options[0] || 'doubao-seedance-2.0'
+}
+
+export function isWorkspaceOneLinkSeedanceModel(name: string): boolean {
+  const m = name.trim().toLowerCase()
+  if (!m) return false
+  return m === 'doubao-seedance-1.5-pro' || m === 'doubao-seedance-2.0'
 }
 
 export function emptyViduForm(): ViduFormState {
@@ -184,7 +192,7 @@ export function normalizeReferenceImages(values: string[]): string[] {
 export function isWorkspaceKlingMultiReferenceModelName(name: string): boolean {
   const m = name.trim().toLowerCase()
   if (!m) return false
-  return m === 'kling-v2' || (m.includes('kling') && m.includes('multi') && m.includes('reference'))
+  return m === 'video-kling-v3' || (m.includes('kling') && m.includes('multi') && m.includes('reference'))
 }
 
 export function isWorkspaceOutpaintModelName(name: string): boolean {
@@ -362,9 +370,15 @@ export function buildWorkspaceAdvancedMediaPayload({
   const imageExtra = needImg ? buildImageAdvancedExtra(imageAdvancedCapability, imageAdvancedForm) : undefined
   const trimmedVideoReferenceImageUrl = needVid ? videoReferenceImageUrl.trim() || undefined : undefined
   const videoViduOptions = needVid && isWorkspaceViduModelName(finalVideoModel) ? buildVideoViduOptions(viduForm) : undefined
+  const oneLinkSeedanceExtra: GenerateAdvancedVideoOneLinkSeedanceExtraRequest | undefined =
+    needVid && isWorkspaceOneLinkSeedanceModel(finalVideoModel)
+      ? {
+          referenceImageUrls: trimmedVideoReferenceImageUrl ? [trimmedVideoReferenceImageUrl] : undefined,
+        }
+      : undefined
 
   const advancedMedia =
-    imageExtra || trimmedVideoReferenceImageUrl || videoViduOptions
+    imageExtra || trimmedVideoReferenceImageUrl || videoViduOptions || oneLinkSeedanceExtra
       ? {
           image:
             imageExtra
@@ -377,10 +391,11 @@ export function buildWorkspaceAdvancedMediaPayload({
                 }
               : undefined,
           video:
-            needVid && (trimmedVideoReferenceImageUrl || videoViduOptions)
+            needVid && (trimmedVideoReferenceImageUrl || videoViduOptions || oneLinkSeedanceExtra)
               ? {
                   referenceImageUrl: trimmedVideoReferenceImageUrl,
                   viduOptions: videoViduOptions,
+                  extra: oneLinkSeedanceExtra,
                 }
               : undefined,
         }

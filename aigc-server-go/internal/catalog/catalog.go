@@ -129,7 +129,7 @@ func New() *Catalog {
 		APIFormat: "openai", ChatPath: "/v1/chat/completions", ModelsPath: "/v1/models",
 		AuthMode: AuthBearer, TextProxySupported: true, Kind: KindOpenAICompat,
 		StaticModels: []string{"gpt-4o", "gpt-4o-mini", "claude-sonnet-4-6", "gemini-2.5-pro", "gemini-2.5-flash",
-			"wanx-v1", "MiniMax-M2.1", "viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"wanx-v1", "MiniMax-M2.1", "viduq3-turbo", "video-viduq3-pro", "image-vidu-q2-fast", "image-vidu-q2", "viduq2-turbo",
 			"viduq2", "viduq1", "viduq1-classic", "vidu2.0"},
 	}, "onelink", "onelink-ai", "一键ai")
 
@@ -230,12 +230,12 @@ func New() *Catalog {
 	})
 
 	reg(Provider{
-		Key: "vidu", DisplayName: "Vidu", DefaultBaseURL: "https://api.vidu.cn",
+		Key: "vidu", DisplayName: "Vidu", DefaultBaseURL: "https://api.onelinkai.cloud",
 		APIFormat: "vidu", AuthMode: AuthToken, TextProxySupported: false,
-		VideoSubmitPath: "/ent/v2/img2video", VideoResultPath: "/ent/v2/tasks/{taskId}/creations",
+		VideoSubmitPath: "//vidu/vidu/ent/v2/img2video", VideoResultPath: "/ent/v2/tasks/{taskId}/creations",
 		Kind: KindOpenAICompat,
 		StaticModels: []string{
-			"viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"viduq3-turbo", "video-viduq3-pro", "image-vidu-q2-fast", "image-vidu-q2", "viduq2-turbo",
 			"viduq2", "viduq1", "viduq1-classic", "vidu2.0",
 		},
 	}, "viduai")
@@ -243,10 +243,10 @@ func New() *Catalog {
 	reg(Provider{
 		Key: "vidu_onelink", DisplayName: "OneLinkAI Vidu", DefaultBaseURL: "https://api.onelinkai.cloud",
 		APIFormat: "openai", AuthMode: AuthBearer, TextProxySupported: false,
-		VideoSubmitPath: "/vidu/ent/v2/img2video", VideoResultPath: "/vidu/ent/v2/tasks/{taskId}/creations",
+		VideoSubmitPath: "/vidu//vidu/vidu/ent/v2/img2video", VideoResultPath: "/vidu/ent/v2/tasks/{taskId}/creations",
 		Kind: KindOpenAICompat,
 		StaticModels: []string{
-			"viduq3-turbo", "viduq3-pro", "viduq2-pro-fast", "viduq2-pro", "viduq2-turbo",
+			"viduq3-turbo", "video-viduq3-pro", "image-vidu-q2-fast", "image-vidu-q2", "viduq2-turbo",
 			"viduq2", "viduq1", "viduq1-classic", "vidu2.0",
 		},
 	}, "onelinkvidu", "OneLinkVidu", "viduai-onelink")
@@ -256,9 +256,9 @@ func New() *Catalog {
 		APIFormat: "openai", AuthMode: AuthBearer, TextProxySupported: false,
 		VideoSubmitPath: "/kling/v1/videos/text2video",
 		VideoResultPath: "/kling/v1/videos/tasks/{taskId}",
-		Kind: KindOpenAICompat,
+		Kind:            KindOpenAICompat,
 		StaticModels: []string{
-			"kling-v2-6", "kling-v2-1", "kling-v2", "kling-v1-6", "kling-v1",
+			"video-kling-v3-6", "video-kling-v3", "video-kling-v3", "kling-v1-6", "kling-v1",
 		},
 	}, "kling", "可灵", "oneLinkKling", "onelink-kling")
 

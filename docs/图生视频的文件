@@ -8,7 +8,7 @@ info:
   description: ''
   version: 1.0.0
 paths:
-  /vidu/ent/v2/img2video:
+  /vidu//vidu/vidu/ent/v2/img2video:
     post:
       summary: 图生视频
       deprecated: false
@@ -30,7 +30,7 @@ paths:
               - application/json
         - name: Authorization
           in: header
-          description: 创建API密钥地址：https://www.onelinkai.cloud/console/APIKey
+          description: 创建API密钥地址：https://api.onelinkai.cloud/console/APIKey
           required: false
           example: ''
           schema:
@@ -49,7 +49,7 @@ paths:
                 model:
                   type: string
                   description: >-
-                    模型名称。可选值：viduq3-turbo、viduq3-pro、viduq2-pro-fast、viduq2-pro、viduq2-turbo、viduq1、viduq1-classic、vidu2.0。
+                    模型名称。可选值：viduq3-turbo、video-viduq3-pro、image-vidu-q2-fast、image-vidu-q2、viduq2-turbo、viduq1、viduq1-classic、vidu2.0。
                 images:
                   type: array
                   description: 首帧图像。仅支持输入 1 张图，支持 Base64 或可访问 URL。
@@ -129,7 +129,7 @@ paths:
                 - meta_data
                 - callback_url
             example:
-              model: viduq2-pro
+              model: image-vidu-q2
               images:
                 - https://example.com/first-frame.png
               prompt: The astronaut waved and the camera moved up.
@@ -199,3 +199,11 @@ servers: []
 security: []
 
 ```
+
+## Vidu reference2image 请求头说明（后端重配）
+
+- 接口地址：`https://api.onelinkai.cloud/vidu/ent/v2/reference2image`
+- 请求头字段与说明：
+  - `Content-Type: application/json`：数据交换格式（JSON）。
+  - `Authorization: Bearer {apiKey}`：将 `{apiKey}` 替换为您的 API Key。
+- 说明：该接口示例已统一为 `Bearer` 方案，不再使用 `Token {apiKey}`。

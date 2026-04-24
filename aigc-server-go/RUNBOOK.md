@@ -4,7 +4,7 @@
 
 1. **数据库**：仅由一方执行 Flyway 迁移。并行阶段建议继续由现有 **Java `aigc-server`** 启动并完成迁移；Go 服务 `aigc-server-go` 仅连接**同一 MySQL**，不重复执行迁移工具，避免 `flyway_schema_history` 双写。
 2. **配置**：对齐环境变量（与 `aigc-server` 的 `application.yml` 注释一致），至少包括：`DB_*`、`AIGC_ACCESS_TOKEN`、`AIGC_USER_ID_REQUIRED`、`ENCRYPTION_KEY`、`ARK_API_KEY`、`AIGC_COMFY_BASE_URL` 等。
-3. **端口**：默认 Go 与 Java 均为 `8080`，并行时需将一方改为例如 `SERVER_PORT=8081`（Go）或 Spring `server.port`。
+3. **端口**：默认 Go 与 Java 均为 `8080`，并行时需将一方改为例如 `SERVER_PORT=8080`（Go）或 Spring `server.port`。
 4. **对比测试**：使用 [scripts/parity/compare.sh](scripts/parity/compare.sh) 对同一基线请求 Java 与 Go，核对 HTTP 状态与 JSON `code/message` 形状（动态字段可做规范化后再比）。
 
 ## 切换流量

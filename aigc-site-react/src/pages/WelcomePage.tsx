@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppButton } from '@/components/common/AppButton'
 import { AppInput } from '@/components/common/AppInput'
@@ -28,7 +28,7 @@ export function WelcomePage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [socialLoading, setSocialLoading] = useState(false)
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     try {
       await signIn(username.trim(), password)
@@ -119,9 +119,9 @@ export function WelcomePage() {
           </div>
 
           <div className="welcome-social">
-            <button
-              type="button"
-              className="welcome-social__btn"
+            <AppButton
+              variant="ghost"
+              block
               loading={socialLoading}
               disabled={loggingIn || socialLoading}
               onClick={handleOnelinkLogin}
@@ -132,7 +132,7 @@ export function WelcomePage() {
                 </svg>
               </span>
               使用 OneLinkAI 登录
-            </button>
+            </AppButton>
           </div>
         </div>
 

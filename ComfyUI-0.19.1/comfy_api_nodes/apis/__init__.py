@@ -1314,8 +1314,8 @@ class KlingTaskStatus(str, Enum):
 class KlingTextToVideoModelName(str, Enum):
     kling_v1 = 'kling-v1'
     kling_v1_6 = 'kling-v1-6'
-    kling_v2_1_master = 'kling-v2-1-master'
-    kling_v2_5_turbo = 'kling-v2-5-turbo'
+    kling_v2_1_master = 'video-kling-v3-master'
+    kling_v2_5_turbo = 'video-kling-v3-5-turbo'
 
 
 class KlingVideoGenAspectRatio(str, Enum):
@@ -1347,10 +1347,10 @@ class KlingVideoGenModelName(str, Enum):
     kling_v1 = 'kling-v1'
     kling_v1_5 = 'kling-v1-5'
     kling_v1_6 = 'kling-v1-6'
-    kling_v2_master = 'kling-v2-master'
-    kling_v2_1 = 'kling-v2-1'
-    kling_v2_1_master = 'kling-v2-1-master'
-    kling_v2_5_turbo = 'kling-v2-5-turbo'
+    kling_v2_master = 'video-kling-v3-master'
+    kling_v2_1 = 'video-kling-v3'
+    kling_v2_1_master = 'video-kling-v3-master'
+    kling_v2_5_turbo = 'video-kling-v3-5-turbo'
 
 
 class KlingVideoResult(BaseModel):
@@ -5042,7 +5042,7 @@ class KlingImage2VideoRequest(BaseModel):
         description='Reference Image - End frame control. URL or Base64 encoded string, cannot exceed 10MB, resolution not less than 300*300px. Base64 should not include data:image prefix.',
     )
     mode: Optional[KlingVideoGenMode] = 'std'
-    model_name: Optional[KlingVideoGenModelName] = 'kling-v2-master'
+    model_name: Optional[KlingVideoGenModelName] = 'video-kling-v3-master'
     negative_prompt: Optional[str] = Field(
         None, description='Negative text prompt', max_length=2500
     )

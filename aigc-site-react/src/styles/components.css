@@ -80,6 +80,133 @@
   }
 }
 
+.reverse-prompt-page {
+  display: grid;
+  gap: 16px;
+}
+
+.reverse-prompt-page__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 16px;
+}
+
+.reverse-prompt-page__guide {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.reverse-prompt-page__steps {
+  margin: 0;
+}
+
+.reverse-prompt-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.reverse-prompt-panel__toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+}
+
+.reverse-prompt-panel__status {
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  padding: 12px 14px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+}
+
+.reverse-prompt-panel__status p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.reverse-prompt-panel__field {
+  display: grid;
+  gap: 6px;
+}
+
+.reverse-prompt-panel__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reverse-prompt-panel__result {
+  display: grid;
+  gap: 12px;
+}
+
+.reverse-prompt-panel__result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.reverse-prompt-panel__result-title {
+  display: grid;
+  gap: 4px;
+}
+
+.reverse-prompt-panel__copy-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.reverse-prompt-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.reverse-prompt-panel__meta ul {
+  margin: 0 0 var(--space-sm) 1.2rem;
+}
+
+.reverse-prompt-panel .content-card {
+  border-radius: 18px;
+  border-color: color-mix(in srgb, var(--line) 92%, #fff);
+  background: color-mix(in srgb, var(--surface-soft) 64%, #fff 36%);
+}
+
+.reverse-prompt-panel .content-card h4 {
+  margin: 0 0 8px;
+}
+
+.reverse-prompt-panel .content-card p {
+  margin: 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.reverse-prompt-panel__meta pre {
+  margin: 0;
+  overflow: auto;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+}
+
+@media (max-width: 960px) {
+  .reverse-prompt-page__grid,
+  .reverse-prompt-panel__toolbar,
+  .reverse-prompt-panel__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* AppInput */
 .input-wrap {
   display: grid;

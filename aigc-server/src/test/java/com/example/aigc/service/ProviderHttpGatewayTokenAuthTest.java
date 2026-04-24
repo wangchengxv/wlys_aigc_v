@@ -26,21 +26,21 @@ class ProviderHttpGatewayTokenAuthTest {
         ProviderDefinition vidu = new ProviderDefinition(
                 "vidu",
                 "Vidu",
-                "https://api.vidu.cn",
+                "https://api.onelinkai.cloud",
                 "vidu",
                 null,
                 null,
                 AuthMode.TOKEN,
                 false,
                 null,
-                "/ent/v2/img2video",
+                "/vidu/ent/v2/img2video",
                 "/ent/v2/tasks/{taskId}/creations",
                 GatewayKind.OPENAI_COMPAT,
                 List.of(),
                 null,
                 false
         );
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("https://api.vidu.cn/ent/v2/img2video"));
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("https://api.onelinkai.cloud/vidu/ent/v2/img2video"));
 
         Method applyHeaders = ProviderHttpGateway.class.getDeclaredMethod(
                 "applyHeaders",
@@ -54,5 +54,45 @@ class ProviderHttpGatewayTokenAuthTest {
 
         HttpRequest request = builder.GET().build();
         assertThat(request.headers().firstValue("Authorization")).hasValue("Token secret-key");
+    }
+
+    @Test
+    void applyHeadersUsesBearerAuthorizationForViduOnelink() throws Exception {
+        ProviderHttpGateway gateway = new ProviderHttpGateway(
+                new ObjectMapper(),
+                Mockito.mock(BedrockGatewayService.class),
+                Mockito.mock(VertexAiGatewayService.class)
+        );
+        ProviderDefinition viduOnelink = new ProviderDefinition(
+                "vidu_onelink",
+                "Vidu (OneLink)",
+                "https://api.onelinkai.cloud",
+                "openai",
+                null,
+                null,
+                AuthMode.BEARER,
+                false,
+                null,
+                "/vidu/ent/v2/img2video",
+                "/vidu/ent/v2/tasks/{taskId}/creations",
+                GatewayKind.OPENAI_COMPAT,
+                List.of(),
+                null,
+                false
+        );
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("https://api.onelinkai.cloud/vidu/ent/v2/reference2image"));
+
+        Method applyHeaders = ProviderHttpGateway.class.getDeclaredMethod(
+                "applyHeaders",
+                HttpRequest.Builder.class,
+                ProviderDefinition.class,
+                String.class,
+                Map.class
+        );
+        applyHeaders.setAccessible(true);
+        applyHeaders.invoke(gateway, builder, viduOnelink, "secret-key", Map.of());
+
+        HttpRequest request = builder.GET().build();
+        assertThat(request.headers().firstValue("Authorization")).hasValue("Bearer secret-key");
     }
 }

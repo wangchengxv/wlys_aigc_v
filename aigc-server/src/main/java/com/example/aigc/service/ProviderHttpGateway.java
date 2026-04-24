@@ -444,11 +444,12 @@ public class ProviderHttpGateway {
             byte[] body = raw.toByteArray();
             String contentType = "multipart/form-data; boundary=" + boundary;
 
-            HttpRequest.Builder builder = HttpRequest.newBuilder(buildUri(baseUrl, definition.videoSubmitPath(), connectionMetadata))
+            URI requestUri = buildUri(baseUrl, definition.videoSubmitPath(), connectionMetadata);
+            HttpRequest.Builder builder = HttpRequest.newBuilder(requestUri)
                     .timeout(timeout)
                     .header("Content-Type", contentType)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body));
-            applyHeaders(builder, definition, apiKey, connectionMetadata);
+            applyHeaders(builder, definition, apiKey, connectionMetadata, requestUri);
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 400) {
                 throw new ProviderGatewayException(response.statusCode(), extractMessage(response.body()));
@@ -519,10 +520,11 @@ public class ProviderHttpGateway {
             Duration timeout
     ) {
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(buildUri(baseUrl, path, connectionMetadata))
+            URI requestUri = buildUri(baseUrl, path, connectionMetadata);
+            HttpRequest.Builder builder = HttpRequest.newBuilder(requestUri)
                     .timeout(timeout)
                     .GET();
-            applyHeaders(builder, definition, apiKey, connectionMetadata);
+            applyHeaders(builder, definition, apiKey, connectionMetadata, requestUri);
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 400) {
                 throw new ProviderGatewayException(response.statusCode(), extractMessage(response.body()));
@@ -546,15 +548,22 @@ public class ProviderHttpGateway {
             Map<String, Object> payload,
             Duration timeout
     ) throws IOException {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(buildUri(baseUrl, path, connectionMetadata))
+        URI requestUri = buildUri(baseUrl, path, connectionMetadata);
+        HttpRequest.Builder builder = HttpRequest.newBuilder(requestUri)
                 .timeout(timeout)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8));
-        applyHeaders(builder, definition, apiKey, connectionMetadata);
+        applyHeaders(builder, definition, apiKey, connectionMetadata, requestUri);
         return builder;
     }
 
-    private void applyHeaders(HttpRequest.Builder builder, ProviderDefinition definition, String apiKey, Map<String, Object> meta) {
+    private void applyHeaders(
+            HttpRequest.Builder builder,
+            ProviderDefinition definition,
+            String apiKey,
+            Map<String, Object> meta,
+            URI requestUri
+    ) {
         if (definition.authMode() == AuthMode.BEARER && apiKey != null && !apiKey.isBlank()) {
             builder.header("Authorization", "Bearer " + apiKey);
         }
@@ -566,9 +575,18 @@ public class ProviderHttpGateway {
             builder.header("api-key", apiKey);
         }
         if (definition.authMode() == AuthMode.TOKEN && apiKey != null && !apiKey.isBlank()) {
-            builder.header("Authorization", "Token " + apiKey);
+            String prefix = isOnelinkHost(requestUri) ? "Bearer " : "Token ";
+            builder.header("Authorization", prefix + apiKey);
         }
         applyCustomHeadersFromMeta(builder, meta);
+    }
+
+    private boolean isOnelinkHost(URI requestUri) {
+        if (requestUri == null || requestUri.getHost() == null) {
+            return false;
+        }
+        String host = requestUri.getHost().toLowerCase();
+        return host.equals("onelinkai.cloud") || host.endsWith(".onelinkai.cloud");
     }
 
     private void applyCustomHeadersFromMeta(HttpRequest.Builder builder, Map<String, Object> meta) {

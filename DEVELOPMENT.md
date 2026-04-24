@@ -71,8 +71,10 @@ start-react.sh               # 指定 React 前端后调用 start.sh
 复制 `aigc-site-react/.env.example` 为 `.env`，至少设置：
 
 - **`VITE_API_BASE_URL`**：后端基地址，本地联调一般为 `http://localhost:8080`。
+- **`VITE_API_PROXY_TARGET`**（可选）：Vite 开发代理目标地址，默认 `http://localhost:8080`。
 
 `start.sh` 在无 `.env` 时会从 `.env.example` 复制或写入默认 `http://localhost:8080`。
+即使未配置 `VITE_API_BASE_URL`，开发环境也可通过 `vite.config.ts` 的 `/api` 代理兜底访问后端。
 
 ## 6. 本地运行方式
 
@@ -114,11 +116,12 @@ Vite 开发端口在 `vite.config.ts` 的 `server.port`，当前仓库为 **5174
 2. 后台启动后端，日志在 `.logs/backend.log`，PID 在 `.logs/backend.pid`。
 3. 等待 `/api/v1/health` 通过。
 4. 准备前端 `.env`、必要时 `npm install`，再执行 `npm run dev`。
-5. `Ctrl+C` 时尝试结束本次脚本启动的后端进程。
+5. 默认 `Ctrl+C` 退出前端后会保留后端进程（`KEEP_BACKEND_ON_EXIT=1`）；如需退出时自动关闭后端，设置 `KEEP_BACKEND_ON_EXIT=0`。
 
 **注意**：若 **8080** 已被非本脚本进程占用，脚本会报错退出，需先释放端口。
 
 环境变量 **`BACKEND_PORT`** 可改后端端口（需与前端 `VITE_API_BASE_URL` 一致）。
+环境变量 **`KEEP_BACKEND_ON_EXIT`** 控制退出脚本时是否关闭后端（`1` 保留，`0` 清理）。
 
 ### 6.4 生产构建前端
 
@@ -145,6 +148,7 @@ npm run build
 |------|----------|
 | 前端请求跨域失败 | 检查 `aigc.cors` 是否包含前端来源；开发机可用 `http://localhost:*` 类 pattern |
 | 后端启动失败 | MySQL 不可达、账号密码错误、Flyway 与库版本不一致；查看控制台与 `.logs/backend.log` |
+| 前端报 `ERR_CONNECTION_REFUSED` | 先访问 `http://localhost:8080/api/v1/health`；若不通先查 `.logs/backend.log`，并确认是否误将 `KEEP_BACKEND_ON_EXIT` 设为 `0` 导致退出前端时后端被清理 |
 | 一键启动报端口占用 | 释放 8080 或调整 `BACKEND_PORT` 并同步前端 API 地址 |
 | 图文/视频不走真实模型 | 未配置连接与模型，或 `ARK_API_KEY` 未设置，会按 README「当前实现说明」回退 |
 

@@ -73,6 +73,9 @@ import type {
   QuickConnectionRequest,
   ReviewRecord,
   RewriteScriptApplyRequest,
+  ReversePromptModelOptions,
+  ReversePromptRequest,
+  ReversePromptResponse,
   RewriteScriptPreviewRequest,
   RewriteScriptPreviewResponse,
   ScriptDocumentPayload,
@@ -423,6 +426,18 @@ export async function getVideoModels(): Promise<VideoModelOptions> {
     options: [DEFAULT_VIDEO_MODEL],
     details: [],
   }
+}
+
+export async function getReversePromptModels(): Promise<ReversePromptModelOptions> {
+  requireScriptApi()
+  const { data } = await http.get<ApiEnvelope<ReversePromptModelOptions>>('/api/v1/reverse-prompt/models')
+  return unwrapApiData(data, '获取反推模型列表失败')
+}
+
+export async function generateReversePrompt(payload: ReversePromptRequest): Promise<ReversePromptResponse> {
+  requireScriptApi()
+  const { data } = await http.post<ApiEnvelope<ReversePromptResponse>>('/api/v1/reverse-prompt/generate', payload)
+  return unwrapApiData(data, '反推提示词失败')
 }
 
 export async function getHistory(query: HistoryQuery): Promise<PagedTasks> {
@@ -956,33 +971,35 @@ export async function getConnections(): Promise<ConnectionConfig[]> {
 const MOCK_PRESET_MODELS: PresetModelListResponse = {
   providers: ['openai', 'anthropic', 'deepseek', 'qwen', 'ark', 'onelinkai', 'vidu', 'moark'],
   models: [
-    { provider: 'openai', modelName: 'gpt-4o', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o', capabilities: ['text'] },
-    { provider: 'openai', modelName: 'gpt-4o-mini', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o Mini', capabilities: ['text'] },
-    { provider: 'anthropic', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.anthropic.com', displayName: 'Claude Sonnet 4.6', capabilities: ['text'] },
-    { provider: 'deepseek', modelName: 'deepseek-chat', baseUrl: 'https://api.deepseek.com', displayName: 'DeepSeek Chat', capabilities: ['text'] },
-    { provider: 'qwen', modelName: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode', displayName: '通义千问 Plus', capabilities: ['text'] },
-    { provider: 'ark', modelName: 'doubao-seedream-5-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包图片 Seedream', capabilities: ['image'] },
-    { provider: 'ark', modelName: 'doubao-seedance-2-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（标准版）', capabilities: ['video'] },
-    { provider: 'ark', modelName: 'doubao-seedance-2-0-fast-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（极速版）', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'gpt-4o', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI GPT-4o', capabilities: ['text'] },
-    { provider: 'onelinkai', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Claude Sonnet 4.6', capabilities: ['text'] },
-    { provider: 'onelinkai', modelName: 'gemini-2.5-pro', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Gemini 2.5 Pro', capabilities: ['text'] },
-    { provider: 'onelinkai', modelName: 'wanx-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Wanx v1', capabilities: ['image'] },
-    { provider: 'onelinkai', modelName: 'kling-v2-1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图像生成 v2.1', capabilities: ['image'] },
-    { provider: 'onelinkai', modelName: 'kling-v2', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 多图参考生图 v2', capabilities: ['image'] },
-    { provider: 'onelinkai', modelName: 'MiniMax-M2.1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI MiniMax M2.1', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'kling-v2-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 文生视频 v2.6', capabilities: ['video'] },
-    { provider: 'onelinkai', modelName: 'kling-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图生视频 v1', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq3-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Turbo', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq3-pro', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Pro', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq2-pro-fast', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro Fast', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq2-pro', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq2-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Turbo', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq2', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq1', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'viduq1-classic', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1 Classic', capabilities: ['video'] },
-    { provider: 'vidu', modelName: 'vidu2.0', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu 2.0', capabilities: ['video'] },
+    { id: 'openai:gpt-4o:GPT-4o', provider: 'openai', modelName: 'gpt-4o', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o', capabilities: ['text'] },
+    { id: 'openai:gpt-4o-mini:GPT-4o Mini', provider: 'openai', modelName: 'gpt-4o-mini', baseUrl: 'https://api.openai.com', displayName: 'GPT-4o Mini', capabilities: ['text'] },
+    { id: 'anthropic:claude-sonnet-4-6:Claude Sonnet 4.6', provider: 'anthropic', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.anthropic.com', displayName: 'Claude Sonnet 4.6', capabilities: ['text'] },
+    { id: 'deepseek:deepseek-chat:DeepSeek Chat', provider: 'deepseek', modelName: 'deepseek-chat', baseUrl: 'https://api.deepseek.com', displayName: 'DeepSeek Chat', capabilities: ['text'] },
+    { id: 'qwen:qwen-plus:通义千问 Plus', provider: 'qwen', modelName: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode', displayName: '通义千问 Plus', capabilities: ['text'] },
+    { id: 'ark:doubao-seedream-5-0-260128:豆包图片 Seedream', provider: 'ark', modelName: 'doubao-seedream-5-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包图片 Seedream', capabilities: ['image'] },
+    { id: 'ark:doubao-seedance-2-0-260128:豆包视频 Seedance 2.0（标准版）', provider: 'ark', modelName: 'doubao-seedance-2-0-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（标准版）', capabilities: ['video'] },
+    { id: 'ark:doubao-seedance-2-0-fast-260128:豆包视频 Seedance 2.0（极速版）', provider: 'ark', modelName: 'doubao-seedance-2-0-fast-260128', baseUrl: 'https://ark.cn-beijing.volces.com', displayName: '豆包视频 Seedance 2.0（极速版）', capabilities: ['video'] },
+    { id: 'onelinkai:gpt-4o:OneLinkAI GPT-4o', provider: 'onelinkai', modelName: 'gpt-4o', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI GPT-4o', capabilities: ['text'] },
+    { id: 'onelinkai:claude-sonnet-4-6:OneLinkAI Claude Sonnet 4.6', provider: 'onelinkai', modelName: 'claude-sonnet-4-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Claude Sonnet 4.6', capabilities: ['text'] },
+    { id: 'onelinkai:gemini-2.5-pro:OneLinkAI Gemini 2.5 Pro', provider: 'onelinkai', modelName: 'gemini-2.5-pro', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Gemini 2.5 Pro', capabilities: ['text'] },
+    { id: 'onelinkai:wanx-v1:OneLinkAI Wanx v1', provider: 'onelinkai', modelName: 'wanx-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Wanx v1', capabilities: ['image'] },
+    { id: 'onelinkai:doubao-seedance-2.0:OneLinkAI 豆包 Seedance 2.0', provider: 'onelinkai', modelName: 'doubao-seedance-2.0', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI 豆包 Seedance 2.0', capabilities: ['video'] },
+    { id: 'onelinkai:video-kling-v3:OneLinkAI Kling 图像生成 v2.1', provider: 'onelinkai', modelName: 'video-kling-v3', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图像生成 v2.1', capabilities: ['image'] },
+    { id: 'onelinkai:video-kling-v3:OneLinkAI Kling 多图参考生图 v2', provider: 'onelinkai', modelName: 'video-kling-v3', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 多图参考生图 v2', capabilities: ['image'] },
+    { id: 'onelinkai:MiniMax-M2.1:OneLinkAI MiniMax M2.1', provider: 'onelinkai', modelName: 'MiniMax-M2.1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI MiniMax M2.1', capabilities: ['video'] },
+    { id: 'onelinkai:video-kling-v3-6:OneLinkAI Kling 文生视频 v2.6', provider: 'onelinkai', modelName: 'video-kling-v3-6', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 文生视频 v2.6', capabilities: ['video'] },
+    { id: 'onelinkai:kling-v1:OneLinkAI Kling 图生视频 v1', provider: 'onelinkai', modelName: 'kling-v1', baseUrl: 'https://api.onelinkai.cloud', displayName: 'OneLinkAI Kling 图生视频 v1', capabilities: ['video'] },
+    { id: 'vidu:viduq3-turbo:Vidu Q3 Turbo', provider: 'vidu', modelName: 'viduq3-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Turbo', capabilities: ['video'] },
+    { id: 'vidu:video-viduq3-pro:Vidu Q3 Pro', provider: 'vidu', modelName: 'video-viduq3-pro', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q3 Pro', capabilities: ['video'] },
+    { id: 'vidu:image-vidu-q2-fast:Vidu Q2 Pro Fast', provider: 'vidu', modelName: 'image-vidu-q2-fast', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro Fast', capabilities: ['video'] },
+    { id: 'vidu:image-vidu-q2:Vidu Q2 Pro', provider: 'vidu', modelName: 'image-vidu-q2', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Pro', capabilities: ['video'] },
+    { id: 'vidu:viduq2-turbo:Vidu Q2 Turbo', provider: 'vidu', modelName: 'viduq2-turbo', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2 Turbo', capabilities: ['video'] },
+    { id: 'vidu:viduq2:Vidu Q2', provider: 'vidu', modelName: 'viduq2', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q2', capabilities: ['video'] },
+    { id: 'vidu:viduq1:Vidu Q1', provider: 'vidu', modelName: 'viduq1', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1', capabilities: ['video'] },
+    { id: 'vidu:viduq1-classic:Vidu Q1 Classic', provider: 'vidu', modelName: 'viduq1-classic', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu Q1 Classic', capabilities: ['video'] },
+    { id: 'vidu:vidu2.0:Vidu 2.0', provider: 'vidu', modelName: 'vidu2.0', baseUrl: 'https://api.vidu.cn', displayName: 'Vidu 2.0', capabilities: ['video'] },
     {
+      id: 'moark:Wan2.1-I2V-14B-720P:Moark Wan2.1 图生视频 720P',
       provider: 'moark',
       modelName: 'Wan2.1-I2V-14B-720P',
       baseUrl: 'https://api.moark.com',
@@ -1080,14 +1097,14 @@ const MOCK_PROVIDER_CATALOG: ProviderCatalogListResponse = {
         'wanx-v1',
         'kling-v1',
         'kling-v1-6',
-        'kling-v2',
-        'kling-v2-1',
-        'kling-v2-6',
+        'video-kling-v3',
+        'video-kling-v3',
+        'video-kling-v3-6',
         'MiniMax-M2.1',
         'viduq3-turbo',
-        'viduq3-pro',
-        'viduq2-pro-fast',
-        'viduq2-pro',
+        'video-viduq3-pro',
+        'image-vidu-q2-fast',
+        'image-vidu-q2',
         'viduq2-turbo',
         'viduq2',
         'viduq1',
@@ -1119,9 +1136,9 @@ const MOCK_PROVIDER_CATALOG: ProviderCatalogListResponse = {
       videoProxySupported: true,
       staticModels: [
         'viduq3-turbo',
-        'viduq3-pro',
-        'viduq2-pro-fast',
-        'viduq2-pro',
+        'video-viduq3-pro',
+        'image-vidu-q2-fast',
+        'image-vidu-q2',
         'viduq2-turbo',
         'viduq2',
         'viduq1',

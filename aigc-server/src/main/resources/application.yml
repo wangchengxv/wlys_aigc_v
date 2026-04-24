@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8080
 
 spring:
   application:
@@ -99,7 +99,7 @@ aigc:
     default-video-model: doubao-seedance-1-5-pro-251215
     video-api-path: /api/v3/contents/generations/tasks
     video-result-api-path: /api/v3/contents/generations/tasks/{taskId}
-    video-poll-max-attempts: 40
+    video-poll-max-attempts: 200
     video-poll-interval-ms: 3000
     video-duration-seconds: 5
     image-model-options:

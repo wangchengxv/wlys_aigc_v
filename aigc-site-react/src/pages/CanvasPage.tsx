@@ -76,6 +76,13 @@ export function CanvasPage() {
           badge: '生成',
         },
         {
+          key: 'reverse-prompt',
+          title: '反推提示词',
+          description: '上传图片反推正向/反向提示词，再回填到画布 Prompt 节点',
+          to: '/tools/reverse-prompt',
+          badge: '反推',
+        },
+        {
           key: 'history',
           title: '历史记录',
           description: '后续会把画布执行结果纳入统一历史入口，本阶段先保留跳转路径',

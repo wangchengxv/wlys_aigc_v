@@ -34,7 +34,7 @@ import (
 var viduOneLinkVideoProvider = &catalog.Provider{
 	Key:             "vidu_onelink",
 	AuthMode:        catalog.AuthBearer,
-	VideoSubmitPath: "/vidu/ent/v2/img2video",
+	VideoSubmitPath: "/vidu//vidu/vidu/ent/v2/img2video",
 	VideoResultPath: "/vidu/ent/v2/tasks/{taskId}/creations",
 	Kind:            catalog.KindOpenAICompat,
 }
@@ -75,6 +75,12 @@ type Generation struct {
 }
 
 const maxVideoMergedPromptChars = 8000
+
+const (
+	onelinkDoubaoVideoModel      = "doubao-seedance-1.5-pro"
+	onelinkDoubaoVideoSubmitPath = "/volc/api/v3/contents/generations/tasks"
+	onelinkDoubaoVideoResultPath = "/volc/api/v3/contents/generations/tasks/{taskId}"
+)
 
 var blockWords = []string{"暴恐", "色情", "违禁", "涉政"}
 
@@ -964,6 +970,21 @@ func (g *Generation) genVideos(prompt string, count int, requested, refURL strin
 			return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
 		}
 		if strings.EqualFold(rm.Provider.Key, "onelinkai") {
+			if isOneLinkDoubaoVideoModel(rm.Model.ModelName) {
+				imageRef, err := validateOneLinkDoubaoReferenceImage(refURL)
+				if err != nil {
+					return nil, "", "", "", "", err
+				}
+				var vids []string
+				for i := 0; i < count; i++ {
+					u, err := g.callOneLinkDoubaoVideo(rm.Provider, rm.Conn.BaseURL, rm.APIKey, rm.Meta, prompt, imageRef)
+					if err != nil {
+						return nil, "", "", "", "", err
+					}
+					vids = append(vids, u)
+				}
+				return vids, rm.Model.ModelName, rm.Source, rm.Matched, rm.Reject, nil
+			}
 			if isViduWorkspaceModel(rm.Model.ModelName) {
 				if !isValidViduRefImage(refURL) {
 					return nil, "", "", "", "", errs.New(400, "Vidu 图生视频需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址，或 data:image/...;base64,...）")
@@ -1088,16 +1109,16 @@ func (g *Generation) callKlingVideo(baseURL, apiKey string, meta map[string]any,
 	if imageToVideo {
 		resultPath = klingResultPath()
 		payload = map[string]any{
-			"model":   modelName,
-			"prompt":  strings.TrimSpace(prompt),
-			"image":   refImageURL,
+			"model":    modelName,
+			"prompt":   strings.TrimSpace(prompt),
+			"image":    refImageURL,
 			"duration": g.safeVideoDuration(),
 		}
 	} else {
 		resultPath = klingResultPath()
 		payload = map[string]any{
-			"model":   modelName,
-			"prompt":  strings.TrimSpace(prompt),
+			"model":    modelName,
+			"prompt":   strings.TrimSpace(prompt),
 			"duration": g.safeVideoDuration(),
 		}
 	}
@@ -1133,6 +1154,17 @@ func (g *Generation) safeVideoDuration() string {
 		d = 30
 	}
 	return strconv.Itoa(d)
+}
+
+func (g *Generation) safeVideoDurationInt() int {
+	d := g.Cfg.ArkVideoDurationSeconds
+	if d < 1 {
+		d = 5
+	}
+	if d > 30 {
+		d = 30
+	}
+	return d
 }
 
 func (g *Generation) pollKlingVideo(def *catalog.Provider, baseURL, apiKey, taskID, resultPathTemplate string) (string, error) {
@@ -1205,6 +1237,21 @@ func isKlingModel(modelName string) bool {
 	return false
 }
 
+func isOneLinkDoubaoVideoModel(modelName string) bool {
+	return strings.EqualFold(strings.TrimSpace(modelName), onelinkDoubaoVideoModel)
+}
+
+func validateOneLinkDoubaoReferenceImage(refURL string) (string, error) {
+	imageRef := strings.TrimSpace(refURL)
+	if imageRef == "" {
+		return "", errs.New(400, "OneLink 豆包视频模型需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址）")
+	}
+	if !isHTTPURL(imageRef) {
+		return "", errs.New(400, "OneLink 豆包视频模型参考图必须为可访问的 http(s) 图片地址")
+	}
+	return imageRef, nil
+}
+
 func isValidViduRefImage(ref string) bool {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -1236,6 +1283,74 @@ func (g *Generation) callViduVideo(def *catalog.Provider, baseURL, apiKey string
 		return nil, errs.New(502, "Vidu 未返回 task_id 或视频地址")
 	}
 	return g.pollViduTask(def, baseURL, apiKey, tid)
+}
+
+func (g *Generation) callOneLinkDoubaoVideo(def *catalog.Provider, baseURL, apiKey string, meta map[string]any, prompt, imageURL string) (string, error) {
+	payload := map[string]any{
+		"model": onelinkDoubaoVideoModel,
+		"content": []any{
+			map[string]any{
+				"type": "text",
+				"text": strings.TrimSpace(prompt) + fmt.Sprintf(" --duration %d --camerafixed false --watermark %v", g.safeVideoDurationInt(), g.Cfg.ArkWatermark),
+			},
+			map[string]any{
+				"type": "image_url",
+				"image_url": map[string]any{
+					"url": imageURL,
+				},
+			},
+		},
+	}
+	submit, err := g.GW.PostJSON(context.Background(), baseURL, onelinkDoubaoVideoSubmitPath, def, apiKey, meta, payload, 120*time.Second)
+	if err != nil {
+		if pe, ok := err.(*gateway.ProviderError); ok {
+			return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+		}
+		return "", err
+	}
+	if u := parseArkVideoURL(submit, false); u != "" {
+		return u, nil
+	}
+	tid := parseArkVideoTaskID(submit)
+	if tid == "" {
+		return "", errs.New(502, "OneLink 豆包视频未返回 task_id 或视频地址")
+	}
+	return g.pollVideoTaskWithPath(def, baseURL, apiKey, meta, tid, onelinkDoubaoVideoResultPath)
+}
+
+func (g *Generation) pollVideoTaskWithPath(def *catalog.Provider, baseURL, apiKey string, meta map[string]any, taskID, resultPathTemplate string) (string, error) {
+	max := g.Cfg.ArkVideoPollMaxAttempts
+	if max < 1 {
+		max = 40
+	}
+	interval := g.Cfg.ArkVideoPollIntervalMs
+	if interval < 300 {
+		interval = 300
+	}
+	path := strings.ReplaceAll(resultPathTemplate, "{taskId}", taskID)
+	for attempt := 1; attempt <= max; attempt++ {
+		res, err := g.GW.GetJSON(context.Background(), baseURL, path, def, apiKey, meta, 30*time.Second)
+		if err != nil {
+			if pe, ok := err.(*gateway.ProviderError); ok {
+				return "", errs.New(mapProviderStatus(pe.StatusCode), pe.Message)
+			}
+			return "", err
+		}
+		if errNode := res["error"]; errNode != nil && fmt.Sprint(errNode) != "false" && errNode != false {
+			return "", errs.New(502, parseArkTaskError(res))
+		}
+		if u := parseArkVideoURL(res, false); u != "" {
+			return u, nil
+		}
+		st := parseArkTaskStatus(res)
+		if isFailedStatus(st) {
+			return "", errs.New(502, "视频任务失败："+parseArkTaskError(res))
+		}
+		if attempt < max {
+			time.Sleep(time.Duration(interval) * time.Millisecond)
+		}
+	}
+	return "", errs.New(504, "视频生成超时，请稍后重试或缩短提示词")
 }
 
 func (g *Generation) pollViduTask(def *catalog.Provider, baseURL, apiKey string, taskID string) ([]string, error) {

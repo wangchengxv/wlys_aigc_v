@@ -6,8 +6,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/aigc-server"
 FRONTEND_DIR="${FRONTEND_DIR:-}"
 FRONTEND_MODE="auto"
-BACKEND_PORT="${BACKEND_PORT:-8081}"
+BACKEND_PORT="${BACKEND_PORT:-8080}"
 HEALTH_URL="http://localhost:${BACKEND_PORT}/api/v1/health"
+KEEP_BACKEND_ON_EXIT="${KEEP_BACKEND_ON_EXIT:-1}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_FILE="$LOG_DIR/backend.pid"
@@ -242,7 +243,7 @@ prepare_frontend_env() {
       cp "$FRONTEND_DIR/.env.example" "$FRONTEND_DIR/.env"
       echo "[前端] 已从 .env.example 生成 .env"
     else
-      echo "VITE_API_BASE_URL=http://localhost:8081" >"$FRONTEND_DIR/.env"
+      echo "VITE_API_BASE_URL=http://localhost:8080" >"$FRONTEND_DIR/.env"
       echo "[前端] 已创建默认 .env"
     fi
   fi
@@ -261,12 +262,22 @@ install_frontend_deps() {
 cleanup() {
   if [ "$STARTED_BACKEND" -eq 1 ] && [ -f "$PID_FILE" ]; then
     pid="$(<"$PID_FILE")"
-    if is_running "$pid"; then
-      echo
-      echo "[清理] 正在关闭本次启动的后端服务..."
-      kill "$pid" >/dev/null 2>&1 || true
+    if [ "${KEEP_BACKEND_ON_EXIT}" = "0" ]; then
+      if is_running "$pid"; then
+        echo
+        echo "[清理] 正在关闭本次启动的后端服务..."
+        kill "$pid" >/dev/null 2>&1 || true
+      fi
+      rm -f "$PID_FILE"
+    else
+      if is_running "$pid"; then
+        echo
+        echo "[清理] 已保留后端服务运行 (PID: $pid, HEALTH: $HEALTH_URL)"
+        echo "[清理] 如需退出时自动关闭后端，请设置 KEEP_BACKEND_ON_EXIT=0"
+      else
+        rm -f "$PID_FILE"
+      fi
     fi
-    rm -f "$PID_FILE"
   fi
 }
 
@@ -301,10 +312,24 @@ main() {
   echo "[前端] 启动中..."
   echo "[前端] 目录: $FRONTEND_DIR"
   echo "[访问地址] 以终端中 Vite 输出的 Local 地址为准"
+  echo "[后端] 健康检查地址: $HEALTH_URL"
+  set +e
   (
     cd "$FRONTEND_DIR"
     npm run dev
   )
+  frontend_exit_code=$?
+  set -e
+  if [ "$frontend_exit_code" -ne 0 ]; then
+    echo "[前端] dev 进程异常退出 (exit=$frontend_exit_code)"
+    echo "[前端] 可查看后端日志: $BACKEND_LOG"
+    if [ "${KEEP_BACKEND_ON_EXIT}" = "0" ]; then
+      echo "[前端] 当前策略：退出时清理后端 (KEEP_BACKEND_ON_EXIT=0)"
+    else
+      echo "[前端] 当前策略：保留后端运行 (KEEP_BACKEND_ON_EXIT=1)"
+    fi
+  fi
+  return "$frontend_exit_code"
 }
 
 main "$@"

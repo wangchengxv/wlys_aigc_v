@@ -1,6 +1,6 @@
 import type { GenerateMode } from '@/types'
 
-export type WorkspaceRouteVariant = 'workspace' | 'image' | 'video' | 'image-to-video'
+export type WorkspaceRouteVariant = 'workspace' | 'image' | 'video' | 'image-to-video' | 'reverse-prompt'
 
 export type RouteHandle = {
   title: string

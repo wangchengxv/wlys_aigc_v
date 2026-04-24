@@ -1,5 +1,5 @@
 - [x] Java 服务商目录与模型配置链路可识别 Vidu 图生视频能力
-- [x] Java 后端将 Vidu 图生视频请求提交到 `POST /ent/v2/img2video`
+- [x] Java 后端将 Vidu 图生视频请求提交到 `POST //vidu/vidu/ent/v2/img2video`
 - [x] Java 后端请求头使用 `Authorization: Token {apiKey}` 与 `Content-Type: application/json`
 - [x] Java 后端对 `images` 单图输入执行必要校验（格式、比例、体积或等价约束）
 - [x] Java 后端按模型族对 `duration` 与 `resolution` 执行约束校验

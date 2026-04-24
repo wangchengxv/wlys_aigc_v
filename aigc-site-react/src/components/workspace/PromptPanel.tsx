@@ -26,7 +26,7 @@ const styles = ['科技风', '国潮风', '简约风', '可爱风', '商务风']
 const STYLE_GLOBAL = 'global'
 const sizes = ['512x512', '768x768', '1024x1024']
 const DEFAULT_IMAGE_MODEL = 'doubao-seedream-5-0-260128'
-const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
+const DEFAULT_VIDEO_MODEL = 'doubao-seedance-2.0'
 const textLengthOptions = [
   { label: '短', value: 'short' as const },
   { label: '中', value: 'medium' as const },
@@ -602,7 +602,7 @@ export function PromptPanel({
                 value={customVideoModel}
                 onChange={(v) => setCustomVideoModel(String(v))}
                 label="视频模型ID"
-                placeholder="如：doubao-seedance-1-5-pro-251215、viduq3-turbo、kling-v2-6、Wan2.1-I2V-14B-720P"
+                placeholder="如：doubao-seedance-2.0、doubao-seedance-1.5-pro、viduq3-turbo、video-kling-v3-6、Wan2.1-I2V-14B-720P"
               />
             )}
           </div>

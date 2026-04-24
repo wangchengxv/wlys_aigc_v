@@ -27,6 +27,8 @@ import com.example.aigc.service.ProviderCatalog;
 import com.example.aigc.service.ProviderGatewayException;
 import com.example.aigc.service.ProviderHttpGateway;
 import com.example.aigc.service.RouterRoutingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -44,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -53,19 +56,30 @@ import java.util.UUID;
 
 @Service
 public class GenerationServiceImpl implements GenerationService {
+    private static final Logger log = LoggerFactory.getLogger(GenerationServiceImpl.class);
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final List<String> BLOCK_WORDS = List.of("暴恐", "色情", "违禁", "涉政");
     /** 视频：全局风格 + 用户描述合并后最大长度（避免超出模型侧限制） */
     private static final int MAX_VIDEO_MERGED_PROMPT_CHARS = 8000;
-    private static final int VIDU_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+    private static final int VIDU_MAX_IMAGE_BYTES = 50 * 1024 * 1024;
     private static final int KLING_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
     private static final Map<String, Object> EMPTY_MAP = Map.of();
+    private static final Set<String> ONELINK_DOUBAO_VIDEO_MODELS = Set.of(
+            "doubao-seedance-1.5-pro",
+            "doubao-seedance-2.0"
+    );
+    private static final String ONELINK_DOUBAO_VIDEO_SUBMIT_PATH = "/volc/api/v3/contents/generations/tasks";
+    private static final String ONELINK_DOUBAO_VIDEO_RESULT_PATH = "/volc/api/v3/contents/generations/tasks/{taskId}";
     private static final Set<String> VIDU_OPTION_KEYS = Set.of(
             "duration", "seed", "resolution", "movement_amplitude", "payload", "off_peak",
             "watermark", "wm_position", "wm_url", "meta_data", "callback_url",
             "audio", "audio_type", "voice_id", "is_rec", "bgm"
     );
     private static final Set<String> VIDU_AUDIO_TYPES = Set.of("all", "speech_only", "sound_effect_only");
+    private static final Set<String> VIDU_REFERENCE2IMAGE_MODEL_WHITELIST = Set.of(
+            "image-vidu-q2",
+            "image-viduq3-pro"
+    );
 
     private final GenerationTaskRepository repository;
     private final AigcArkProperties arkProperties;
@@ -158,7 +172,8 @@ public class GenerationServiceImpl implements GenerationService {
                         safeCount(request.count()),
                         request.videoModel(),
                         normalizedAdvancedMedia.videoReferenceImageUrl(),
-                        normalizedAdvancedMedia.videoViduOptions()
+                        normalizedAdvancedMedia.videoViduOptions(),
+                        normalizedAdvancedMedia.videoExtraOptions()
                 );
                 videoResults = videoResult.results();
                 task.setVideoModel(videoResult.modelName());
@@ -311,7 +326,8 @@ public class GenerationServiceImpl implements GenerationService {
             int count,
             String requestedModel,
             String videoReferenceImageUrl,
-            Map<String, Object> videoViduOptions
+            Map<String, Object> videoViduOptions,
+            Map<String, Object> videoExtraOptions
     ) {
         ResolvedModel resolvedModel = resolveModel("video", requestedModel);
         if (resolvedModel != null) {
@@ -351,37 +367,26 @@ public class GenerationServiceImpl implements GenerationService {
                         resolvedModel.rejectReason()
                 );
             }
-            if ("kling".equalsIgnoreCase(resolvedModel.provider().key())) {
+            if ("kling".equalsIgnoreCase(resolvedModel.provider().key())
+                    || "kling_onelink".equalsIgnoreCase(resolvedModel.provider().key())) {
                 return new MediaResult(
                         resolvedModel.model().getModelName(),
-                        generateVideosWithKlingOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl),
+                        generateVideosWithKlingConnection(prompt, count, resolvedModel, videoReferenceImageUrl),
                         resolvedModel.source(),
                         resolvedModel.matchedBy(),
                         resolvedModel.rejectReason()
                 );
             }
             if ("onelinkai".equalsIgnoreCase(resolvedModel.provider().key())) {
-                if (isViduWorkspaceModel(resolvedModel.model().getModelName())) {
-                    return new MediaResult(
-                            resolvedModel.model().getModelName(),
-                            generateVideosWithViduOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl, videoViduOptions),
-                            resolvedModel.source(),
-                            resolvedModel.matchedBy(),
-                            resolvedModel.rejectReason()
-                    );
-                }
-                if (isKlingModel(resolvedModel.model().getModelName())) {
-                    return new MediaResult(
-                            resolvedModel.model().getModelName(),
-                            generateVideosWithKlingOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl),
-                            resolvedModel.source(),
-                            resolvedModel.matchedBy(),
-                            resolvedModel.rejectReason()
-                    );
-                }
-                throw new BizException(400, "当前 OneLink 视频模型仅支持 Vidu 或 Kling；其它模型请改用方舟/专属连接或补充接入");
+                return new MediaResult(
+                        resolvedModel.model().getModelName(),
+                        generateVideosWithOneLinkConnection(prompt, count, resolvedModel, videoReferenceImageUrl, videoViduOptions, videoExtraOptions),
+                        resolvedModel.source(),
+                        resolvedModel.matchedBy(),
+                        resolvedModel.rejectReason()
+                );
             }
-            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu)、Vidu OneLink(vidu_onelink)、Kling(kling) 或 OneLink+Vidu/Kling 连接");
+            throw new BizException(400, "当前视频模型仅支持配置为方舟(ark)、Moark(moark)、Vidu(vidu)、Vidu OneLink(vidu_onelink)、Kling(kling/kling_onelink) 或 OneLink 连接");
         }
         if (requestedModel != null && !requestedModel.isBlank()) {
             throw new BizException(400, "视频模型未在可用配置中");
@@ -405,6 +410,7 @@ public class GenerationServiceImpl implements GenerationService {
         Map<String, Object> outpaint = sanitizeObjectMap(imageExtra.get("outpaint"));
         Map<String, Object> omni = sanitizeObjectMap(imageExtra.get("omni"));
         Map<String, Object> videoSection = sanitizeObjectMap(advancedMedia.get("video"));
+        Map<String, Object> videoExtra = sanitizeObjectMap(videoSection.get("extra"));
 
         List<String> reference2imageImages = firstNonEmptyStringList(
                 sanitizeStringList(reference2image.get("images"))
@@ -461,6 +467,7 @@ public class GenerationServiceImpl implements GenerationService {
         Map<String, Object> mergedViduOptions = new HashMap<>(extractViduOptions(request.videoViduOptions()));
         mergedViduOptions.putAll(extractViduOptions(sanitizeObjectMap(videoSection.get("videoViduOptions"))));
         mergedViduOptions.putAll(extractViduOptions(sanitizeObjectMap(videoSection.get("viduOptions"))));
+        Map<String, Object> mergedVideoExtraOptions = extractOneLinkSeedanceVideoExtraOptions(videoExtra);
 
         return new NormalizedAdvancedMedia(
                 new NormalizedImageRequest(
@@ -478,7 +485,8 @@ public class GenerationServiceImpl implements GenerationService {
                         omniSubjectPrompt
                 ),
                 videoReferenceImageUrl,
-                mergedViduOptions.isEmpty() ? EMPTY_MAP : mergedViduOptions
+                mergedViduOptions.isEmpty() ? EMPTY_MAP : mergedViduOptions,
+                mergedVideoExtraOptions.isEmpty() ? EMPTY_MAP : mergedVideoExtraOptions
         );
     }
 
@@ -586,7 +594,8 @@ public class GenerationServiceImpl implements GenerationService {
             };
         }
         ProviderCatalog.ProviderDefinition provider = resolvedModel.provider();
-        if ("onelinkai".equalsIgnoreCase(provider.key()) && isKlingModel(resolvedModel.model().getModelName())) {
+        if (("onelinkai".equalsIgnoreCase(provider.key()) && isKlingModel(resolvedModel.model().getModelName()))
+                || ("kling".equalsIgnoreCase(provider.key()) && isKlingImageModel(resolvedModel.model().getModelName()))) {
             return generateImagesWithKlingOneLinkConnection(prompt, count, resolvedModel);
         }
         if (provider.imageGenerationPath() == null || provider.imageGenerationPath().isBlank()) {
@@ -628,9 +637,6 @@ public class GenerationServiceImpl implements GenerationService {
             NormalizedImageRequest imageRequest
     ) {
         List<String> refs = imageRequest.referenceImages();
-        if (refs.isEmpty()) {
-            throw new BizException(400, "Vidu reference2image 需要至少 1 张参考图");
-        }
         if (refs.size() > 7) {
             throw new BizException(400, "Vidu reference2image 最多支持 7 张参考图");
         }
@@ -643,8 +649,12 @@ public class GenerationServiceImpl implements GenerationService {
             validateViduImageRef(trimmed);
             normalizedRefs.add(trimmed);
         }
-        if (normalizedRefs.isEmpty()) {
-            throw new BizException(400, "Vidu reference2image 需要至少 1 张参考图");
+        if (normalizedRefs.size() > 7) {
+            throw new BizException(400, "Vidu reference2image 最多支持 7 张参考图");
+        }
+        boolean q1Family = isViduQ1FamilyModel(resolvedModel.model().getModelName());
+        if (q1Family && normalizedRefs.isEmpty()) {
+            throw new BizException(400, "Vidu Q1 reference2image 需要至少 1 张参考图");
         }
         List<String> images = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -735,10 +745,7 @@ public class GenerationServiceImpl implements GenerationService {
     }
 
     private ProviderCatalog.ProviderDefinition resolveViduImageProvider(ProviderCatalog.ProviderDefinition provider) {
-        if ("vidu".equalsIgnoreCase(provider.key())) {
-            return provider;
-        }
-        if ("onelinkai".equalsIgnoreCase(provider.key())) {
+        if ("vidu".equalsIgnoreCase(provider.key()) || "onelinkai".equalsIgnoreCase(provider.key())) {
             return providerCatalog.require("vidu_onelink");
         }
         throw new BizException(400, "当前图片模型对应连接不支持 Vidu reference2image");
@@ -873,13 +880,17 @@ public class GenerationServiceImpl implements GenerationService {
         return videos;
     }
 
-    private List<String> generateVideosWithKlingOneLinkConnection(
+    private List<String> generateVideosWithKlingConnection(
             String prompt,
             int count,
             ResolvedModel resolvedModel,
             String referenceImageUrl
     ) {
         String imageRef = referenceImageUrl == null ? "" : referenceImageUrl.trim();
+        String klingVideoInputMode = resolveKlingVideoInputMode(resolvedModel);
+        if (requiresKlingReferenceImage(klingVideoInputMode) && imageRef.isBlank()) {
+            throw new BizException(400, "Kling 图生视频模型需要参考图：请填写 videoReferenceImageUrl，或切换为文生视频模型");
+        }
         List<String> videos = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             videos.addAll(callKlingVideoApi(
@@ -900,14 +911,114 @@ public class GenerationServiceImpl implements GenerationService {
             return false;
         }
         String n = modelName.trim().toLowerCase(Locale.ROOT);
-        return n.startsWith("viduq") || n.startsWith("vidu");
+        return n.startsWith("viduq") || n.startsWith("vidu") || n.startsWith("image-vidu-");
     }
 
     private boolean isKlingModel(String modelName) {
         if (modelName == null || modelName.isBlank()) {
             return false;
         }
-        return modelName.trim().toLowerCase(Locale.ROOT).startsWith("kling-");
+        String normalized = modelName.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("kling-") || normalized.startsWith("video-kling-");
+    }
+
+    private boolean isKlingImageModel(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return false;
+        }
+        return modelName.trim().toLowerCase(Locale.ROOT).startsWith("image-kling-");
+    }
+
+    private String resolveKlingVideoInputMode(ResolvedModel resolvedModel) {
+        if (resolvedModel == null || resolvedModel.model() == null) {
+            return "auto";
+        }
+        Map<String, Object> metadata = resolvedModel.model().getMetadata();
+        String explicit = normalizeKlingVideoInputMode(firstNonBlank(
+                valueAsString(metadata == null ? null : metadata.get("videoInputMode")),
+                valueAsString(metadata == null ? null : metadata.get("klingVideoInputMode")),
+                valueAsString(metadata == null ? null : metadata.get("inputMode")),
+                valueAsString(metadata == null ? null : metadata.get("mode"))
+        ));
+        if (!explicit.isBlank() && !"auto".equals(explicit)) {
+            return explicit;
+        }
+        String providerKey = resolvedModel.provider() == null ? "" : normalize(resolvedModel.provider().key());
+        String modelName = normalize(resolvedModel.model().getModelName());
+        if ("kling".equals(providerKey) || "kling_onelink".equals(providerKey)) {
+            return isKlingImageToVideoOnlyModel(modelName) ? "image_to_video" : "text_to_video";
+        }
+        if ("onelinkai".equals(providerKey) && isKlingImageToVideoOnlyModel(modelName)) {
+            return "image_to_video";
+        }
+        return "auto";
+    }
+
+    private String normalizeKlingVideoInputMode(String raw) {
+        String normalized = normalize(raw);
+        return switch (normalized) {
+            case "image2video", "image_to_video", "img2video", "i2v" -> "image_to_video";
+            case "text2video", "text_to_video", "txt2video", "t2v" -> "text_to_video";
+            case "auto", "" -> "auto";
+            default -> normalized;
+        };
+    }
+
+    private boolean requiresKlingReferenceImage(String inputMode) {
+        return "image_to_video".equals(normalizeKlingVideoInputMode(inputMode));
+    }
+
+    private boolean isKlingImageToVideoOnlyModel(String modelName) {
+        String normalized = normalize(modelName);
+        return "kling-v1".equals(normalized) || "kling-v1-6".equals(normalized);
+    }
+
+    private List<String> generateVideosWithOneLinkConnection(
+            String prompt,
+            int count,
+            ResolvedModel resolvedModel,
+            String referenceImageUrl,
+            Map<String, Object> videoViduOptions,
+            Map<String, Object> videoExtraOptions
+    ) {
+        if (isOneLinkDoubaoVideoModel(resolvedModel.model().getModelName())) {
+            return generateVideosWithOneLinkDoubaoConnection(prompt, count, resolvedModel, referenceImageUrl, videoExtraOptions);
+        }
+        if (isViduWorkspaceModel(resolvedModel.model().getModelName())) {
+            return generateVideosWithViduOneLinkConnection(prompt, count, resolvedModel, referenceImageUrl, videoViduOptions);
+        }
+        if (isKlingModel(resolvedModel.model().getModelName())) {
+            return generateVideosWithKlingConnection(prompt, count, resolvedModel, referenceImageUrl);
+        }
+        throw new BizException(400, "OneLink 连接暂不支持该视频模型: " + resolvedModel.model().getModelName());
+    }
+
+    private boolean isOneLinkDoubaoVideoModel(String modelName) {
+        return ONELINK_DOUBAO_VIDEO_MODELS.contains(normalize(modelName));
+    }
+
+    private List<String> generateVideosWithOneLinkDoubaoConnection(
+            String prompt,
+            int count,
+            ResolvedModel resolvedModel,
+            String referenceImageUrl,
+            Map<String, Object> videoExtraOptions
+    ) {
+        String imageRef = referenceImageUrl == null ? "" : referenceImageUrl.trim();
+        List<String> videos = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            videos.add(callOneLinkDoubaoVideoApi(
+                    resolvedModel.provider(),
+                    resolvedModel.connection().getBaseUrl(),
+                    resolvedModel.apiKey(),
+                    resolvedModel.metadataPlain(),
+                    resolvedModel.model().getModelName(),
+                    prompt,
+                    imageRef,
+                    videoExtraOptions
+            ));
+        }
+        return videos;
     }
 
     private boolean isValidViduRefImage(String ref) {
@@ -962,9 +1073,12 @@ public class GenerationServiceImpl implements GenerationService {
         String path = "vidu_onelink".equalsIgnoreCase(provider.key())
                 ? "/vidu/ent/v2/reference2image"
                 : "/ent/v2/reference2image";
+        String requestBaseUrl = "vidu_onelink".equalsIgnoreCase(provider.key())
+                ? "https://api.onelinkai.cloud"
+                : baseUrl;
         try {
             Map<String, Object> submitBody = providerHttpGateway.postJson(
-                    baseUrl,
+                    requestBaseUrl,
                     path,
                     provider,
                     apiKey,
@@ -1090,8 +1204,8 @@ public class GenerationServiceImpl implements GenerationService {
             String referenceImageUrl
     ) {
         boolean imageToVideo = referenceImageUrl != null && !referenceImageUrl.isBlank();
-        String submitPath = imageToVideo ? "/kling/v1/videos/image2video" : "/kling/v1/videos/text2video";
-        String queryPath = imageToVideo ? "/kling/v1/videos/image2video/{taskId}" : "/kling/v1/videos/text2video/{taskId}";
+        String submitPath = resolveKlingVideoSubmitPath(provider, imageToVideo);
+        String queryPath = resolveKlingVideoQueryPath(provider, submitPath);
         Map<String, Object> payload = new HashMap<>();
         payload.put("model_name", modelName);
         payload.put("duration", String.valueOf(safeVideoDuration()));
@@ -1099,7 +1213,7 @@ public class GenerationServiceImpl implements GenerationService {
             payload.put("prompt", prompt);
         }
         if (imageToVideo) {
-            payload.put("image", referenceImageUrl);
+            payload.put("image", normalizeKlingImageInput(referenceImageUrl));
         }
         try {
             Map<String, Object> submitBody = providerHttpGateway.postJson(
@@ -1123,6 +1237,31 @@ public class GenerationServiceImpl implements GenerationService {
         } catch (ProviderGatewayException ex) {
             throw new BizException(mapProviderStatus(ex), ex.getMessage());
         }
+    }
+
+    private String resolveKlingVideoSubmitPath(ProviderCatalog.ProviderDefinition provider, boolean imageToVideo) {
+        String textToVideoPath = provider == null ? null : valueAsString(provider.videoSubmitPath());
+        if (textToVideoPath == null || textToVideoPath.isBlank()) {
+            textToVideoPath = "/v1/videos/text2video";
+        }
+        if (!imageToVideo) {
+            return textToVideoPath;
+        }
+        if (textToVideoPath.contains("text2video")) {
+            return textToVideoPath.replace("text2video", "image2video");
+        }
+        if (textToVideoPath.endsWith("/")) {
+            return textToVideoPath + "image2video";
+        }
+        return textToVideoPath + "/image2video";
+    }
+
+    private String resolveKlingVideoQueryPath(ProviderCatalog.ProviderDefinition provider, String submitPath) {
+        String configured = provider == null ? null : valueAsString(provider.videoResultPath());
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        return submitPath + "/{taskId}";
     }
 
     private List<String> pollKlingTaskForUrls(
@@ -1320,9 +1459,12 @@ public class GenerationServiceImpl implements GenerationService {
             String prompt,
             List<String> imageRefs
     ) {
+        validateViduReference2ImageModel(resolvedModel.model().getModelName());
         Map<String, Object> payload = new HashMap<>();
         payload.put("model", resolvedModel.model().getModelName());
-        payload.put("images", imageRefs);
+        if (imageRefs != null && !imageRefs.isEmpty()) {
+            payload.put("images", imageRefs);
+        }
         if (prompt != null && !prompt.isBlank()) {
             payload.put("prompt", prompt.trim());
         }
@@ -1542,7 +1684,7 @@ public class GenerationServiceImpl implements GenerationService {
 
     private void validateViduImageRef(String ref) {
         if (!isValidViduRefImage(ref)) {
-            throw new BizException(400, "Vidu images 仅支持 1 张 http(s) 图片地址或 data:image base64");
+            throw new BizException(400, "Vidu images 仅支持 http(s) 图片地址或 data:image base64");
         }
         String normalized = ref.trim().toLowerCase(Locale.ROOT);
         if (normalized.startsWith("data:image/")) {
@@ -1558,8 +1700,11 @@ public class GenerationServiceImpl implements GenerationService {
             throw new BizException(400, "Vidu data:image 格式错误");
         }
         String header = parts[0].toLowerCase(Locale.ROOT);
-        if (!header.contains("image/jpeg") && !header.contains("image/jpg") && !header.contains("image/png")) {
-            throw new BizException(400, "Vidu 仅支持 JPEG/PNG 参考图");
+        if (!header.contains("image/jpeg")
+                && !header.contains("image/jpg")
+                && !header.contains("image/png")
+                && !header.contains("image/webp")) {
+            throw new BizException(400, "Vidu 仅支持 PNG/JPEG/JPG/WEBP 参考图");
         }
         byte[] data;
         try {
@@ -1595,34 +1740,46 @@ public class GenerationServiceImpl implements GenerationService {
         if (contentType.contains(";")) {
             contentType = contentType.substring(0, contentType.indexOf(';')).trim();
         }
-        if (!contentType.isBlank() && !"image/jpeg".equals(contentType) && !"image/jpg".equals(contentType) && !"image/png".equals(contentType)) {
-            throw new BizException(400, "Vidu 仅支持 JPEG/PNG 参考图");
+        if (!contentType.isBlank()
+                && !"image/jpeg".equals(contentType)
+                && !"image/jpg".equals(contentType)
+                && !"image/png".equals(contentType)
+                && !"image/webp".equals(contentType)) {
+            throw new BizException(400, "Vidu 仅支持 PNG/JPEG/JPG/WEBP 参考图");
         }
         validateViduImageBytes(response.body());
     }
 
     private void validateViduImageBytes(byte[] data) {
         if (data == null || data.length == 0 || data.length > VIDU_MAX_IMAGE_BYTES) {
-            throw new BizException(400, "Vidu 参考图体积需在 0-10MB 之间");
+            throw new BizException(400, "Vidu 参考图体积需在 0-50MB 之间");
         }
         BufferedImage image;
         try {
             image = ImageIO.read(new ByteArrayInputStream(data));
         } catch (IOException ex) {
-            throw new BizException(400, "Vidu 参考图无法解析，请使用 JPEG/PNG 图片");
+            throw new BizException(400, "Vidu 参考图无法解析，请使用 PNG/JPEG/JPG/WEBP 图片");
         }
         if (image == null) {
-            throw new BizException(400, "Vidu 参考图无法解析，请使用 JPEG/PNG 图片");
+            throw new BizException(400, "Vidu 参考图无法解析，请使用 PNG/JPEG/JPG/WEBP 图片");
         }
         int width = image.getWidth();
         int height = image.getHeight();
         if (width <= 0 || height <= 0) {
             throw new BizException(400, "Vidu 参考图尺寸无效");
         }
-        double ratio = (double) width / (double) height;
-        if (ratio < 0.4d || ratio > 2.5d) {
-            throw new BizException(400, "Vidu 参考图比例不受支持，请使用 0.4-2.5 之间的宽高比");
+        if (width < 128 || height < 128) {
+            throw new BizException(400, "Vidu 参考图尺寸不能小于 128x128");
         }
+        double ratio = (double) width / (double) height;
+        if (ratio < 0.25d || ratio > 4.0d) {
+            throw new BizException(400, "Vidu 参考图比例不受支持，请使用 1:4-4:1 之间的宽高比");
+        }
+    }
+
+    private boolean isViduQ1FamilyModel(String modelName) {
+        String normalized = normalize(modelName);
+        return normalized.startsWith("viduq1");
     }
 
     private String parseViduPrimaryVideoUrl(Map<String, Object> body) {
@@ -1762,10 +1919,22 @@ public class GenerationServiceImpl implements GenerationService {
 
     private ViduMatrix defaultViduMatrix(String family) {
         return switch (normalize(family)) {
-            case "q1" -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p"), false);
-            case "q3" -> new ViduMatrix(List.of(4, 8), List.of("540p", "720p", "1080p"), true);
-            case "2.0" -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p", "720p", "1080p"), true);
-            default -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p", "720p"), true);
+            case "q1" -> new ViduMatrix(List.of(5), List.of("1080p"), false);
+            case "q3" -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
+                    List.of("540p", "720p", "1080p"),
+                    true
+            );
+            case "2.0" -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                    List.of("540p", "720p", "1080p"),
+                    false
+            );
+            default -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                    List.of("540p", "720p", "1080p"),
+                    false
+            );
         };
     }
 
@@ -1952,13 +2121,24 @@ public class GenerationServiceImpl implements GenerationService {
         if (normalized.contains("omni")) {
             return "omni";
         }
-        if ("kling-v2".equals(normalized) || normalized.contains("multi") && normalized.contains("reference")) {
+        if ("video-kling-v3".equals(normalized) || normalized.contains("multi") && normalized.contains("reference")) {
             return "kling_multi_reference";
         }
-        if (normalized.startsWith("vidu") || normalized.contains("reference2image")) {
+        if (normalized.startsWith("vidu")
+                || normalized.startsWith("image-vidu-")
+                || normalized.startsWith("image-viduq3-")
+                || normalized.contains("reference2image")) {
             return "vidu_reference2image";
         }
         return null;
+    }
+
+    private void validateViduReference2ImageModel(String modelName) {
+        String normalized = normalize(modelName);
+        if (VIDU_REFERENCE2IMAGE_MODEL_WHITELIST.contains(normalized)) {
+            return;
+        }
+        throw new BizException(400, "Vidu reference2image 仅支持模型：image-vidu-q2、image-viduq3-pro");
     }
 
     private int requireNonNegativeExpand(Integer raw, String fieldName) {
@@ -2111,7 +2291,8 @@ public class GenerationServiceImpl implements GenerationService {
     private record NormalizedAdvancedMedia(
             NormalizedImageRequest image,
             String videoReferenceImageUrl,
-            Map<String, Object> videoViduOptions
+            Map<String, Object> videoViduOptions,
+            Map<String, Object> videoExtraOptions
     ) {
     }
 
@@ -2158,6 +2339,123 @@ public class GenerationServiceImpl implements GenerationService {
                 throw new BizException(502, "视频模型服务返回异常，缺少task_id或视频地址");
             }
             return pollArkVideoTask(providerCatalog.require("ark"), baseUrl, apiKey, taskId);
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
+        }
+    }
+
+    private String callOneLinkDoubaoVideoApi(
+            ProviderCatalog.ProviderDefinition provider,
+            String baseUrl,
+            String apiKey,
+            Map<String, Object> connectionMetadata,
+            String modelName,
+            String prompt,
+            String referenceImageUrl,
+            Map<String, Object> videoExtraOptions
+    ) {
+        Map<String, Object> extra = videoExtraOptions == null ? EMPTY_MAP : videoExtraOptions;
+        String text = firstNonBlank(valueAsString(extra.get("text")), prompt);
+        if (text == null || text.isBlank()) {
+            throw new BizException(400, "OneLink 豆包视频请求缺少文本描述");
+        }
+        List<String> referenceImages = sanitizeStringList(extra.get("referenceImageUrls"));
+        if (referenceImages.isEmpty()) {
+            referenceImages = sanitizeStringList(extra.get("referenceImages"));
+        }
+        if (referenceImages.isEmpty()) {
+            referenceImages = sanitizeStringList(extra.get("images"));
+        }
+        if (referenceImages.isEmpty() && referenceImageUrl != null && !referenceImageUrl.isBlank()) {
+            referenceImages = List.of(referenceImageUrl.trim());
+        }
+        if (referenceImages.isEmpty()) {
+            throw new BizException(400, "OneLink 豆包视频模型需要参考图：请在请求中填写 videoReferenceImageUrl（可访问的 http(s) 图片地址）");
+        }
+        List<String> referenceVideos = sanitizeStringList(extra.get("referenceVideoUrls"));
+        if (referenceVideos.isEmpty()) {
+            referenceVideos = sanitizeStringList(extra.get("referenceVideos"));
+        }
+        if (referenceVideos.isEmpty()) {
+            referenceVideos = sanitizeStringList(extra.get("videos"));
+        }
+        List<String> referenceAudios = sanitizeStringList(extra.get("referenceAudioUrls"));
+        if (referenceAudios.isEmpty()) {
+            referenceAudios = sanitizeStringList(extra.get("referenceAudios"));
+        }
+        if (referenceAudios.isEmpty()) {
+            referenceAudios = sanitizeStringList(extra.get("audios"));
+        }
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", text.trim()));
+        for (String imageUrl : referenceImages) {
+            validateOnelinkSeedanceMediaUrl(imageUrl, "reference_image");
+            content.add(Map.of(
+                    "type", "image_url",
+                    "image_url", Map.of("url", imageUrl.trim()),
+                    "role", "reference_image"
+            ));
+        }
+        for (String videoUrl : referenceVideos) {
+            validateOnelinkSeedanceMediaUrl(videoUrl, "reference_video");
+            content.add(Map.of(
+                    "type", "video_url",
+                    "video_url", Map.of("url", videoUrl.trim()),
+                    "role", "reference_video"
+            ));
+        }
+        for (String audioUrl : referenceAudios) {
+            validateOnelinkSeedanceMediaUrl(audioUrl, "reference_audio");
+            content.add(Map.of(
+                    "type", "audio_url",
+                    "audio_url", Map.of("url", audioUrl.trim()),
+                    "role", "reference_audio"
+            ));
+        }
+        Integer duration = parseIntegerStrict(extra.get("duration"));
+        if (duration != null && duration <= 0) {
+            throw new BizException(400, "OneLink 豆包视频参数 duration 必须为正整数");
+        }
+        Boolean watermark = parseBooleanStrict(extra.get("watermark"));
+        Boolean generateAudio = parseBooleanStrict(extra.get("generate_audio"));
+        String ratio = valueAsString(extra.get("ratio"));
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("model", modelName);
+        payload.put("content", content);
+        payload.put("duration", duration == null ? safeVideoDuration() : duration);
+        payload.put("watermark", watermark == null ? arkProperties.isWatermark() : watermark);
+        if (generateAudio != null) {
+            payload.put("generate_audio", generateAudio);
+        }
+        if (ratio != null && !ratio.isBlank()) {
+            payload.put("ratio", ratio.trim());
+        }
+        try {
+            Map<String, Object> submitBody = providerHttpGateway.postJson(
+                    baseUrl,
+                    ONELINK_DOUBAO_VIDEO_SUBMIT_PATH,
+                    provider,
+                    apiKey,
+                    connectionMetadata,
+                    payload,
+                    Duration.ofSeconds(120)
+            );
+            String directUrl = parseArkVideoUrl(submitBody, false);
+            if (directUrl != null) {
+                return directUrl;
+            }
+            String taskId = parseArkVideoTaskId(submitBody);
+            if (taskId == null) {
+                throw new BizException(502, "OneLink 豆包视频未返回 task_id 或视频地址");
+            }
+            return pollVideoTaskByPath(
+                    provider,
+                    baseUrl,
+                    apiKey,
+                    connectionMetadata,
+                    taskId,
+                    ONELINK_DOUBAO_VIDEO_RESULT_PATH
+            );
         } catch (ProviderGatewayException ex) {
             throw new BizException(mapProviderStatus(ex), ex.getMessage());
         }
@@ -2218,17 +2516,106 @@ public class GenerationServiceImpl implements GenerationService {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             Map<String, Object> resultBody = requestVideoTaskResult(provider, baseUrl, apiKey, taskId);
             lastBody = resultBody;
-            Object errNode = resultBody.get("error");
-            if (errNode != null && !Boolean.FALSE.equals(errNode) && !"false".equalsIgnoreCase(String.valueOf(errNode).trim())) {
+            if (isArkTaskErrorResponse(resultBody)) {
                 throw new BizException(502, parseArkTaskError(resultBody));
             }
             String maybeUrl = parseArkVideoUrl(resultBody, false);
+            String status = parseArkTaskStatus(resultBody);
+            lastStatus = status;
+            String code = firstNonBlank(
+                    valueAsString(resultBody.get("code")),
+                    nestedValue(resultBody, "data", "code"),
+                    nestedValue(resultBody, "result", "code")
+            );
+            if (log.isDebugEnabled()) {
+                log.debug("[视频轮询][ark] taskId={} attempt={}/{} status={} hasUrl={} code={} summary={}",
+                        taskId,
+                        attempt,
+                        maxAttempts,
+                        safeStatus(status),
+                        maybeUrl != null,
+                        code == null ? "-" : code,
+                        summarizeBody(resultBody));
+            }
             if (maybeUrl != null) {
                 return maybeUrl;
             }
+            if (isSuccessStatus(status) && attempt == maxAttempts) {
+                throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
+                        + taskId + "，status=" + safeStatus(status) + "，响应摘要=" + summarizeBody(resultBody));
+            }
+            if (isFailedStatus(status)) {
+                throw new BizException(502, "视频任务失败：" + parseArkTaskError(resultBody));
+            }
 
+            if (attempt < maxAttempts) {
+                try {
+                    Thread.sleep(intervalMs);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new BizException(504, "视频任务轮询被中断，请稍后重试");
+                }
+            }
+        }
+        if (isSuccessStatus(lastStatus)) {
+            throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
+                    + taskId + "，status=" + safeStatus(lastStatus) + "，响应摘要=" + summarizeBody(lastBody));
+        }
+        throw new BizException(504, "视频生成超时，请稍后重试或缩短提示词");
+    }
+
+    private String pollVideoTaskByPath(
+            ProviderCatalog.ProviderDefinition provider,
+            String baseUrl,
+            String apiKey,
+            Map<String, Object> connectionMetadata,
+            String taskId,
+            String resultPathTemplate
+    ) {
+        int maxAttempts = Math.max(1, arkProperties.getVideoPollMaxAttempts());
+        long intervalMs = Math.max(300L, arkProperties.getVideoPollIntervalMs());
+        String lastStatus = null;
+        Map<String, Object> lastBody = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            Map<String, Object> resultBody;
+            try {
+                resultBody = providerHttpGateway.getJson(
+                        baseUrl,
+                        pathWithTaskId(resultPathTemplate, taskId),
+                        provider,
+                        apiKey,
+                        connectionMetadata,
+                        Duration.ofSeconds(30)
+                );
+            } catch (ProviderGatewayException ex) {
+                throw new BizException(mapProviderStatus(ex), ex.getMessage());
+            }
+            lastBody = resultBody;
+            if (isArkTaskErrorResponse(resultBody)) {
+                throw new BizException(502, parseArkTaskError(resultBody));
+            }
+            String maybeUrl = parseArkVideoUrl(resultBody, false);
             String status = parseArkTaskStatus(resultBody);
             lastStatus = status;
+            String code = firstNonBlank(
+                    valueAsString(resultBody.get("code")),
+                    nestedValue(resultBody, "data", "code"),
+                    nestedValue(resultBody, "result", "code")
+            );
+            if (log.isDebugEnabled()) {
+                log.debug("[视频轮询][path] taskId={} attempt={}/{} status={} hasUrl={} code={} summary={}",
+                        taskId,
+                        attempt,
+                        maxAttempts,
+                        safeStatus(status),
+                        maybeUrl != null,
+                        code == null ? "-" : code,
+                        summarizeBody(resultBody));
+            }
+            if (maybeUrl != null) {
+                return maybeUrl;
+            }
             if (isSuccessStatus(status) && attempt == maxAttempts) {
                 throw new BizException(502, "视频任务已完成，但未返回视频地址，task_id="
                         + taskId + "，status=" + safeStatus(status) + "，响应摘要=" + summarizeBody(resultBody));
@@ -2420,6 +2807,18 @@ public class GenerationServiceImpl implements GenerationService {
             }
             return null;
         }
+        String directUrl = firstNonBlank(
+                nestedValue(body, "content", "videoUrl"),
+                nestedValue(body, "content", "video_url"),
+                nestedValue(body, "data", "content", "videoUrl"),
+                nestedValue(body, "data", "content", "video_url"),
+                nestedValue(body, "result", "content", "videoUrl"),
+                nestedValue(body, "result", "content", "video_url")
+        );
+        directUrl = normalizeMediaUrl(directUrl);
+        if (isValidMediaUrl(directUrl)) {
+            return directUrl;
+        }
         List<String> urls = collectVideoUrls(body);
         if (!urls.isEmpty()) {
             return urls.get(0);
@@ -2440,7 +2839,7 @@ public class GenerationServiceImpl implements GenerationService {
         if (node == null || depth > 8) {
             return;
         }
-        String directValue = valueAsString(node);
+        String directValue = normalizeMediaUrl(valueAsString(node));
         if (isValidMediaUrl(directValue)) {
             urls.add(directValue);
             return;
@@ -2450,7 +2849,7 @@ public class GenerationServiceImpl implements GenerationService {
                 String key = entry.getKey() == null ? "" : String.valueOf(entry.getKey()).toLowerCase();
                 Object value = entry.getValue();
                 if (key.contains("url")) {
-                    String maybe = valueAsString(value);
+                    String maybe = normalizeMediaUrl(valueAsString(value));
                     if (isValidMediaUrl(maybe)) {
                         urls.add(maybe);
                     }
@@ -2473,11 +2872,39 @@ public class GenerationServiceImpl implements GenerationService {
     }
 
     private boolean isValidMediaUrl(String value) {
-        if (value == null) {
+        String normalizedValue = normalizeMediaUrl(value);
+        if (normalizedValue == null) {
             return false;
         }
-        String normalized = value.trim().toLowerCase();
+        String normalized = normalizedValue.toLowerCase(Locale.ROOT);
         return normalized.startsWith("https://") || normalized.startsWith("http://");
+    }
+
+    private String normalizeMediaUrl(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() >= 2) {
+            char first = normalized.charAt(0);
+            char last = normalized.charAt(normalized.length() - 1);
+            boolean wrappedByQuote = (first == '"' && last == '"') || (first == '\'' && last == '\'');
+            boolean wrappedByBacktick = first == '`' && last == '`';
+            if (wrappedByQuote || wrappedByBacktick) {
+                normalized = normalized.substring(1, normalized.length() - 1).trim();
+            }
+        }
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void validateOnelinkSeedanceMediaUrl(String url, String role) {
+        String normalized = valueAsString(url);
+        if (!isValidMediaUrl(normalized)) {
+            throw new BizException(400, "OneLink 豆包视频 " + role + " 必须为可访问的 http(s) 地址");
+        }
     }
 
     private String parseArkVideoTaskId(Map<String, Object> body) {
@@ -2535,7 +2962,17 @@ public class GenerationServiceImpl implements GenerationService {
         if (body == null) {
             return "未知错误";
         }
+        String errorNodeMessage = null;
+        Object errorNode = body.get("error");
+        if (errorNode instanceof Map<?, ?> errorMap) {
+            errorNodeMessage = firstNonBlank(
+                    valueAsString(errorMap.get("message")),
+                    valueAsString(errorMap.get("code")),
+                    valueAsString(errorMap.get("type"))
+            );
+        }
         return firstNonBlank(
+                errorNodeMessage,
                 valueAsString(body.get("message")),
                 valueAsString(body.get("error")),
                 valueAsString(body.get("error_message")),
@@ -2546,6 +2983,42 @@ public class GenerationServiceImpl implements GenerationService {
                 nestedValue(body, "result", "message"),
                 "未知错误"
         );
+    }
+
+    private boolean isArkTaskErrorResponse(Map<String, Object> body) {
+        if (body == null || body.isEmpty()) {
+            return false;
+        }
+        Object errNode = body.get("error");
+        if (errNode instanceof Map<?, ?> errorMap && !errorMap.isEmpty()) {
+            return true;
+        }
+        if (errNode != null && !Boolean.FALSE.equals(errNode)) {
+            String errorText = valueAsString(errNode);
+            if (errorText != null && !"false".equalsIgnoreCase(errorText) && !"null".equalsIgnoreCase(errorText)) {
+                return true;
+            }
+        }
+        String code = firstNonBlank(
+                valueAsString(body.get("code")),
+                nestedValue(body, "data", "code"),
+                nestedValue(body, "result", "code")
+        );
+        if (code == null) {
+            return false;
+        }
+        return !isSuccessCode(code);
+    }
+
+    private boolean isSuccessCode(String code) {
+        String normalized = code.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return true;
+        }
+        return normalized.equals("0")
+                || normalized.equals("200")
+                || normalized.equals("ok")
+                || normalized.equals("success");
     }
 
     private boolean isSuccessStatus(String status) {
@@ -2590,6 +3063,64 @@ public class GenerationServiceImpl implements GenerationService {
         }
         String raw = String.valueOf(value).trim();
         return raw.isEmpty() ? null : raw;
+    }
+
+    private Map<String, Object> extractOneLinkSeedanceVideoExtraOptions(Map<String, Object> rawExtra) {
+        if (rawExtra == null || rawExtra.isEmpty()) {
+            return EMPTY_MAP;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        String text = valueAsString(rawExtra.get("text"));
+        if (text != null) {
+            out.put("text", text);
+        }
+        List<String> imageUrls = sanitizeStringList(rawExtra.get("referenceImageUrls"));
+        if (imageUrls.isEmpty()) {
+            imageUrls = sanitizeStringList(rawExtra.get("referenceImages"));
+        }
+        if (imageUrls.isEmpty()) {
+            imageUrls = sanitizeStringList(rawExtra.get("images"));
+        }
+        if (!imageUrls.isEmpty()) {
+            out.put("referenceImageUrls", imageUrls);
+        }
+        List<String> videoUrls = sanitizeStringList(rawExtra.get("referenceVideoUrls"));
+        if (videoUrls.isEmpty()) {
+            videoUrls = sanitizeStringList(rawExtra.get("referenceVideos"));
+        }
+        if (videoUrls.isEmpty()) {
+            videoUrls = sanitizeStringList(rawExtra.get("videos"));
+        }
+        if (!videoUrls.isEmpty()) {
+            out.put("referenceVideoUrls", videoUrls);
+        }
+        List<String> audioUrls = sanitizeStringList(rawExtra.get("referenceAudioUrls"));
+        if (audioUrls.isEmpty()) {
+            audioUrls = sanitizeStringList(rawExtra.get("referenceAudios"));
+        }
+        if (audioUrls.isEmpty()) {
+            audioUrls = sanitizeStringList(rawExtra.get("audios"));
+        }
+        if (!audioUrls.isEmpty()) {
+            out.put("referenceAudioUrls", audioUrls);
+        }
+        Boolean generateAudio = parseBooleanStrict(rawExtra.get("generate_audio"));
+        if (generateAudio != null) {
+            out.put("generate_audio", generateAudio);
+        }
+        String ratio = valueAsString(rawExtra.get("ratio"));
+        if (ratio != null) {
+            out.put("ratio", ratio);
+        }
+        Integer duration = parseIntegerStrict(rawExtra.get("duration"));
+        if (duration != null) {
+            out.put("duration", duration);
+        }
+        Boolean watermark = parseBooleanStrict(rawExtra.get("watermark"));
+        if (watermark != null) {
+            out.put("watermark", watermark);
+        }
+        return out.isEmpty() ? EMPTY_MAP : out;
     }
 
     private String firstNonBlank(String... values) {
@@ -2660,6 +3191,7 @@ public class GenerationServiceImpl implements GenerationService {
     ) {
         boolean hasImages = imageResults != null && !imageResults.isEmpty();
         boolean hasVideos = videoResults != null && !videoResults.isEmpty();
+        log.info("[工作台生成] taskId={} 开始持久化文件: hasImages={}, hasVideos={}", taskId, hasImages, hasVideos);
         if (!hasImages && !hasVideos) {
             task.setPersistedImageFileIds(List.of());
             task.setPersistedVideoFileIds(List.of());
@@ -2683,6 +3215,7 @@ public class GenerationServiceImpl implements GenerationService {
                         persistedImg.add(rec.fileId);
                         displayImg.add(localAssetFileService.toPublicUrl(rec.fileId));
                     } catch (Exception ex) {
+                        log.warn("[工作台生成] taskId={} 图片下载失败: url={}, error={}", taskId, trimmed, ex.getMessage());
                         displayImg.add(trimmed);
                     }
                 }
@@ -2697,8 +3230,14 @@ public class GenerationServiceImpl implements GenerationService {
                         continue;
                     }
                     String trimmed = url.trim();
+                    log.info("[工作台生成] taskId={} 处理视频[{}]: {}", taskId, i, trimmed);
                     if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-                        displayVid.add(trimmed);
+                        if (trimmed.startsWith("/api/v1/files/")) {
+                            String fileId = trimmed.substring("/api/v1/files/".length());
+                            displayVid.add(localAssetFileService.toPublicUrl(fileId));
+                        } else {
+                            displayVid.add(trimmed);
+                        }
                         continue;
                     }
                     try {
@@ -2708,10 +3247,12 @@ public class GenerationServiceImpl implements GenerationService {
                                 "video/mp4",
                                 trimmed
                         );
+                        log.info("[工作台生成] taskId={} 视频[{}] 下载成功: fileId={}", taskId, i, rec.fileId);
                         scriptProjectService.upsertFile(aggregate, rec);
                         persistedVid.add(rec.fileId);
                         displayVid.add(localAssetFileService.toPublicUrl(rec.fileId));
                     } catch (Exception ex) {
+                        log.error("[工作台生成] taskId={} 视频[{}] 下载失败: url={}, error={}", taskId, i, trimmed, ex.getMessage(), ex);
                         displayVid.add(trimmed);
                     }
                 }
@@ -2725,7 +3266,9 @@ public class GenerationServiceImpl implements GenerationService {
             if (!displayVid.isEmpty()) {
                 task.setVideoResults(displayVid);
             }
+            log.info("[工作台生成] taskId={} 持久化完成: persistedImg={}, persistedVid={}", taskId, persistedImg.size(), persistedVid.size());
         } catch (Exception ex) {
+            log.error("[工作台生成] taskId={} 持久化失败: error={}", taskId, ex.getMessage(), ex);
             task.setPersistedImageFileIds(List.of());
             task.setPersistedVideoFileIds(List.of());
         }

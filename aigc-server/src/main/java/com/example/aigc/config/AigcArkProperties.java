@@ -15,7 +15,7 @@ public class AigcArkProperties {
     private List<String> videoModelOptions = new ArrayList<>();
     private String videoApiPath = "/api/v3/contents/generations/tasks";
     private String videoResultApiPath = "/api/v3/contents/generations/tasks/{taskId}";
-    private int videoPollMaxAttempts = 40;
+    private int videoPollMaxAttempts = 200;
     private long videoPollIntervalMs = 3000;
     private String responseFormat = "url";
     private String size = "2K";

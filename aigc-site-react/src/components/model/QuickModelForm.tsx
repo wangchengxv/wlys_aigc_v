@@ -100,8 +100,8 @@ export function QuickModelForm({ visible, onClose, onSuccess, showOnelinkPromo =
         {showOnelinkPromo ? (
           <section className="quick-form-promo" aria-label="onelinkai-api 推荐">
             <p className="quick-form-promo__title">推荐购买 API：onelinkai-api</p>
-            <a className="quick-form-promo__link" href="https://www.onelinkai.cloud" target="_blank" rel="noopener noreferrer">
-              https://www.onelinkai.cloud
+            <a className="quick-form-promo__link" href="https://api.onelinkai.cloud" target="_blank" rel="noopener noreferrer">
+              https://api.onelinkai.cloud
             </a>
             <img className="quick-form-promo__image" src="/recommend/onelinkai-login.png" alt="OneLink AI API 推荐" />
           </section>
@@ -133,7 +133,7 @@ export function QuickModelForm({ visible, onClose, onSuccess, showOnelinkPromo =
                 {selectedProvider ? '请选择模型' : '请先选择提供商'}
               </option>
               {modelOptions.map((m) => (
-                <option key={m.modelName} value={m.modelName}>
+                <option key={m.id} value={m.modelName}>
                   {m.displayName} ({m.modelName})
                 </option>
               ))}

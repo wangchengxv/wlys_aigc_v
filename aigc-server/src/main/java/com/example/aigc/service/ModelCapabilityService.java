@@ -81,7 +81,16 @@ public class ModelCapabilityService {
                 || normalizedModel.contains("sora")) {
             capabilities.add("video");
         }
+        if (isViduReference2ImageFamilyModel(normalizedModel)) {
+            capabilities.add("image");
+        }
         if (isViduWorkspaceModel(normalizedModel)) {
+            capabilities.add("video");
+        }
+        if (isKlingImageModel(normalizedProvider, normalizedModel)) {
+            capabilities.add("image");
+        }
+        if (isKlingVideoModel(normalizedProvider, normalizedModel)) {
             capabilities.add("video");
         }
         if (isKlingModel(normalizedModel) && capabilities.isEmpty()) {
@@ -148,12 +157,45 @@ public class ModelCapabilityService {
 
     private boolean isViduWorkspaceModel(String modelName) {
         String normalized = normalize(modelName);
-        return normalized.startsWith("viduq") || normalized.startsWith("vidu");
+        return normalized.startsWith("viduq")
+                || normalized.startsWith("vidu")
+                || normalized.startsWith("image-vidu-");
+    }
+
+    private boolean isViduReference2ImageFamilyModel(String modelName) {
+        String normalized = normalize(modelName);
+        return normalized.startsWith("image-vidu-")
+                || normalized.startsWith("image-viduq3-")
+                || normalized.startsWith("viduq2")
+                || normalized.startsWith("viduq1");
     }
 
     private boolean isKlingModel(String modelName) {
         String normalized = normalize(modelName);
         return normalized.startsWith("kling-");
+    }
+
+    private boolean isKlingImageModel(String provider, String modelName) {
+        String normalizedProvider = normalize(provider);
+        String normalizedModel = normalize(modelName);
+        if (!"onelinkai".equals(normalizedProvider)) {
+            return false;
+        }
+        return "video-kling-v3".equals(normalizedModel) || "video-kling-v3".equals(normalizedModel);
+    }
+
+    private boolean isKlingVideoModel(String provider, String modelName) {
+        String normalizedProvider = normalize(provider);
+        String normalizedModel = normalize(modelName);
+        if ("kling".equals(normalizedProvider) || "kling_onelink".equals(normalizedProvider)) {
+            return isKlingModel(normalizedModel);
+        }
+        if (!"onelinkai".equals(normalizedProvider)) {
+            return false;
+        }
+        return "kling-v1".equals(normalizedModel)
+                || "kling-v1-6".equals(normalizedModel)
+                || "video-kling-v3-6".equals(normalizedModel);
     }
 
     private String detectViduModelFamily(String modelName) {
@@ -175,10 +217,22 @@ public class ModelCapabilityService {
 
     private ViduMatrix defaultViduMatrix(String family) {
         return switch (normalize(family)) {
-            case "q1" -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p"), false);
-            case "q3" -> new ViduMatrix(List.of(4, 8), List.of("540p", "720p", "1080p"), true);
-            case "2.0" -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p", "720p", "1080p"), true);
-            default -> new ViduMatrix(List.of(4, 8), List.of("360p", "540p", "720p"), true);
+            case "q1" -> new ViduMatrix(List.of(5), List.of("1080p"), false);
+            case "q3" -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
+                    List.of("540p", "720p", "1080p"),
+                    true
+            );
+            case "2.0" -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                    List.of("540p", "720p", "1080p"),
+                    false
+            );
+            default -> new ViduMatrix(
+                    List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                    List.of("540p", "720p", "1080p"),
+                    false
+            );
         };
     }
 

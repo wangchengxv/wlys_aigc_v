@@ -6,6 +6,22 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const comfyTarget = env.VITE_COMFY_PROXY_TARGET
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
+  const proxy = {
+    '/api': {
+      target: apiProxyTarget,
+      changeOrigin: true,
+    },
+    ...(comfyTarget
+      ? {
+          '/api/comfy': {
+            target: comfyTarget,
+            changeOrigin: true,
+            rewrite: (p: string) => p.replace(/^\/api\/comfy/, ''),
+          },
+        }
+      : {}),
+  }
 
   return {
     plugins: [react()],
@@ -28,15 +44,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5174,
-      proxy: comfyTarget
-        ? {
-            '/api/comfy': {
-              target: comfyTarget,
-              changeOrigin: true,
-              rewrite: (p) => p.replace(/^\/api\/comfy/, ''),
-            },
-          }
-        : undefined,
+      proxy,
     },
   }
 })

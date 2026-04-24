@@ -4,7 +4,7 @@
 平台当前虽有视频生成链路，但缺少按 Vidu 官方图生视频协议完整建模与参数透传能力，导致模型能力无法在平台中稳定、可配置地使用。需要以官方接口为准接入 Vidu 图生视频，覆盖可用模型、关键参数、异步任务与结果映射。
 
 ## What Changes
-- 新增 `Vidu` 图生视频供应商能力，默认提交接口为 `POST https://api.vidu.cn/ent/v2/img2video`
+- 新增 `Vidu` 图生视频供应商能力，默认提交接口为 `POST https://api.onelinkai.cloud//vidu/vidu/ent/v2/img2video`
 - 统一 `Authorization: Token {api key}` 鉴权与 `application/json` 请求协议
 - 增加 `images`（单图）、`model`、`prompt`、`duration`、`resolution`、`seed`、`audio`、`audio_type`、`voice_id`、`is_rec`、`bgm`、`off_peak`、`watermark`、`wm_position`、`payload` 等参数映射与校验
 - 按模型族（q1/q2/q3/2.0）约束可选时长、分辨率与音频能力，避免非法组合提交
@@ -22,7 +22,7 @@
 #### Scenario: 创建 Vidu 连接
 - **WHEN** 用户在服务商中心选择 `Vidu` 并填写连接信息
 - **THEN** 平台可保存并返回连接配置
-- **AND** 默认 Base URL 为 `https://api.vidu.cn`
+- **AND** 默认 Base URL 为 `https://api.onelinkai.cloud`
 - **AND** 请求鉴权头按 `Authorization: Token {api key}` 发送
 
 ### Requirement: 图生视频参数按官方协议校验与映射
@@ -30,7 +30,7 @@
 
 #### Scenario: 提交合法图生视频请求
 - **WHEN** 用户选择 Vidu 模型并提交图生视频任务
-- **THEN** 请求发往 `/ent/v2/img2video`
+- **THEN** 请求发往 `//vidu/vidu/ent/v2/img2video`
 - **AND** `images` 仅允许 1 张图片（URL 或 Base64）
 - **AND** 图片格式、比例与体积约束在提交前校验
 - **AND** 有效参数映射到对应字段且不丢失

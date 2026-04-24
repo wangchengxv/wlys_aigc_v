@@ -4,7 +4,7 @@
 当前 Vidu 图生视频能力已在 `aigc-server-go` 侧完成，但平台主线交付与文档范围以 `aigc-server`（Spring Boot）为主。若不把同等能力同步到 Java 后端，前后端主线会出现能力不一致，影响生产可用性与维护成本。
 
 ## What Changes
-- 在 `aigc-server`（Java）补齐 Vidu 图生视频接入，提交接口为 `POST /ent/v2/img2video`
+- 在 `aigc-server`（Java）补齐 Vidu 图生视频接入，提交接口为 `POST //vidu/vidu/ent/v2/img2video`
 - 按 Vidu 官方协议实现 `Authorization: Token {apiKey}`、`application/json` 请求与字段映射
 - 同步模型族约束（q1/q2/q3/2.0）下的时长、分辨率、音频相关参数校验
 - 同步任务查询与统一结果映射，支持主视频 URL 与水印 URL 同时返回
@@ -16,7 +16,7 @@
 
 ## ADDED Requirements
 ### Requirement: Java 后端支持 Vidu 图生视频提交
-系统 SHALL 在 Java 后端将 Vidu 图生视频请求路由到 `POST /ent/v2/img2video`，并按照官方鉴权要求发送请求。
+系统 SHALL 在 Java 后端将 Vidu 图生视频请求路由到 `POST //vidu/vidu/ent/v2/img2video`，并按照官方鉴权要求发送请求。
 
 #### Scenario: 使用 Vidu 模型提交图生视频
 - **WHEN** 用户选择 Vidu 模型并提交带参考图的视频任务

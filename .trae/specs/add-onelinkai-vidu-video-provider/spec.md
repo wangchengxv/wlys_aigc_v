@@ -1,7 +1,7 @@
 # OneLinkAI Vidu 视频能力接入 Spec
 
 ## Why
-当前后端已支持直接连接 Vidu（`https://api.vidu.cn`）图生视频，也已支持通过 OneLinkAI 连接调用 Vidu 模型（`vidu_onelink` 向后兼容路径）。但尚未把 **OneLinkAI Vidu 视频** 作为正式的第一方能力接入：用户通过 OneLinkAI 连接配置 API Key 后，平台应能识别 Vidu 模型并路由到 `/vidu/ent/v2/img2video`，与直接 Vidu 连接行为一致。
+当前后端已支持直接连接 Vidu（`https://api.onelinkai.cloud`）图生视频，也已支持通过 OneLinkAI 连接调用 Vidu 模型（`vidu_onelink` 向后兼容路径）。但尚未把 **OneLinkAI Vidu 视频** 作为正式的第一方能力接入：用户通过 OneLinkAI 连接配置 API Key 后，平台应能识别 Vidu 模型并路由到 `/vidu//vidu/vidu/ent/v2/img2video`，与直接 Vidu 连接行为一致。
 
 ## What Changes
 - 在 `catalog.go` 中新增 `vidu_onelink` Provider，支持 OneLinkAI 域名下的 Vidu 图生视频
@@ -22,17 +22,17 @@
 - **WHEN** 用户在服务商中心选择 `vidu_onelink` 并填写 Base URL（`https://api.onelinkai.cloud`）、API Key
 - **THEN** 后端可保存连接配置并返回连接信息
 - **AND** 默认 Base URL 为 `https://api.onelinkai.cloud`
-- **AND** `VideoSubmitPath` 为 `/vidu/ent/v2/img2video`
+- **AND** `VideoSubmitPath` 为 `/vidu//vidu/vidu/ent/v2/img2video`
 - **AND** `VideoResultPath` 为 `/vidu/ent/v2/tasks/{taskId}/creations`
 - **AND** 鉴权方式为 `Bearer`（与 OneLinkAI 通用格式一致）
 
 ### Requirement: OneLinkAI Vidu 模型可被识别并路由
-系统 SHALL 在用户选择 `onelinkai` Provider 中的 Vidu 模型（如 `viduq3-turbo`、`viduq2-pro` 等）时，自动路由到 OneLinkAI Vidu 图生视频接口。
+系统 SHALL 在用户选择 `onelinkai` Provider 中的 Vidu 模型（如 `viduq3-turbo`、`image-vidu-q2` 等）时，自动路由到 OneLinkAI Vidu 图生视频接口。
 
 #### Scenario: OneLinkAI Vidu 图生视频调用
-- **WHEN** 用户配置了 `onelinkai` 连接，其中模型名为 `viduq3-pro`
+- **WHEN** 用户配置了 `onelinkai` 连接，其中模型名为 `video-viduq3-pro`
 - **AND** 用户提交图生视频任务并提供参考图
-- **THEN** 后端提交到 `/vidu/ent/v2/img2video`（通过 OneLinkAI 域名）
+- **THEN** 后端提交到 `/vidu//vidu/vidu/ent/v2/img2video`（通过 OneLinkAI 域名）
 - **AND** 使用用户 OneLinkAI 连接中的 Base URL 与 API Key 认证
 - **AND** 复用现有 Vidu payload 构建与参数校验逻辑
 

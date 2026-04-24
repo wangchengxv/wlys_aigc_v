@@ -587,7 +587,7 @@ class Vidu2ImageToVideoNode(IO.ComfyNode):
             category="api node/video/Vidu",
             description="Generate a video from an image and an optional prompt.",
             inputs=[
-                IO.Combo.Input("model", options=["viduq2-pro-fast", "viduq2-pro", "viduq2-turbo"]),
+                IO.Combo.Input("model", options=["image-vidu-q2-fast", "image-vidu-q2", "viduq2-turbo"]),
                 IO.Image.Input(
                     "image",
                     tooltip="An image to be used as the start frame of the generated video.",
@@ -852,7 +852,7 @@ class Vidu2StartEndToVideoNode(IO.ComfyNode):
             category="api node/video/Vidu",
             description="Generate a video from a start frame, an end frame, and a prompt.",
             inputs=[
-                IO.Combo.Input("model", options=["viduq2-pro-fast", "viduq2-pro", "viduq2-turbo"]),
+                IO.Combo.Input("model", options=["image-vidu-q2-fast", "image-vidu-q2", "viduq2-turbo"]),
                 IO.Image.Input("first_frame"),
                 IO.Image.Input("end_frame"),
                 IO.String.Input(
@@ -976,7 +976,7 @@ class ViduExtendVideoNode(IO.ComfyNode):
                     "model",
                     options=[
                         IO.DynamicCombo.Option(
-                            "viduq2-pro",
+                            "image-vidu-q2",
                             [
                                 IO.Int.Input(
                                     "duration",
@@ -1142,7 +1142,7 @@ class ViduMultiFrameVideoNode(IO.ComfyNode):
             category="api node/video/Vidu",
             description="Generate a video with multiple keyframe transitions.",
             inputs=[
-                IO.Combo.Input("model", options=["viduq2-pro", "viduq2-turbo"]),
+                IO.Combo.Input("model", options=["image-vidu-q2", "viduq2-turbo"]),
                 IO.Image.Input(
                     "start_image",
                     tooltip="The starting frame image. Aspect ratio must be between 1:4 and 4:1.",
@@ -1292,7 +1292,7 @@ class Vidu3TextToVideoNode(IO.ComfyNode):
                     "model",
                     options=[
                         IO.DynamicCombo.Option(
-                            "viduq3-pro",
+                            "video-viduq3-pro",
                             [
                                 IO.Combo.Input(
                                     "aspect_ratio",
@@ -1437,7 +1437,7 @@ class Vidu3ImageToVideoNode(IO.ComfyNode):
                     "model",
                     options=[
                         IO.DynamicCombo.Option(
-                            "viduq3-pro",
+                            "video-viduq3-pro",
                             [
                                 IO.Combo.Input(
                                     "resolution",
@@ -1579,7 +1579,7 @@ class Vidu3StartEndToVideoNode(IO.ComfyNode):
                     "model",
                     options=[
                         IO.DynamicCombo.Option(
-                            "viduq3-pro",
+                            "video-viduq3-pro",
                             [
                                 IO.Combo.Input(
                                     "resolution",

@@ -6,7 +6,7 @@
   - [x] 输出最小改造范围，避免牵动非 Vidu 供应商逻辑
 
 - [x] Task 2: 同步 Java 侧 Vidu 提交与鉴权
-  - [x] 在 Java 后端补齐 Vidu 图生视频提交路由到 `/ent/v2/img2video`
+  - [x] 在 Java 后端补齐 Vidu 图生视频提交路由到 `//vidu/vidu/ent/v2/img2video`
   - [x] 实现 `Authorization: Token {apiKey}` 与 `Content-Type: application/json`
   - [x] 完成必要请求体字段映射（`model`、`images`、`prompt` 等）
 

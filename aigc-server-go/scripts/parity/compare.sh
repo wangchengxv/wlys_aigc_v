@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Compare Java vs Go /api/v1/health JSON shape (code=200, data.ok=true).
 # Usage:
-#   JAVA_URL=http://127.0.0.1:8080 GO_URL=http://127.0.0.1:8081 ./scripts/parity/compare.sh
+#   JAVA_URL=http://127.0.0.1:8080 GO_URL=http://127.0.0.1:8080 ./scripts/parity/compare.sh
 set -euo pipefail
 JAVA_URL="${JAVA_URL:-http://127.0.0.1:8080}"
-GO_URL="${GO_URL:-http://127.0.0.1:8081}"
+GO_URL="${GO_URL:-http://127.0.0.1:8080}"
 TOKEN="${AIGC_ACCESS_TOKEN:-dev-local-token}"
 
 jq_expr='.code == 200 and .data.ok == true'

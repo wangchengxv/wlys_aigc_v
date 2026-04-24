@@ -1,6 +1,7 @@
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LGraph, LGraphCanvas, LGraphNode, LiteGraph } from '@comfyorg/litegraph'
 import '@comfyorg/litegraph/style.css'
+import { useNavigate } from 'react-router-dom'
 import { AppButton } from '@/components/common/AppButton'
 import { useToast } from '@/context/ToastContext'
 import {
@@ -129,6 +130,7 @@ function executionStatusText(result: ComfyPromptResult | null, promptId: string 
 
 export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMetaHydrated }: Props) {
   const { showToast } = useToast()
+  const navigate = useNavigate()
   const viewportRef = useRef<HTMLDivElement>(null)
   const domCanvasRef = useRef<HTMLCanvasElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -570,6 +572,9 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
           </AppButton>
           <AppButton size="sm" variant="ghost" loading={bridgeLoading} onClick={handleSyncObjectInfo}>
             检查 Comfy 连通性
+          </AppButton>
+          <AppButton size="sm" variant="ghost" onClick={() => navigate('/tools/reverse-prompt')}>
+            反推提示词
           </AppButton>
         </div>
 
