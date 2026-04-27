@@ -239,13 +239,13 @@ export const router = createBrowserRouter([
         }),
       },
       {
-        path: 'social/callback/onelinkai',
+        path: 'social/callback/:provider',
         lazy: lazyPage(() => import('@/pages/SocialLoginCallbackPage'), 'SocialLoginCallbackPage'),
         handle: H({
           title: '第三方登录回调',
           eyebrow: '认证',
           section: '认证中心',
-          description: '接收 OneLinkAI 授权回调并完成登录。',
+          description: '接收第三方授权回调并完成登录。',
         }),
       },
       {

@@ -65,15 +65,15 @@ export function LoginModal({ visible, onClose, onSuccess }: Props) {
     }
   }
 
-  async function handleOnelinkLogin() {
+  async function handleSocialLogin(provider: 'onelinkai' | 'wechat', displayName: string) {
     setSubmitError(null)
     setSocialLoading(true)
     try {
-      const payload = await getSocialAuthUrl('onelinkai')
+      const payload = await getSocialAuthUrl(provider)
       window.location.href = payload.authUrl
     } catch (error) {
       setSocialLoading(false)
-      setSubmitError(error instanceof Error ? error.message : '发起 OneLinkAI 登录失败')
+      setSubmitError(error instanceof Error ? error.message : `发起 ${displayName} 登录失败`)
     }
   }
 
@@ -141,7 +141,22 @@ export function LoginModal({ visible, onClose, onSuccess }: Props) {
           </div>
           <div className="login-modal__social">
             <span>或使用第三方账号</span>
-            <AppButton variant="ghost" type="button" loading={socialLoading} disabled={loggingIn || socialLoading} onClick={handleOnelinkLogin}>
+            <AppButton
+              variant="ghost"
+              type="button"
+              loading={socialLoading}
+              disabled={loggingIn || socialLoading}
+              onClick={() => handleSocialLogin('wechat', '微信')}
+            >
+              使用微信登录
+            </AppButton>
+            <AppButton
+              variant="ghost"
+              type="button"
+              loading={socialLoading}
+              disabled={loggingIn || socialLoading}
+              onClick={() => handleSocialLogin('onelinkai', 'OneLinkAI')}
+            >
               使用 OneLinkAI 登录
             </AppButton>
           </div>

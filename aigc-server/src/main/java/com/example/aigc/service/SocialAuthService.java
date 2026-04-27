@@ -1,6 +1,5 @@
 package com.example.aigc.service;
 
-import com.example.aigc.config.AuthProperties;
 import com.example.aigc.dto.CurrentUserResponse;
 import com.example.aigc.dto.LoginResponse;
 import com.example.aigc.dto.SocialAuthUrlResponse;
@@ -12,37 +11,30 @@ import com.example.aigc.enums.UserRole;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.repository.AppUserRepository;
 import com.example.aigc.repository.SocialAccountRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.aigc.service.social.SocialProvider;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class SocialAuthService {
-    private static final String PROVIDER_ONELINKAI = "onelinkai";
+    private static final Set<String> SUPPORTED_PROVIDERS = Set.of("onelinkai", "wechat");
 
     private final AppUserRepository appUserRepository;
     private final SocialAccountRepository socialAccountRepository;
     private final JwtTokenService jwtTokenService;
     private final PasswordCodec passwordCodec;
-    private final AuthProperties authProperties;
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
+    private final Map<String, SocialProvider> socialProviders;
     private final Map<String, Instant> stateStore = new ConcurrentHashMap<>();
 
     public SocialAuthService(
@@ -50,43 +42,31 @@ public class SocialAuthService {
             SocialAccountRepository socialAccountRepository,
             JwtTokenService jwtTokenService,
             PasswordCodec passwordCodec,
-            AuthProperties authProperties,
-            ObjectMapper objectMapper
+            List<SocialProvider> socialProviders
     ) {
         this.appUserRepository = appUserRepository;
         this.socialAccountRepository = socialAccountRepository;
         this.jwtTokenService = jwtTokenService;
         this.passwordCodec = passwordCodec;
-        this.authProperties = authProperties;
-        this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(8))
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
+        this.socialProviders = socialProviders.stream()
+                .collect(Collectors.toMap(provider -> provider.provider().toLowerCase(Locale.ROOT), Function.identity(), (left, right) -> left));
     }
 
     public SocialAuthUrlResponse buildAuthUrl(String provider) {
-        String normalized = normalizeProvider(provider);
-        AuthProperties.OnelinkaiProperties config = requireOnelinkaiConfig();
+        SocialProvider socialProvider = resolveProvider(provider);
         cleanupExpiredStates(Instant.now());
         String state = UUID.randomUUID().toString().replace("-", "");
         stateStore.put(state, Instant.now().plus(Duration.ofMinutes(10)));
-        String authUrl = config.getAuthorizeUri()
-                + "?response_type=code"
-                + "&client_id=" + encode(config.getClientId())
-                + "&redirect_uri=" + encode(config.getRedirectUri())
-                + "&scope=" + encode(config.getScope())
-                + "&state=" + encode(state);
-        return new SocialAuthUrlResponse(normalized, authUrl);
+        String authUrl = socialProvider.getAuthUrl(state);
+        return new SocialAuthUrlResponse(socialProvider.provider(), authUrl);
     }
 
     public LoginResponse handleCallback(String provider, String code, String state, String clientIp) {
-        normalizeProvider(provider);
-        AuthProperties.OnelinkaiProperties config = requireOnelinkaiConfig();
+        SocialProvider socialProvider = resolveProvider(provider);
         validateState(state);
-        String accessToken = exchangeCodeForToken(config, code);
-        SocialUserInfo userInfo = fetchSocialUserInfo(config, accessToken);
-        AppUser user = resolveOrCreateUser(userInfo, clientIp);
+        String accessToken = socialProvider.exchangeCodeForToken(code);
+        SocialUserInfo userInfo = socialProvider.getUserInfo(accessToken);
+        AppUser user = resolveOrCreateUser(userInfo, socialProvider.provider(), clientIp);
         JwtTokenService.TokenPayload tokenPayload = jwtTokenService.createToken(user);
         return new LoginResponse(
                 tokenPayload.accessToken(),
@@ -104,7 +84,7 @@ public class SocialAuthService {
     }
 
     public void unbind(String userId, String provider) {
-        String normalizedProvider = normalizeProvider(provider);
+        String normalizedProvider = resolveProvider(provider).provider();
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new BizException(404, "用户不存在"));
         SocialAccount linked = socialAccountRepository.findByUserIdAndProvider(userId, normalizedProvider)
@@ -113,7 +93,7 @@ public class SocialAuthService {
         boolean socialOnlyUser = normalizedProvider.equals(normalizeText(user.provider).toLowerCase(Locale.ROOT))
                 && normalizeText(user.providerUserId).equals(linked.providerUserId);
         if (socialOnlyUser && linkCount <= 1) {
-            throw new BizException(400, "当前账号仅绑定 OneLinkAI，请先设置密码后再解绑");
+            throw new BizException(400, "当前账号仅绑定该第三方登录，请先设置密码后再解绑");
         }
         socialAccountRepository.delete(linked);
         if (normalizedProvider.equals(normalizeText(user.provider).toLowerCase(Locale.ROOT))
@@ -126,58 +106,17 @@ public class SocialAuthService {
         }
     }
 
-    private String exchangeCodeForToken(AuthProperties.OnelinkaiProperties config, String code) {
-        String formBody = "grant_type=authorization_code"
-                + "&client_id=" + encode(config.getClientId())
-                + "&client_secret=" + encode(config.getClientSecret())
-                + "&code=" + encode(code)
-                + "&redirect_uri=" + encode(config.getRedirectUri());
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(config.getTokenUri()))
-                .timeout(Duration.ofSeconds(12))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(formBody))
-                .build();
-        JsonNode payload = executeJson(request, "OneLinkAI token 交换失败");
-        String token = firstText(payload, "access_token", "token", "data.access_token");
-        if (token == null || token.isBlank()) {
-            throw new BizException(502, "OneLinkAI token 响应缺少 access_token");
-        }
-        return token;
-    }
-
-    private SocialUserInfo fetchSocialUserInfo(AuthProperties.OnelinkaiProperties config, String accessToken) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(config.getUserInfoUri()))
-                .timeout(Duration.ofSeconds(12))
-                .header("Accept", "application/json")
-                .header("Authorization", "Bearer " + accessToken)
-                .GET()
-                .build();
-        JsonNode payload = executeJson(request, "OneLinkAI 用户信息拉取失败");
-        String providerUserId = firstText(payload, "sub", "id", "user_id", "data.id", "data.user_id");
-        if (providerUserId == null || providerUserId.isBlank()) {
-            throw new BizException(502, "OneLinkAI 用户信息缺少用户标识");
-        }
-        String username = firstText(payload, "preferred_username", "username", "name", "data.username", "data.name");
-        String displayName = firstText(payload, "nickname", "display_name", "name", "data.nickname", "data.display_name");
-        return new SocialUserInfo(
-                providerUserId.trim(),
-                normalizeText(username),
-                normalizeText(displayName),
-                normalizeText(firstText(payload, "email", "data.email")),
-                normalizeText(firstText(payload, "avatar_url", "avatar", "picture", "data.avatar_url", "data.avatar")),
-                PROVIDER_ONELINKAI
-        );
-    }
-
-    private AppUser resolveOrCreateUser(SocialUserInfo socialUserInfo, String clientIp) {
+    private AppUser resolveOrCreateUser(SocialUserInfo socialUserInfo, String provider, String clientIp) {
         Instant now = Instant.now();
-        AppUser existing = appUserRepository.findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.id())
+        String providerUserId = normalizeText(socialUserInfo.id());
+        if (providerUserId.isBlank()) {
+            throw new BizException(502, "第三方用户信息缺少用户标识");
+        }
+        AppUser existing = appUserRepository.findByProviderAndProviderUserId(provider, providerUserId)
                 .orElse(null);
         if (existing == null) {
             SocialAccount linked = socialAccountRepository
-                    .findByProviderAndProviderUserId(PROVIDER_ONELINKAI, socialUserInfo.id())
+                    .findByProviderAndProviderUserId(provider, providerUserId)
                     .orElse(null);
             if (linked != null) {
                 existing = appUserRepository.findById(linked.userId).orElse(null);
@@ -192,7 +131,7 @@ public class SocialAuthService {
 
         AppUser user = new AppUser();
         user.userId = "user-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        user.username = buildUniqueUsername(socialUserInfo);
+        user.username = buildUniqueUsername(socialUserInfo, provider, providerUserId);
         user.passwordHash = passwordCodec.encode("social-only-" + UUID.randomUUID());
         user.displayName = !socialUserInfo.displayName().isBlank() ? socialUserInfo.displayName() : user.username;
         user.role = UserRole.STUDENT;
@@ -201,8 +140,8 @@ public class SocialAuthService {
         user.failedLoginCount = 0;
         user.forcePasswordChange = false;
         user.sessionVersion = 0L;
-        user.provider = PROVIDER_ONELINKAI;
-        user.providerUserId = socialUserInfo.id();
+        user.provider = provider;
+        user.providerUserId = providerUserId;
         user.linkedAt = now;
         user.lastLoginAt = now;
         user.lastLoginIp = clientIp;
@@ -213,20 +152,20 @@ public class SocialAuthService {
 
         SocialAccount account = new SocialAccount();
         account.userId = saved.userId;
-        account.provider = PROVIDER_ONELINKAI;
-        account.providerUserId = socialUserInfo.id();
+        account.provider = provider;
+        account.providerUserId = providerUserId;
         account.linkedAt = now;
         socialAccountRepository.save(account);
 
         return saved;
     }
 
-    private String buildUniqueUsername(SocialUserInfo socialUserInfo) {
+    private String buildUniqueUsername(SocialUserInfo socialUserInfo, String provider, String providerUserId) {
         String base = !socialUserInfo.username().isBlank()
                 ? sanitizeUsername(socialUserInfo.username())
-                : ("onelinkai_" + sanitizeUsername(socialUserInfo.id()));
+                : (provider + "_" + sanitizeUsername(providerUserId));
         if (base.isBlank()) {
-            base = "onelinkai_user";
+            base = provider + "_user";
         }
         String candidate = base;
         int suffix = 1;
@@ -253,62 +192,16 @@ public class SocialAuthService {
         stateStore.entrySet().removeIf(e -> e.getValue().isBefore(now));
     }
 
-    private String normalizeProvider(String provider) {
+    private SocialProvider resolveProvider(String provider) {
         String normalized = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
-        if (!PROVIDER_ONELINKAI.equals(normalized)) {
-            throw new BizException(400, "当前仅支持 onelinkai 第三方登录");
+        if (!SUPPORTED_PROVIDERS.contains(normalized)) {
+            throw new BizException(400, "不支持的第三方登录渠道");
         }
-        return normalized;
-    }
-
-    private AuthProperties.OnelinkaiProperties requireOnelinkaiConfig() {
-        AuthProperties.OnelinkaiProperties config = authProperties.getSocial().getOnelinkai();
-        if (!config.isEnabled()) {
-            throw new BizException(403, "OneLinkAI 第三方登录未启用");
+        SocialProvider socialProvider = socialProviders.get(normalized);
+        if (socialProvider == null) {
+            throw new BizException(500, "第三方登录组件未注册: " + normalized);
         }
-        if (isBlank(config.getClientId()) || isBlank(config.getClientSecret())) {
-            throw new BizException(500, "OneLinkAI 第三方登录配置不完整");
-        }
-        if (isBlank(config.getAuthorizeUri()) || isBlank(config.getTokenUri()) || isBlank(config.getUserInfoUri()) || isBlank(config.getRedirectUri())) {
-            throw new BizException(500, "OneLinkAI OAuth 地址配置不完整");
-        }
-        return config;
-    }
-
-    private JsonNode executeJson(HttpRequest request, String fallbackMessage) {
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() >= 400) {
-                throw new BizException(502, fallbackMessage);
-            }
-            return objectMapper.readTree(response.body());
-        } catch (BizException ex) {
-            throw ex;
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new BizException(502, fallbackMessage);
-        } catch (IOException ex) {
-            throw new BizException(502, fallbackMessage);
-        }
-    }
-
-    private String firstText(JsonNode node, String... paths) {
-        for (String path : paths) {
-            JsonNode cursor = node;
-            for (String key : path.split("\\.")) {
-                if (cursor == null) {
-                    break;
-                }
-                cursor = cursor.get(key);
-            }
-            if (cursor != null && !cursor.isNull()) {
-                String value = cursor.asText();
-                if (!value.isBlank()) {
-                    return value;
-                }
-            }
-        }
-        return null;
+        return socialProvider;
     }
 
     private CurrentUserResponse toCurrentUser(AppUser user) {
@@ -323,10 +216,6 @@ public class SocialAuthService {
         );
     }
 
-    private static String encode(String value) {
-        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
-    }
-
     private static String normalizeText(String value) {
         return value == null ? "" : value.trim();
     }
@@ -335,10 +224,6 @@ public class SocialAuthService {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         String safe = normalized.replaceAll("[^a-z0-9_\\-\\.]", "_");
         return safe.replaceAll("_+", "_");
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
 }

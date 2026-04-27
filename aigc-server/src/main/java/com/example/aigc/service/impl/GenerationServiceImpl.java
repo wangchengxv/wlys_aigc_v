@@ -68,6 +68,7 @@ public class GenerationServiceImpl implements GenerationService {
             "doubao-seedance-1.5-pro",
             "doubao-seedance-2.0"
     );
+    private static final String ONELINK_DOUBAO_IMAGE_PATH = "/volc/api/v3/images/generations";
     private static final String ONELINK_DOUBAO_VIDEO_SUBMIT_PATH = "/volc/api/v3/contents/generations/tasks";
     private static final String ONELINK_DOUBAO_VIDEO_RESULT_PATH = "/volc/api/v3/contents/generations/tasks/{taskId}";
     private static final Set<String> VIDU_OPTION_KEYS = Set.of(
@@ -598,6 +599,20 @@ public class GenerationServiceImpl implements GenerationService {
                 || ("kling".equalsIgnoreCase(provider.key()) && isKlingImageModel(resolvedModel.model().getModelName()))) {
             return generateImagesWithKlingOneLinkConnection(prompt, count, resolvedModel);
         }
+        if ("onelinkai".equalsIgnoreCase(provider.key()) && isOneLinkSeedreamImageModel(resolvedModel.model().getModelName())) {
+            List<String> images = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                images.add(callOneLinkSeedreamImageApi(
+                        provider,
+                        resolvedModel.connection().getBaseUrl(),
+                        resolvedModel.apiKey(),
+                        resolvedModel.metadataPlain(),
+                        resolvedModel.model().getModelName(),
+                        prompt
+                ));
+            }
+            return images;
+        }
         if (provider.imageGenerationPath() == null || provider.imageGenerationPath().isBlank()) {
             throw new BizException(400, "当前图片模型对应连接未配置图片生成接口");
         }
@@ -991,6 +1006,46 @@ public class GenerationServiceImpl implements GenerationService {
             return generateVideosWithKlingConnection(prompt, count, resolvedModel, referenceImageUrl);
         }
         throw new BizException(400, "OneLink 连接暂不支持该视频模型: " + resolvedModel.model().getModelName());
+    }
+
+    private boolean isOneLinkSeedreamImageModel(String modelName) {
+        return normalize(modelName).contains("seedream");
+    }
+
+    private String callOneLinkSeedreamImageApi(
+            ProviderCatalog.ProviderDefinition provider,
+            String baseUrl,
+            String apiKey,
+            Map<String, Object> connectionMetadata,
+            String modelName,
+            String prompt
+    ) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("model", modelName);
+        payload.put("prompt", prompt);
+        payload.put("sequential_image_generation", "disabled");
+        payload.put("response_format", "url");
+        payload.put("size", "2K");
+        payload.put("stream", false);
+        payload.put("watermark", true);
+        try {
+            Map<String, Object> body = providerHttpGateway.postJson(
+                    baseUrl,
+                    ONELINK_DOUBAO_IMAGE_PATH,
+                    provider,
+                    apiKey,
+                    connectionMetadata,
+                    payload,
+                    Duration.ofSeconds(60)
+            );
+            String imageUrl = parseImageUrl(body);
+            if (imageUrl == null || imageUrl.isBlank()) {
+                throw new BizException(502, "模型服务返回异常，未获取到图片地址");
+            }
+            return imageUrl;
+        } catch (ProviderGatewayException ex) {
+            throw new BizException(mapProviderStatus(ex), ex.getMessage());
+        }
     }
 
     private boolean isOneLinkDoubaoVideoModel(String modelName) {

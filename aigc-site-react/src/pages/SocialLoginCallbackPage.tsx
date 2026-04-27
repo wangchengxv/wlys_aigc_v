@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { socialLoginCallback } from '@/api'
 import { useAuthStore } from '@/stores/authStore'
 
 export function SocialLoginCallbackPage() {
+  const { provider = 'onelinkai' } = useParams<{ provider: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const refresh = useAuthStore((s) => s.refresh)
-  const [message, setMessage] = useState('正在完成 OneLinkAI 登录...')
+  const providerLabel = provider.toLowerCase() === 'wechat' ? '微信' : 'OneLinkAI'
+  const [message, setMessage] = useState(`正在完成 ${providerLabel} 登录...`)
 
   useEffect(() => {
     let cancelled = false
@@ -17,22 +19,22 @@ export function SocialLoginCallbackPage() {
 
     async function run() {
       if (error) {
-        setMessage(`OneLinkAI 登录失败：${error}`)
+        setMessage(`${providerLabel} 登录失败：${error}`)
         return
       }
       if (!code || !state) {
-        setMessage('缺少 OneLinkAI 回调参数，请重新发起登录')
+        setMessage(`缺少 ${providerLabel} 回调参数，请重新发起登录`)
         return
       }
       try {
-        await socialLoginCallback('onelinkai', code, state)
+        await socialLoginCallback(provider, code, state)
         await refresh()
         if (!cancelled) {
           navigate('/', { replace: true })
         }
       } catch (e) {
         if (!cancelled) {
-          setMessage(e instanceof Error ? e.message : 'OneLinkAI 登录失败，请稍后重试')
+          setMessage(e instanceof Error ? e.message : `${providerLabel} 登录失败，请稍后重试`)
         }
       }
     }
@@ -41,7 +43,7 @@ export function SocialLoginCallbackPage() {
     return () => {
       cancelled = true
     }
-  }, [navigate, refresh, searchParams])
+  }, [navigate, provider, providerLabel, refresh, searchParams])
 
   return (
     <section className="page stack-lg">

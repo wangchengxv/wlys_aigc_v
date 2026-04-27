@@ -110,6 +110,7 @@ public class AuthProperties {
 
     public static class SocialProperties {
         private OnelinkaiProperties onelinkai = new OnelinkaiProperties();
+        private WechatProperties wechat = new WechatProperties();
 
         public OnelinkaiProperties getOnelinkai() {
             return onelinkai;
@@ -117,6 +118,14 @@ public class AuthProperties {
 
         public void setOnelinkai(OnelinkaiProperties onelinkai) {
             this.onelinkai = onelinkai == null ? new OnelinkaiProperties() : onelinkai;
+        }
+
+        public WechatProperties getWechat() {
+            return wechat;
+        }
+
+        public void setWechat(WechatProperties wechat) {
+            this.wechat = wechat == null ? new WechatProperties() : wechat;
         }
     }
 
@@ -152,6 +161,81 @@ public class AuthProperties {
 
         public void setClientSecret(String clientSecret) {
             this.clientSecret = clientSecret;
+        }
+
+        public String getAuthorizeUri() {
+            return authorizeUri;
+        }
+
+        public void setAuthorizeUri(String authorizeUri) {
+            this.authorizeUri = authorizeUri;
+        }
+
+        public String getTokenUri() {
+            return tokenUri;
+        }
+
+        public void setTokenUri(String tokenUri) {
+            this.tokenUri = tokenUri;
+        }
+
+        public String getUserInfoUri() {
+            return userInfoUri;
+        }
+
+        public void setUserInfoUri(String userInfoUri) {
+            this.userInfoUri = userInfoUri;
+        }
+
+        public String getRedirectUri() {
+            return redirectUri;
+        }
+
+        public void setRedirectUri(String redirectUri) {
+            this.redirectUri = redirectUri;
+        }
+
+        public String getScope() {
+            return scope;
+        }
+
+        public void setScope(String scope) {
+            this.scope = scope;
+        }
+    }
+
+    public static class WechatProperties {
+        private boolean enabled = false;
+        private String appId = "";
+        private String appSecret = "";
+        private String authorizeUri = "https://open.weixin.qq.com/connect/qrconnect";
+        private String tokenUri = "https://api.weixin.qq.com/sns/oauth2/access_token";
+        private String userInfoUri = "https://api.weixin.qq.com/sns/userinfo";
+        private String redirectUri = "http://localhost:5173/social/callback/wechat";
+        private String scope = "snsapi_login";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getAppId() {
+            return appId;
+        }
+
+        public void setAppId(String appId) {
+            this.appId = appId;
+        }
+
+        public String getAppSecret() {
+            return appSecret;
+        }
+
+        public void setAppSecret(String appSecret) {
+            this.appSecret = appSecret;
         }
 
         public String getAuthorizeUri() {

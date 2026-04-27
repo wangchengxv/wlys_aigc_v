@@ -60,30 +60,32 @@ export function SettingsPage() {
     })()
   }, [user])
 
-  async function handleBindOnelinkai() {
+  async function handleBindProvider(provider: 'onelinkai' | 'wechat', label: string) {
     setSocialError(null)
     try {
-      const payload = await getSocialAuthUrl('onelinkai')
+      const payload = await getSocialAuthUrl(provider)
       window.location.href = payload.authUrl
     } catch (error) {
-      setSocialError(error instanceof Error ? error.message : '发起 OneLinkAI 绑定失败')
+      setSocialError(error instanceof Error ? error.message : `发起 ${label} 绑定失败`)
     }
   }
 
-  async function handleUnbindOnelinkai() {
+  async function handleUnbindProvider(provider: 'onelinkai' | 'wechat', label: string) {
     setUnbindLoading(true)
     setSocialError(null)
     try {
-      await unbindSocialLink('onelinkai')
+      await unbindSocialLink(provider)
       const links = await getSocialLinks()
       setSocialLinks(links)
     } catch (error) {
-      setSocialError(error instanceof Error ? error.message : '解绑 OneLinkAI 失败')
+      setSocialError(error instanceof Error ? error.message : `解绑 ${label} 失败`)
     } finally {
       setUnbindLoading(false)
     }
   }
 
+  const wechatBound = socialLinks.some((item) => item.provider.toLowerCase() === 'wechat')
+  const wechatLink = socialLinks.find((item) => item.provider.toLowerCase() === 'wechat') || null
   const onelinkBound = socialLinks.some((item) => item.provider.toLowerCase() === 'onelinkai')
   const onelinkLink = socialLinks.find((item) => item.provider.toLowerCase() === 'onelinkai') || null
 
@@ -165,6 +167,14 @@ export function SettingsPage() {
           {user ? (
             <div className="settings-page__list">
               <div>
+                <span>微信</span>
+                <strong>{socialLoading ? '加载中...' : wechatBound ? '已绑定' : '未绑定'}</strong>
+              </div>
+              <div>
+                <span>微信账号</span>
+                <strong>{wechatLink?.providerUserId || '-'}</strong>
+              </div>
+              <div>
                 <span>OneLinkAI</span>
                 <strong>{socialLoading ? '加载中...' : onelinkBound ? '已绑定' : '未绑定'}</strong>
               </div>
@@ -177,12 +187,31 @@ export function SettingsPage() {
           {socialError ? <p className="hint-error">{socialError}</p> : null}
           {user ? (
             <div className="inline-actions">
+              {!wechatBound ? (
+                <button type="button" className="app-btn v-ghost s-md" onClick={() => handleBindProvider('wechat', '微信')}>
+                  绑定微信
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="app-btn v-ghost s-md"
+                  disabled={unbindLoading}
+                  onClick={() => handleUnbindProvider('wechat', '微信')}
+                >
+                  {unbindLoading ? '解绑中...' : '解绑微信'}
+                </button>
+              )}
               {!onelinkBound ? (
-                <button type="button" className="app-btn v-ghost s-md" onClick={handleBindOnelinkai}>
+                <button type="button" className="app-btn v-ghost s-md" onClick={() => handleBindProvider('onelinkai', 'OneLinkAI')}>
                   绑定 OneLinkAI
                 </button>
               ) : (
-                <button type="button" className="app-btn v-ghost s-md" disabled={unbindLoading} onClick={handleUnbindOnelinkai}>
+                <button
+                  type="button"
+                  className="app-btn v-ghost s-md"
+                  disabled={unbindLoading}
+                  onClick={() => handleUnbindProvider('onelinkai', 'OneLinkAI')}
+                >
                   {unbindLoading ? '解绑中...' : '解绑 OneLinkAI'}
                 </button>
               )}

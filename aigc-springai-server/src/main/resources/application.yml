@@ -1,0 +1,32 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: aigc-springai-server
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:test-key}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+
+aigc:
+  ai-gateway:
+    fallback-enabled: true
+    providers:
+      openai:
+        base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+        model: ${OPENAI_MODEL:gpt-4o-mini}
+        api-key: ${OPENAI_API_KEY:test-key}
+      anthropic:
+        base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+        model: ${ANTHROPIC_MODEL:claude-3-5-sonnet}
+        api-key: ${ANTHROPIC_API_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

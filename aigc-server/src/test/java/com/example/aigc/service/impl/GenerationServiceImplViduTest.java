@@ -943,6 +943,83 @@ class GenerationServiceImplViduTest {
     }
 
     @Test
+    void generateImagesWithConfiguredModelRoutesOneLinkSeedreamToVolcImageApi() throws Exception {
+        Object resolvedModel = createResolvedModel("doubao-seedream-4.0", "onelinkai", Map.of());
+        Class<?> resolvedClass = Class.forName("com.example.aigc.service.impl.GenerationServiceImpl$ResolvedModel");
+        Class<?> normalizedMediaClass = Class.forName("com.example.aigc.service.impl.GenerationServiceImpl$NormalizedAdvancedMedia");
+
+        Mockito.when(providerHttpGateway.postJson(
+                Mockito.eq("https://example.com"),
+                Mockito.eq("/volc/api/v3/images/generations"),
+                Mockito.any(),
+                Mockito.eq("secret"),
+                Mockito.eq(Map.of()),
+                Mockito.argThat((Map<String, Object> payload) ->
+                        payload != null
+                                && "doubao-seedream-4.0".equals(payload.get("model"))
+                                && "赛博朋克城市夜景".equals(payload.get("prompt"))
+                                && "disabled".equals(payload.get("sequential_image_generation"))
+                                && "url".equals(payload.get("response_format"))
+                                && "2K".equals(payload.get("size"))
+                                && Boolean.FALSE.equals(payload.get("stream"))
+                                && Boolean.TRUE.equals(payload.get("watermark"))
+                ),
+                Mockito.any()
+        )).thenReturn(Map.of("data", List.of(Map.of("url", "https://api.onelinkai.cloud/seedream.png"))));
+
+        @SuppressWarnings("unchecked")
+        List<String> images = (List<String>) invokePrivate(
+                "generateImagesWithConfiguredModel",
+                new Class<?>[]{String.class, int.class, resolvedClass, normalizedMediaClass},
+                "赛博朋克城市夜景",
+                1,
+                resolvedModel,
+                null
+        );
+
+        assertThat(images).containsExactly("https://api.onelinkai.cloud/seedream.png");
+        Mockito.verify(providerHttpGateway, Mockito.times(1)).postJson(
+                Mockito.eq("https://example.com"),
+                Mockito.eq("/volc/api/v3/images/generations"),
+                Mockito.any(),
+                Mockito.eq("secret"),
+                Mockito.eq(Map.of()),
+                Mockito.anyMap(),
+                Mockito.any()
+        );
+    }
+
+    @Test
+    void generateImagesWithConfiguredModelKeepsNonSeedreamOneLinkOnDefaultPath() throws Exception {
+        Object resolvedModel = createResolvedModel("wanx-v1", "onelinkai", Map.of());
+        Class<?> resolvedClass = Class.forName("com.example.aigc.service.impl.GenerationServiceImpl$ResolvedModel");
+        Class<?> normalizedMediaClass = Class.forName("com.example.aigc.service.impl.GenerationServiceImpl$NormalizedAdvancedMedia");
+
+        assertPrivateBizException(
+                400,
+                "当前图片模型对应连接未配置图片生成接口",
+                () -> invokePrivate(
+                        "generateImagesWithConfiguredModel",
+                        new Class<?>[]{String.class, int.class, resolvedClass, normalizedMediaClass},
+                        "普通海报",
+                        1,
+                        resolvedModel,
+                        null
+                )
+        );
+
+        Mockito.verify(providerHttpGateway, Mockito.never()).postJson(
+                Mockito.eq("https://example.com"),
+                Mockito.eq("/volc/api/v3/images/generations"),
+                Mockito.any(),
+                Mockito.eq("secret"),
+                Mockito.eq(Map.of()),
+                Mockito.anyMap(),
+                Mockito.any()
+        );
+    }
+
+    @Test
     void buildKlingOutpaintPayloadRejectsMissingSourceImage() throws Exception {
         GenerateRequest request = new GenerateRequest(
                 "向外扩图",

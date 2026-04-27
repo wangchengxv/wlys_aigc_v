@@ -53,6 +53,15 @@ aigc:
         user-info-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_USER_INFO_URI:https://open.onelinkai.com/oauth/userinfo}
         redirect-uri: ${AIGC_AUTH_SOCIAL_ONELINKAI_REDIRECT_URI:http://localhost:5173/social/callback/onelinkai}
         scope: ${AIGC_AUTH_SOCIAL_ONELINKAI_SCOPE:openid profile}
+      wechat:
+        enabled: ${AIGC_AUTH_SOCIAL_WECHAT_ENABLED:false}
+        app-id: ${AIGC_AUTH_SOCIAL_WECHAT_APP_ID:}
+        app-secret: ${AIGC_AUTH_SOCIAL_WECHAT_APP_SECRET:}
+        authorize-uri: ${AIGC_AUTH_SOCIAL_WECHAT_AUTHORIZE_URI:https://open.weixin.qq.com/connect/qrconnect}
+        token-uri: ${AIGC_AUTH_SOCIAL_WECHAT_TOKEN_URI:https://api.weixin.qq.com/sns/oauth2/access_token}
+        user-info-uri: ${AIGC_AUTH_SOCIAL_WECHAT_USER_INFO_URI:https://api.weixin.qq.com/sns/userinfo}
+        redirect-uri: ${AIGC_AUTH_SOCIAL_WECHAT_REDIRECT_URI:http://localhost:5173/social/callback/wechat}
+        scope: ${AIGC_AUTH_SOCIAL_WECHAT_SCOPE:snsapi_login}
     seed-users:
       - user-id: admin-001
         username: admin
