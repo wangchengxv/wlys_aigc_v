@@ -7,6 +7,10 @@ import java.util.List;
 @Component
 public class PresetModelRegistry {
 
+    private static PresetModel oneLinkTextModel(String modelId) {
+        return new PresetModel("onelinkai", modelId, "https://api.onelinkai.cloud", "OneLinkAI " + modelId, List.of("text"));
+    }
+
     private final List<PresetModel> models = List.of(
         new PresetModel("openai", "gpt-4o", "https://api.openai.com", "GPT-4o", List.of("text")),
         new PresetModel("openai", "gpt-4o-mini", "https://api.openai.com", "GPT-4o Mini", List.of("text")),
@@ -14,6 +18,33 @@ public class PresetModelRegistry {
         new PresetModel("openai", "gpt-3.5-turbo", "https://api.openai.com", "GPT-3.5 Turbo", List.of("text")),
         new PresetModel("onelinkai", "gpt-4o", "https://api.onelinkai.cloud", "OneLinkAI GPT-4o", List.of("text")),
         new PresetModel("onelinkai", "claude-sonnet-4-6", "https://api.onelinkai.cloud", "OneLinkAI Claude Sonnet 4.6", List.of("text")),
+        oneLinkTextModel("claude-opus-4-6"),
+        oneLinkTextModel("claude-opus-4-7"),
+        oneLinkTextModel("deepseek-v4-flash"),
+        oneLinkTextModel("deepseek-v4-pro"),
+        oneLinkTextModel("doubao-seed-2.0-code-preview-260215"),
+        oneLinkTextModel("doubao-seed-2.0-lite-260215"),
+        oneLinkTextModel("doubao-seed-2.0-mini-260215"),
+        oneLinkTextModel("doubao-seed-2.0-pro-260215"),
+        oneLinkTextModel("gemini-3-flash-preview"),
+        oneLinkTextModel("gemini-3.1-pro-preview"),
+        oneLinkTextModel("glm-4.7-flashx"),
+        oneLinkTextModel("glm-5"),
+        oneLinkTextModel("glm-5-turbo"),
+        oneLinkTextModel("GLM-5.1"),
+        oneLinkTextModel("gpt-5.2-codex"),
+        oneLinkTextModel("gpt-5.3-codex"),
+        oneLinkTextModel("gpt-5.4"),
+        oneLinkTextModel("kimi-k2.5"),
+        oneLinkTextModel("kimi-k2.6"),
+        oneLinkTextModel("minimax-m2.5"),
+        oneLinkTextModel("minimax-m2.7"),
+        oneLinkTextModel("qwen3.5-35b-a3b"),
+        oneLinkTextModel("qwen3.5-397b-a17b"),
+        oneLinkTextModel("qwen3.5-flash"),
+        oneLinkTextModel("qwen3.5-plus"),
+        oneLinkTextModel("qwen3.6-plus"),
+        oneLinkTextModel("step-3.5-flash"),
         new PresetModel("onelinkai", "gemini-2.5-pro", "https://api.onelinkai.cloud", "OneLinkAI Gemini 2.5 Pro", List.of("text")),
         new PresetModel("onelinkai", "wanx-v1", "https://api.onelinkai.cloud", "OneLinkAI Wanx v1", List.of("image")),
         new PresetModel("onelinkai", "doubao-seedance-1.5-pro", "https://api.onelinkai.cloud", "OneLinkAI 豆包 Seedance 1.5 Pro", List.of("video")),

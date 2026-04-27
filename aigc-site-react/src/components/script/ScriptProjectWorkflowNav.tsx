@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useMemo, memo, useState } from 'react'
+import { useMemo, memo, useState, useEffect } from 'react'
 import { scriptProjectWorkflowSteps, getScriptProjectWorkflowCurrentIndex } from '@/components/script/scriptProjectWorkflow'
 import { useGlobalSettingsStore } from '@/stores/globalSettingsStore'
 
@@ -119,6 +119,13 @@ export function ScriptProjectWorkflowNav({ projectId, collapsed: controlledColla
     }
   }
   const toggleCollapsed = () => setCollapsed((prev) => !prev)
+
+  useEffect(() => {
+    if (controlledCollapsed !== undefined) {
+      setInternalCollapsed(controlledCollapsed)
+    }
+  }, [controlledCollapsed])
+
   const visualStyleMode = useGlobalSettingsStore((s) => s.visualStyleMode)
   const visualStylePresetId = useGlobalSettingsStore((s) => s.visualStylePresetId)
   const customVisualStyle = useGlobalSettingsStore((s) => s.customVisualStyle)
