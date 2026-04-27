@@ -122,93 +122,116 @@ export function VideoReferenceImageField({ value, onChange, label, placeholder, 
   }
 
   return (
-    <div className="video-ref-field field">
-      <p className="label">{label}</p>
+    <div className="video-ref-field">
+      {label && <div className="video-ref-field__header"><span className="video-ref-field__label">{label}</span></div>}
       {showHttpOnlyHint ? (
         <p className="hint muted video-ref-field__hint">
           Moark 等接口通常需要<strong>公网可访问的 http(s) 图片链接</strong>。本地上传会转为 Base64，更适合 Vidu；若用 Moark 请将图片传到图床后粘贴 URL。
         </p>
       ) : null}
 
-      <div
-        className={`video-ref-dropzone${dragOver ? ' video-ref-dropzone--active' : ''}${busy ? ' video-ref-dropzone--busy' : ''}`}
-        onDragEnter={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setDragOver(true)
-        }}
-        onDragOver={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setDragOver(true)
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          if (e.currentTarget.contains(e.relatedTarget as Node)) return
-          setDragOver(false)
-        }}
-        onDrop={onDrop}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+      <div className="video-ref-field__body">
+        <div
+          className={`video-ref-dropzone${dragOver ? ' video-ref-dropzone--active' : ''}${busy ? ' video-ref-dropzone--busy' : ''}`}
+          onDragEnter={(e) => {
             e.preventDefault()
-            fileRef.current?.click()
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-label="拖拽或点击上传参考图"
-        onClick={() => !busy && fileRef.current?.click()}
-      >
-        <input
-          ref={fileRef}
-          id={inputId}
-          type="file"
-          accept="image/*"
-          className="video-ref-file-input"
-          onChange={onPick}
-          aria-hidden
-          tabIndex={-1}
-        />
-        <div className="video-ref-dropzone__inner">
-          {busy ? (
-            <span className="muted">正在处理图片…</span>
-          ) : (
-            <>
-              <span className="video-ref-dropzone__title">拖拽图片到此处，或点击选择</span>
-              <span className="muted video-ref-dropzone__sub">支持 JPG / PNG / WebP / GIF；大文件会自动压缩为 JPEG</span>
-            </>
-          )}
+            e.stopPropagation()
+            setDragOver(true)
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setDragOver(true)
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return
+            setDragOver(false)
+          }}
+          onDrop={onDrop}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              fileRef.current?.click()
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="拖拽或点击上传参考图"
+          onClick={() => !busy && fileRef.current?.click()}
+        >
+          <input
+            ref={fileRef}
+            id={inputId}
+            type="file"
+            accept="image/*"
+            className="video-ref-file-input"
+            onChange={onPick}
+            aria-hidden
+            tabIndex={-1}
+          />
+          <div className="video-ref-dropzone__inner">
+            {busy ? (
+              <span className="muted">正在处理图片…</span>
+            ) : (
+              <>
+                <div className="video-ref-dropzone__icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
+                <span className="video-ref-dropzone__title">点击或拖拽上传图片</span>
+                <span className="video-ref-dropzone__sub">支持 JPG / PNG / WebP / GIF，大文件自动压缩</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="video-ref-field__divider">
+          <span>或</span>
+        </div>
+
+        <div className="video-ref-manual">
+          <label className="video-ref-manual-label" htmlFor={`${inputId}-manual`}>
+            填写图片 URL 或粘贴 Base64
+          </label>
+          <textarea
+            id={`${inputId}-manual`}
+            className="video-ref-textarea"
+            value={value}
+            onChange={(e) => {
+              setLocalErr('')
+              onChange(e.target.value)
+            }}
+            placeholder={placeholder}
+            rows={isData && trimmed.length > 800 ? 4 : 2}
+            spellCheck={false}
+          />
         </div>
       </div>
 
       {previewSrc ? (
         <div className="video-ref-preview">
-          <img src={previewSrc} alt="参考图预览" className="video-ref-preview__img" />
+          <div className="video-ref-preview__img-wrap">
+            <img src={previewSrc} alt="参考图预览" className="video-ref-preview__img" />
+          </div>
           <div className="video-ref-preview__meta">
-            <span className="muted">{isData ? '已选择本地图片（Base64）' : '来自链接预览'}</span>
+            <span className="video-ref-preview__status">{isData ? '已选择本地图片 (Base64)' : '来自链接预览'}</span>
             <button type="button" className="video-ref-clear" onClick={() => onChange('')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
               清除参考图
             </button>
           </div>
         </div>
       ) : null}
-
-      <label className="video-ref-manual-label" htmlFor={`${inputId}-manual`}>
-        或手动填写 / 粘贴
-      </label>
-      <textarea
-        id={`${inputId}-manual`}
-        className="video-ref-textarea"
-        value={value}
-        onChange={(e) => {
-          setLocalErr('')
-          onChange(e.target.value)
-        }}
-        placeholder={placeholder}
-        rows={isData && trimmed.length > 800 ? 6 : 3}
-        spellCheck={false}
-      />
 
       {localErr ? <p className="error video-ref-field__err">{localErr}</p> : null}
     </div>

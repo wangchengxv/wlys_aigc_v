@@ -91,61 +91,80 @@ export function ReversePromptPanel() {
 
   return (
     <section className="reverse-prompt-panel panel glass">
-      <div className="section-heading">
-        <h3>反推提示词</h3>
-        <span>上传图片后，调用已配置豆包模型反推可编辑提示词</span>
+      <div className="reverse-prompt-panel__header">
+        <div className="reverse-prompt-panel__title-wrap">
+          <h3 className="reverse-prompt-panel__title">反推提示词</h3>
+          <p className="reverse-prompt-panel__subtitle">上传图片后，调用已配置豆包模型反推可编辑提示词</p>
+        </div>
       </div>
 
-      <div className="reverse-prompt-panel__toolbar">
-        <div className="reverse-prompt-panel__field">
-          <span className="label">豆包模型</span>
-          <select
-            className="ctrl"
-            value={selectedModel}
-            disabled={loadingModels || models.length === 0}
-            onChange={(event) => setSelectedModel(event.target.value)}
+      <div className="reverse-prompt-panel__content">
+        <div className="reverse-prompt-panel__section">
+          <div className="reverse-prompt-panel__field">
+            <div className="reverse-prompt-panel__field-header">
+              <span className="reverse-prompt-panel__label">豆包模型</span>
+              <span className={`soft-badge ${loadingModels ? 'is-muted' : models.length > 0 ? 'is-success' : 'is-muted'}`}>
+                {loadingModels ? '模型加载中' : models.length > 0 ? `可用 ${models.length} 个` : '暂无模型'}
+              </span>
+            </div>
+            <div className="reverse-prompt-panel__input-row">
+              <select
+                className="ctrl reverse-prompt-panel__select"
+                value={selectedModel}
+                disabled={loadingModels || models.length === 0}
+                onChange={(event) => setSelectedModel(event.target.value)}
+              >
+                {loadingModels ? <option value="">加载中...</option> : null}
+                {models.length === 0 && !loadingModels ? <option value="">暂无可用模型</option> : null}
+                {models.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+              <p className="reverse-prompt-panel__hint">模型由配置中心动态读取，仅显示可用豆包系列能力。</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="reverse-prompt-panel__section">
+          <VideoReferenceImageField
+            value={imageInput}
+            onChange={setImageInput}
+            label="图片输入"
+            placeholder="https://... 或 data:image/png;base64,..."
+          />
+        </div>
+
+        {error ? (
+          <div className="reverse-prompt-panel__error">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <p>{error}</p>
+          </div>
+        ) : null}
+
+        <div className="reverse-prompt-panel__actions">
+          <AppButton variant="primary" loading={submitting} onClick={() => void runReversePrompt()}>
+            {submitting ? '反推中...' : '开始反推'}
+          </AppButton>
+          <AppButton
+            variant="ghost"
+            onClick={() => {
+              setResult(null)
+              setError('')
+              setImageInput('')
+            }}
+            disabled={submitting}
           >
-            {loadingModels ? <option value="">加载中...</option> : null}
-            {models.length === 0 && !loadingModels ? <option value="">暂无可用模型</option> : null}
-            {models.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+            清空
+          </AppButton>
         </div>
-        <div className="reverse-prompt-panel__status">
-          <span className="soft-badge">{loadingModels ? '模型加载中' : models.length > 0 ? `可用 ${models.length} 个` : '暂无模型'}</span>
-          <p className="muted">模型由配置中心动态读取，仅显示可用豆包系列能力。</p>
-        </div>
-      </div>
 
-      <VideoReferenceImageField
-        value={imageInput}
-        onChange={setImageInput}
-        label="图片输入（上传或 URL）"
-        placeholder="https://... 或 data:image/png;base64,..."
-      />
-
-      {error ? <p className="error">{error}</p> : null}
-
-      <div className="reverse-prompt-panel__actions">
-        <AppButton variant="primary" loading={submitting} onClick={() => void runReversePrompt()}>
-          {submitting ? '反推中...' : '开始反推'}
-        </AppButton>
-        <AppButton
-          onClick={() => {
-            setResult(null)
-            setError('')
-            setImageInput('')
-          }}
-          disabled={submitting}
-        >
-          清空
-        </AppButton>
-      </div>
-
-      {result ? (
+        {result ? (
         <div className="reverse-prompt-panel__result">
           <div className="reverse-prompt-panel__result-head">
             <div className="reverse-prompt-panel__result-title">
@@ -190,6 +209,7 @@ export function ReversePromptPanel() {
           </article>
         </div>
       ) : null}
+      </div>
     </section>
   )
 }
