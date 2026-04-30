@@ -70,6 +70,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: '文生视频', to: '/tools/video' },
       { label: '图生视频', to: '/tools/image-to-video' },
       { label: '三视图 / 九宫格', to: '/tools/asset-visual', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+      { label: '剧本闭环Lite', to: '/tools/storyboard-lite', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
       { label: '无限画布', to: '/canvas' },
       { label: '历史记录', to: '/history' },
     ],

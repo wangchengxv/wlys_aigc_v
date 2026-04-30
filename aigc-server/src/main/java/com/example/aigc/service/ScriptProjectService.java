@@ -707,17 +707,7 @@ public class ScriptProjectService {
             p.dubbingSpeed = normalizeDubbingSpeed(request.dubbingSpeed());
         }
         if (request.overrides() != null) {
-            Map<String, String> current = parseOverrides(p.workflowModelOverrides);
-            for (Map.Entry<String, String> entry : request.overrides().entrySet()) {
-                if (entry.getKey() == null || entry.getKey().isBlank()) continue;
-                String val = entry.getValue();
-                if (val == null || val.isBlank()) {
-                    current.remove(entry.getKey());
-                } else {
-                    current.put(entry.getKey(), val.trim());
-                }
-            }
-            p.workflowModelOverrides = serializeOverrides(current);
+            p.workflowModelOverrides = serializeOverrides(normalizeOverrides(request.overrides()));
         }
         save(aggregate);
         return toModelSettingsResponse(p);
@@ -752,6 +742,24 @@ public class ScriptProjectService {
         } catch (Exception ex) {
             return new java.util.LinkedHashMap<>();
         }
+    }
+
+    private Map<String, String> normalizeOverrides(Map<String, String> overrides) {
+        Map<String, String> normalized = new java.util.LinkedHashMap<>();
+        if (overrides == null || overrides.isEmpty()) {
+            return normalized;
+        }
+        for (Map.Entry<String, String> entry : overrides.entrySet()) {
+            if (entry.getKey() == null || entry.getKey().isBlank()) {
+                continue;
+            }
+            String value = entry.getValue();
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            normalized.put(entry.getKey().trim(), value.trim());
+        }
+        return normalized;
     }
 
     private String serializeOverrides(Map<String, String> overrides) {

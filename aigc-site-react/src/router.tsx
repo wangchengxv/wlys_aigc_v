@@ -1,7 +1,8 @@
-import type { ComponentType } from 'react'
-import { createBrowserRouter } from 'react-router-dom'
+import type { ComponentType, ReactNode } from 'react'
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/layouts/AppLayout'
 import type { RouteHandle } from '@/routes/types'
+import { getScriptProjectWorkflowFallbackPath, isScriptProjectWorkflowStepHidden } from '@/lib/scriptProject/workflowFeatureGate'
 
 const H = (h: RouteHandle) => h
 
@@ -12,6 +13,37 @@ function lazyPage<T extends object>(
   return async () => {
     const mod = await loader()
     return { Component: (mod as Record<string, unknown>)[exportName] as ComponentType<object> }
+  }
+}
+
+function ScriptProjectWorkflowFeatureGate({
+  stepKey,
+  children,
+}: {
+  stepKey: string
+  children: ReactNode
+}) {
+  const { projectId = '' } = useParams()
+  if (isScriptProjectWorkflowStepHidden(stepKey)) {
+    return <Navigate to={getScriptProjectWorkflowFallbackPath(projectId)} replace />
+  }
+  return <>{children}</>
+}
+
+function lazyGuardedScriptProjectPage<T extends object>(
+  loader: () => Promise<T>,
+  exportName: string,
+  stepKey: string,
+) {
+  return async () => {
+    const mod = await loader()
+    const Component = (mod as Record<string, unknown>)[exportName] as ComponentType<object>
+    const GuardedComponent = () => (
+      <ScriptProjectWorkflowFeatureGate stepKey={stepKey}>
+        <Component />
+      </ScriptProjectWorkflowFeatureGate>
+    )
+    return { Component: GuardedComponent }
   }
 }
 
@@ -37,7 +69,7 @@ export const router = createBrowserRouter([
           title: '无限画布',
           eyebrow: '',
           section: '创作工具',
-          description: '预留为后续节点式创作与流程编排能力的画布空间。',
+          description: '正式可用的节点编排画布，支持草稿同步、项目绑定与 Comfy 执行回显。',
         }),
       },
       {
@@ -127,6 +159,16 @@ export const router = createBrowserRouter([
         handle: H({ title: '三视图 / 九宫格', eyebrow: '', section: '创作工具' }),
       },
       {
+        path: 'tools/storyboard-lite',
+        lazy: lazyPage(() => import('@/pages/StoryboardLitePage'), 'StoryboardLitePage'),
+        handle: H({
+          title: '剧本闭环Lite',
+          eyebrow: '',
+          section: '创作工具',
+          description: '独立最小闭环：剧本、三视图/关键帧、图生视频。',
+        }),
+      },
+      {
         path: 'workspace',
         lazy: lazyPage(() => import('@/pages/WorkspacePage'), 'WorkspacePage'),
         handle: H({
@@ -195,22 +237,22 @@ export const router = createBrowserRouter([
       },
       {
         path: 'script-projects/:projectId/dubbing',
-        lazy: lazyPage(() => import('@/pages/ScriptProjectDubbingPage'), 'ScriptProjectDubbingPage'),
+        lazy: lazyGuardedScriptProjectPage(() => import('@/pages/ScriptProjectDubbingPage'), 'ScriptProjectDubbingPage', 'dubbing'),
         handle: H({ title: '配音管理', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/lip-sync',
-        lazy: lazyPage(() => import('@/pages/ScriptProjectLipSyncPage'), 'ScriptProjectLipSyncPage'),
+        lazy: lazyGuardedScriptProjectPage(() => import('@/pages/ScriptProjectLipSyncPage'), 'ScriptProjectLipSyncPage', 'lip-sync'),
         handle: H({ title: '口型同步', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/final-composition',
-        lazy: lazyPage(() => import('@/pages/ScriptProjectFinalCompositionPage'), 'ScriptProjectFinalCompositionPage'),
+        lazy: lazyGuardedScriptProjectPage(() => import('@/pages/ScriptProjectFinalCompositionPage'), 'ScriptProjectFinalCompositionPage', 'edit'),
         handle: H({ title: '视频剪辑工作台', eyebrow: '', section: '项目与作品' }),
       },
       {
         path: 'script-projects/:projectId/export',
-        lazy: lazyPage(() => import('@/pages/ScriptProjectExportPage'), 'ScriptProjectExportPage'),
+        lazy: lazyGuardedScriptProjectPage(() => import('@/pages/ScriptProjectExportPage'), 'ScriptProjectExportPage', 'export'),
         handle: H({ title: '剪辑成片与导出', eyebrow: '', section: '项目与作品' }),
       },
       {

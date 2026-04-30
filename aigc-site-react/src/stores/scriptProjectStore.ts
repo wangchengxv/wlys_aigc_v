@@ -962,8 +962,27 @@ export const useScriptProjectStore = create<ScriptProjectState>((set, get) => ({
     set({ visualPromptLoading: true })
     try {
       const res = await generateThreeView(projectId, assetId)
-      await get().loadAssets(projectId)
-      await get().loadProject(projectId)
+      if (shouldApplyProjectState(projectId)) {
+        set((state) => ({
+          assets: state.assets.map((asset) =>
+            asset.assetId === res.assetId ? { ...asset, threeViewImageFileId: res.imageFileId } : asset,
+          ),
+          currentProject:
+            state.currentProject?.project.projectId === projectId
+              ? {
+                  ...state.currentProject,
+                  assets: state.currentProject.assets.map((asset) =>
+                    asset.assetId === res.assetId ? { ...asset, threeViewImageFileId: res.imageFileId } : asset,
+                  ),
+                }
+              : state.currentProject,
+        }))
+      }
+      try {
+        await get().loadAssets(projectId)
+      } catch {
+        throw new Error('三视图已生成，但资产列表刷新失败，请稍后手动刷新查看最新结果')
+      }
       return res
     } finally {
       set({ visualPromptLoading: false })

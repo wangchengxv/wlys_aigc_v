@@ -11,6 +11,8 @@ public interface CanvasGraphRepository {
     Optional<CanvasGraph> findByIdAndOwnerId(String id, String ownerId);
 
     List<CanvasGraph> findAllByOwnerId(String ownerId);
+    List<CanvasGraph> findAllByOwnerIdAndProjectId(String ownerId, String projectId);
+    List<CanvasGraph> findAllByOwnerIdAndProjectIdIsNull(String ownerId);
 
     void deleteByIdAndOwnerId(String id, String ownerId);
 }

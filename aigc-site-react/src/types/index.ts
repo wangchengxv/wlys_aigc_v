@@ -513,6 +513,62 @@ export interface GenerateResponse {
   persistedVideoFileIds?: string[]
 }
 
+export interface StoryboardLiteCreateSessionRequest {
+  projectId?: string
+  title?: string
+}
+
+export interface StoryboardLiteSaveScriptRequest {
+  scriptText: string
+}
+
+export interface StoryboardLiteGenerateKeyframesRequest {
+  imageModel?: string
+  style?: string
+  prompt?: string
+}
+
+export interface StoryboardLiteGenerateVideoRequest {
+  keyframeId?: string
+  videoModel?: string
+  style?: string
+  prompt?: string
+  referenceImageUrl?: string
+}
+
+export interface StoryboardLiteKeyframe {
+  keyframeId: string
+  promptText?: string | null
+  imageUrl?: string | null
+  imageFileId?: string | null
+  modelName?: string | null
+  selected: boolean
+  status: string
+  createdAt?: string | null
+}
+
+export interface StoryboardLiteVideoTask {
+  videoTaskId: string
+  keyframeId?: string | null
+  status: string
+  videoUrl?: string | null
+  resultVideoFileId?: string | null
+  modelName?: string | null
+  errorMessage?: string | null
+  createdAt?: string | null
+}
+
+export interface StoryboardLiteSession {
+  sessionId: string
+  ownerId: string
+  projectId?: string | null
+  title?: string | null
+  status: string
+  latestScript?: string | null
+  keyframes: StoryboardLiteKeyframe[]
+  videoTasks: StoryboardLiteVideoTask[]
+}
+
 export type AssetHistoryType =
   | 'KEYFRAME'
   | 'TURNAROUND'
@@ -537,6 +593,7 @@ export interface AssetGenerationHistoryItem {
 export interface ImageModelOptions {
   defaultModel: string
   options: string[]
+  details?: VideoModelOptionDetail[]
 }
 
 export interface VideoModelOptionDetail {
@@ -913,7 +970,8 @@ export interface StoryboardShot {
   storyboardImageFileId?: string | null
   storyboardCropFileId?: string | null
   storyboardCropIndex?: number | null
-  firstFrameMode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | null
+  firstFrameImageFileId?: string | null
+  firstFrameMode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | 'ASSET_IMAGE' | 'UPLOADED_IMAGE' | null
   /** B-9 分镜图像提示词 */
   visualPrompt?: string | null
   promptVersions?: PromptVersion[] | null
@@ -978,13 +1036,15 @@ export interface StoryboardRewriteRequest {
 
 export interface ApplyStoryboardFirstFrameRequest {
   assetId?: string
-  mode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL'
+  mode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | 'ASSET_IMAGE' | 'UPLOADED_IMAGE'
   panelIndex?: number
+  imageFileId?: string
+  imageUrl?: string
 }
 
 export interface StoryboardFirstFrameResponse {
   shotId: string
-  mode: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL'
+  mode: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | 'ASSET_IMAGE' | 'UPLOADED_IMAGE'
   assetId: string | null
   panelIndex: number | null
   imageFileId: string | null

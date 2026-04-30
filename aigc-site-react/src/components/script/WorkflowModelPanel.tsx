@@ -54,6 +54,9 @@ interface Props {
   allModels: ModelConfig[]
 }
 
+const FLOAT_PANEL_WIDTH = 360
+const FLOAT_PANEL_MARGIN = 12
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
@@ -74,7 +77,30 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
   const [dubbingVoice, setDubbingVoice] = useState('')
   const [dubbingLanguage, setDubbingLanguage] = useState('')
   const [dubbingSpeed, setDubbingSpeed] = useState('1')
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
   const loaded = useRef(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const dragStateRef = useRef({ active: false, offsetX: 0, offsetY: 0 })
+
+  function clampPanelPosition(nextX: number, nextY: number, width: number, height: number) {
+    const maxX = Math.max(FLOAT_PANEL_MARGIN, window.innerWidth - width - FLOAT_PANEL_MARGIN)
+    const maxY = Math.max(FLOAT_PANEL_MARGIN, window.innerHeight - height - FLOAT_PANEL_MARGIN)
+    return {
+      x: Math.min(Math.max(FLOAT_PANEL_MARGIN, nextX), maxX),
+      y: Math.min(Math.max(FLOAT_PANEL_MARGIN, nextY), maxY),
+    }
+  }
+
+  function getInitPanelPosition() {
+    const toggleEl = rootRef.current?.querySelector<HTMLButtonElement>('.wf-model-panel__toggle')
+    const rect = toggleEl?.getBoundingClientRect()
+    if (!rect) return { x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN }
+    const nextX = rect.right - FLOAT_PANEL_WIDTH
+    const nextY = rect.bottom + 8
+    return clampPanelPosition(nextX, nextY, FLOAT_PANEL_WIDTH, Math.max(420, window.innerHeight * 0.7))
+  }
 
   // 首次展开时加载
   useEffect(() => {
@@ -98,6 +124,20 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
     setDraft(settings.overrides ?? {})
   }, [settings])
 
+  useEffect(() => {
+    if (!open || !panelPos) return
+    function handleResize() {
+      const width = panelRef.current?.offsetWidth ?? FLOAT_PANEL_WIDTH
+      const height = panelRef.current?.offsetHeight ?? Math.max(420, window.innerHeight * 0.7)
+      setPanelPos((pos) => {
+        if (!pos) return pos
+        return clampPanelPosition(pos.x, pos.y, width, height)
+      })
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [open, panelPos])
+
   const keys = SCOPE_KEYS[scope]
 
   // 按 capability 过滤可选模型
@@ -119,21 +159,21 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
   }
 
   async function handleSave() {
-    // 去掉空字符串覆盖（等同清除）
-    const cleanOverrides: Record<string, string> = {}
+    // 保留空字符串以显式清除后端已有覆盖。
+    const nextOverrides: Record<string, string> = {}
     for (const [k, v] of Object.entries(draft)) {
-      if (v.trim()) cleanOverrides[k] = v.trim()
+      nextOverrides[k] = v.trim()
     }
     try {
       await saveSettings(projectId, {
-        defaultTextModel:  defaultText.trim()  || null,
-        defaultImageModel: defaultImage.trim() || null,
-        defaultVideoModel: defaultVideo.trim() || null,
-        defaultTtsModel: defaultTts.trim() || null,
+        defaultTextModel:  defaultText.trim(),
+        defaultImageModel: defaultImage.trim(),
+        defaultVideoModel: defaultVideo.trim(),
+        defaultTtsModel: defaultTts.trim(),
         dubbingVoice: dubbingVoice.trim() || null,
         dubbingLanguage: dubbingLanguage.trim() || null,
         dubbingSpeed: parseDubbingSpeed(dubbingSpeed),
-        overrides: cleanOverrides,
+        overrides: nextOverrides,
       })
       showToast('模型设置已保存', 'success')
     } catch (e) {
@@ -141,13 +181,59 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
     }
   }
 
+  function handleTogglePanel() {
+    setOpen((prev) => {
+      const next = !prev
+      if (next && !panelPos) {
+        setPanelPos(getInitPanelPosition())
+      }
+      return next
+    })
+  }
+
+  function handleDragStart(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return
+    const rect = panelRef.current?.getBoundingClientRect()
+    if (!rect) return
+    dragStateRef.current = {
+      active: true,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    }
+    setDragging(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    event.preventDefault()
+  }
+
+  function handleDragMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragStateRef.current.active) return
+    const width = panelRef.current?.offsetWidth ?? FLOAT_PANEL_WIDTH
+    const height = panelRef.current?.offsetHeight ?? Math.max(420, window.innerHeight * 0.7)
+    const next = clampPanelPosition(
+      event.clientX - dragStateRef.current.offsetX,
+      event.clientY - dragStateRef.current.offsetY,
+      width,
+      height,
+    )
+    setPanelPos(next)
+  }
+
+  function handleDragEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragStateRef.current.active) return
+    dragStateRef.current.active = false
+    setDragging(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
-    <div className="wf-model-panel">
+    <div ref={rootRef} className="wf-model-panel">
       <AppButton
         variant="ghost"
         size="sm"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleTogglePanel}
         className="wf-model-panel__toggle"
         title="切换功能级模型"
       >
@@ -161,7 +247,21 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
       </AppButton>
 
       {open && (
-        <div className="wf-model-panel__body">
+        <div
+          ref={panelRef}
+          className="wf-model-panel__body"
+          style={panelPos ? { left: `${panelPos.x}px`, top: `${panelPos.y}px` } : undefined}
+        >
+          <div
+            className={`wf-model-panel__drag-handle${dragging ? ' is-dragging' : ''}`}
+            onPointerDown={handleDragStart}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
+          >
+            <span>模型配置面板</span>
+            <span className="wf-model-panel__drag-tip">按住拖动</span>
+          </div>
           {settingsLoading ? (
             <p className="muted" style={{ padding: '8px 0' }}>加载中…</p>
           ) : (

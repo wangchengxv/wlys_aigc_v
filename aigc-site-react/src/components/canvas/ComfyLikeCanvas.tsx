@@ -21,6 +21,7 @@ applyLitegraphFrontCanvasBlitFix()
 
 type ControlledNodeType = 'aigc/prompt' | 'aigc/render'
 type GraphTemplateId = 'starter' | 'blank'
+type DrawerPanel = 'closed' | 'tools' | 'status' | 'result'
 
 type DraftMeta = {
   title: string
@@ -145,6 +146,7 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
   const [activeTemplate, setActiveTemplate] = useState<GraphTemplateId>('starter')
   const [resultPromptId, setResultPromptId] = useState<string | null>(null)
   const [resultPayload, setResultPayload] = useState<ComfyPromptResult | null>(null)
+  const [drawerPanel, setDrawerPanel] = useState<DrawerPanel>('closed')
   const comfyPollTokenRef = useRef(0)
   const redrawRafRef = useRef<number | null>(null)
   const interactionActiveRef = useRef(false)
@@ -283,8 +285,8 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
       requestAnimationFrame(async () => {
         syncSize()
 
-        const localCached = loadState()
-        const cached = localCached?.graph ? localCached : await syncFromRemote()
+        const localCached = loadState({ projectId: draftMetaRef.current.projectId })
+        const cached = localCached?.graph ? localCached : await syncFromRemote({ projectId: draftMetaRef.current.projectId })
         if (cached?.graph) {
           applyState(graph, lgCanvas, cached)
           hydrateDraftMeta({ title: cached.title, projectId: cached.projectId ?? null })
@@ -375,7 +377,7 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
       graphRef.current = null
       lgCanvasRef.current = null
     }
-  }, [hydrateDraftMeta, loadState, saveSnapshot, syncFromRemote])
+  }, [hydrateDraftMeta, loadState, projectId, saveSnapshot, syncFromRemote])
 
   const handleExport = useCallback(() => {
     const data = buildSnapshot()
@@ -475,7 +477,7 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
   }, [saveSnapshot])
 
   const handleClearCache = useCallback(() => {
-    clearState()
+    clearState({ projectId: draftMetaRef.current.projectId })
     setUpdatedAt(null)
     setBridgeStatus('已清理本地缓存，当前画布仍保留在页面中，刷新后将不再自动恢复')
     showToast('本地缓存已清理', 'info')
@@ -508,6 +510,7 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
     const snapshot = saveSnapshot()
     if (!snapshot) return
     setBridgeLoading(true)
+    setDrawerPanel('result')
     const pollToken = Date.now()
     comfyPollTokenRef.current = pollToken
     setResultPayload(null)
@@ -547,128 +550,154 @@ export function ComfyLikeCanvas({ draftTitle, projectId, projectName, onDraftMet
   }, [saveSnapshot, showToast])
 
   const resultSummary = useMemo(() => executionStatusText(resultPayload, resultPromptId), [resultPayload, resultPromptId])
+  const isDrawerClosed = drawerPanel === 'closed'
+  const toggleDrawerPanel = (panel: Exclude<DrawerPanel, 'closed'>) => {
+    setDrawerPanel((current) => (current === panel ? 'closed' : panel))
+  }
 
   return (
-    <div className="comfy-canvas panel glass">
-      <div className="comfy-canvas__toolbar">
-        <div className="comfy-canvas__actions">
+    <div className="comfy-canvas panel glass comfy-canvas--revamp">
+      <input ref={inputRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
+      <div className="comfy-canvas__topbar">
+        <div className="comfy-canvas__topbar-primary">
           <AppButton size="sm" variant="primary" onClick={handleManualSave}>
-            保存草稿
+            保存
           </AppButton>
           <AppButton size="sm" variant="primary" loading={bridgeLoading} onClick={handleQueueComfy}>
-            提交到 Comfy
-          </AppButton>
-          <AppButton size="sm" variant="ghost" onClick={handleExport}>
-            导出 JSON
-          </AppButton>
-          <AppButton size="sm" variant="ghost" onClick={handleImportClick}>
-            导入 JSON
+            提交 Comfy
           </AppButton>
           <AppButton size="sm" variant="ghost" onClick={handleFitView}>
             适配视图
           </AppButton>
-          <AppButton size="sm" variant="ghost" onClick={handleClearCache}>
-            清理本地缓存
-          </AppButton>
-          <AppButton size="sm" variant="ghost" loading={bridgeLoading} onClick={handleSyncObjectInfo}>
-            检查 Comfy 连通性
-          </AppButton>
-          <AppButton size="sm" variant="ghost" onClick={() => navigate('/tools/reverse-prompt')}>
-            反推提示词
-          </AppButton>
         </div>
-
-        <div className="comfy-canvas__status-grid">
-          <div className="comfy-canvas__status-card">
-            <span className="comfy-canvas__status-label">草稿状态</span>
-            <strong>{formatSavedAt(updatedAt)}</strong>
-            <p className="muted">{remoteStatusText(remoteStatus, remoteError)}</p>
-          </div>
-          <div className="comfy-canvas__status-card">
-            <span className="comfy-canvas__status-label">项目绑定</span>
-            <strong>{projectName || '未绑定工程'}</strong>
-            <p className="muted">{projectId ? `已关联项目 ID：${projectId}` : '未绑定时仍可编辑、保存与执行'}</p>
-          </div>
-          <div className="comfy-canvas__status-card">
-            <span className="comfy-canvas__status-label">Comfy 回显</span>
-            <strong>{resultPromptId || '未提交'}</strong>
-            <p className="muted">{resultSummary}</p>
-          </div>
+        <div className="comfy-canvas__topbar-secondary">
+          <AppButton size="sm" variant={drawerPanel === 'tools' ? 'primary' : 'ghost'} onClick={() => toggleDrawerPanel('tools')}>
+            工具抽屉
+          </AppButton>
+          <AppButton size="sm" variant={drawerPanel === 'status' ? 'primary' : 'ghost'} onClick={() => toggleDrawerPanel('status')}>
+            状态
+          </AppButton>
+          <AppButton size="sm" variant={drawerPanel === 'result' ? 'primary' : 'ghost'} onClick={() => toggleDrawerPanel('result')}>
+            结果
+          </AppButton>
+          <span className="comfy-canvas__pill">{formatSavedAt(updatedAt)}</span>
+          <span className="comfy-canvas__pill muted">{remoteStatusText(remoteStatus, remoteError)}</span>
         </div>
-
-        <div className="comfy-canvas__control-grid">
-          <div className="comfy-canvas__control-card">
-            <p className="comfy-canvas__control-title">受控模板</p>
-            <div className="comfy-canvas__choice-list">
-              {GRAPH_TEMPLATE_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`comfy-canvas__choice${activeTemplate === option.id ? ' is-active' : ''}`}
-                  onClick={() => handleApplyTemplate(option.id)}
-                >
-                  <strong>{option.label}</strong>
-                  <span>{option.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="comfy-canvas__control-card">
-            <p className="comfy-canvas__control-title">受控节点目录</p>
-            <div className="comfy-canvas__choice-list">
-              {CONTROLLED_NODE_LABELS.map((item) => (
-                <button key={item.type} type="button" className="comfy-canvas__choice" onClick={() => handleAddNode(item.type)}>
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <p className="comfy-canvas__tips muted">
-          快捷键：`Space` 拖动画布、滚轮缩放、`Alt +/-` 缩放、`.` 适配视图、`Delete` 删除节点
-        </p>
-        <p className="comfy-canvas__tips">{bridgeStatus}</p>
       </div>
-
-      <input ref={inputRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
-
-      <div ref={viewportRef} className="comfy-canvas__viewport">
-        <canvas ref={domCanvasRef} className="comfy-canvas__surface" />
-      </div>
-
-      <div className="comfy-canvas__result panel glass">
-        <div className="section-heading">
-          <h3>执行结果</h3>
-          <span>{resultPromptId ? `prompt_id=${resultPromptId}` : '提交后在此显示结果摘要与预览'}</span>
+      <div className={`comfy-canvas__workspace${isDrawerClosed ? ' is-focus' : ''}`}>
+        <div ref={viewportRef} className="comfy-canvas__viewport">
+          <canvas ref={domCanvasRef} className="comfy-canvas__surface" />
         </div>
-
-        {resultPayload?.images.length ? (
-          <div className="comfy-canvas__result-grid">
-            {resultPayload.images.map((image) => (
-              <figure key={`${image.nodeId}-${image.filename}`} className="comfy-canvas__image-card">
-                <img src={image.url} alt={image.filename} />
-                <figcaption>
-                  <strong>{image.filename}</strong>
-                  <span>输出节点：{image.nodeId}</span>
-                </figcaption>
-              </figure>
-            ))}
+        <aside className={`comfy-canvas__drawer${isDrawerClosed ? ' is-closed' : ''}`}>
+          {drawerPanel === 'tools' ? (
+            <div className="comfy-canvas__drawer-panel">
+              <div className="section-heading">
+                <h3>工具与节点</h3>
+                <span>模板、节点与辅助操作</span>
+              </div>
+              <p className="comfy-canvas__control-title">受控模板</p>
+              <div className="comfy-canvas__choice-list">
+                {GRAPH_TEMPLATE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`comfy-canvas__choice${activeTemplate === option.id ? ' is-active' : ''}`}
+                    onClick={() => handleApplyTemplate(option.id)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="comfy-canvas__control-title">受控节点目录</p>
+              <div className="comfy-canvas__choice-list">
+                {CONTROLLED_NODE_LABELS.map((item) => (
+                  <button key={item.type} type="button" className="comfy-canvas__choice" onClick={() => handleAddNode(item.type)}>
+                    <strong>{item.label}</strong>
+                    <span>{item.description}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="comfy-canvas__actions">
+                <AppButton size="sm" variant="ghost" onClick={handleExport}>
+                  导出 JSON
+                </AppButton>
+                <AppButton size="sm" variant="ghost" onClick={handleImportClick}>
+                  导入 JSON
+                </AppButton>
+                <AppButton size="sm" variant="ghost" loading={bridgeLoading} onClick={handleSyncObjectInfo}>
+                  检查 Comfy 连通性
+                </AppButton>
+                <AppButton size="sm" variant="ghost" onClick={handleClearCache}>
+                  清理本地缓存
+                </AppButton>
+                <AppButton size="sm" variant="ghost" onClick={() => navigate('/tools/reverse-prompt')}>
+                  反推提示词
+                </AppButton>
+              </div>
+              <p className="comfy-canvas__tips muted">快捷键：滚轮缩放、Alt +/- 缩放、. 适配视图、Delete 删除节点</p>
+              <p className="comfy-canvas__tips">{bridgeStatus}</p>
+            </div>
+          ) : null}
+          {drawerPanel === 'status' ? (
+            <div className="comfy-canvas__drawer-panel">
+              <div className="section-heading">
+                <h3>运行状态</h3>
+                <span>保存、项目绑定、Comfy 执行摘要</span>
+              </div>
+              <div className="comfy-canvas__status-grid">
+                <div className="comfy-canvas__status-card">
+                  <span className="comfy-canvas__status-label">草稿状态</span>
+                  <strong>{formatSavedAt(updatedAt)}</strong>
+                  <p className="muted">{remoteStatusText(remoteStatus, remoteError)}</p>
+                </div>
+                <div className="comfy-canvas__status-card">
+                  <span className="comfy-canvas__status-label">项目绑定</span>
+                  <strong>{projectName || '未绑定工程'}</strong>
+                  <p className="muted">{projectId ? `已关联项目 ID：${projectId}` : '未绑定时仍可编辑、保存与执行'}</p>
+                </div>
+                <div className="comfy-canvas__status-card">
+                  <span className="comfy-canvas__status-label">Comfy 回显</span>
+                  <strong>{resultPromptId || '未提交'}</strong>
+                  <p className="muted">{resultSummary}</p>
+                </div>
+              </div>
+              <p className="comfy-canvas__tips">{bridgeStatus}</p>
+            </div>
+          ) : null}
+          {drawerPanel === 'result' ? (
+            <div className="comfy-canvas__drawer-panel">
+              <div className="section-heading">
+                <h3>执行结果</h3>
+                <span>{resultPromptId ? `prompt_id=${resultPromptId}` : '提交后在此显示结果摘要与预览'}</span>
+              </div>
+              {resultPayload?.images.length ? (
+                <div className="comfy-canvas__result-grid">
+                  {resultPayload.images.map((image) => (
+                    <figure key={`${image.nodeId}-${image.filename}`} className="comfy-canvas__image-card">
+                      <img src={image.url} alt={image.filename} />
+                      <figcaption>
+                        <strong>{image.filename}</strong>
+                        <span>输出节点：{image.nodeId}</span>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              ) : (
+                <div className="comfy-canvas__result-empty">
+                  <strong>{resultPayload?.errorText ? '执行失败' : '暂未回显图片'}</strong>
+                  <p className="muted">
+                    {resultPayload?.errorText
+                      ? resultPayload.errorText
+                      : resultPromptId
+                        ? '当前任务可能仍在排队，或仅返回文本/结构化输出摘要。'
+                        : '先点击“提交 Comfy”，再查看状态与结果。'}
+                  </p>
+                </div>
+              )}
           </div>
-        ) : (
-          <div className="comfy-canvas__result-empty">
-            <strong>{resultPayload?.errorText ? '执行失败' : '暂未回显图片'}</strong>
-            <p className="muted">
-              {resultPayload?.errorText
-                ? resultPayload.errorText
-                : resultPromptId
-                  ? '当前任务可能仍在排队，或仅返回文本/结构化输出摘要。'
-                  : '先在工具栏点击“提交到 Comfy”，再查看状态与结果。'}
-            </p>
-          </div>
-        )}
+          ) : null}
+        </aside>
       </div>
     </div>
   )

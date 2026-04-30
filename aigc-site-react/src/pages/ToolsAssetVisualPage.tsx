@@ -81,18 +81,27 @@ export function ToolsAssetVisualPage() {
   const selected = useMemo(() => assets.find((a) => a.assetId === assetId), [assets, assetId])
   const isCharacter = selected?.assetType === 'CHARACTER'
 
-  async function run<T>(fn: () => Promise<T>, okMsg: string, errMsg: string) {
+  function isRefreshWarning(error: unknown) {
+    return error instanceof Error && error.message.includes('已生成，但资产列表刷新失败')
+  }
+
+  async function run<T>(fn: () => Promise<T>, okMsg: string, errMsg: string, onSuccess?: (result: T) => void) {
     if (!projectId || !assetId) {
       showToast('当前未绑定工程。你仍可使用下方免绑定快速模式；如需写入工程，请先选择工程与资产。', 'info')
       return
     }
     setBusy(true)
     try {
-      await fn()
+      const result = await fn()
+      onSuccess?.(result)
       showToast(okMsg, 'success')
-      await refreshAssets(projectId)
+      try {
+        await refreshAssets(projectId)
+      } catch {
+        showToast('三视图已生成，但资产列表刷新失败，请稍后手动刷新查看最新结果', 'info')
+      }
     } catch (e) {
-      showToast(e instanceof Error ? e.message : errMsg, 'error')
+      showToast(e instanceof Error ? e.message : errMsg, isRefreshWarning(e) ? 'info' : 'error')
     } finally {
       setBusy(false)
     }
@@ -217,6 +226,13 @@ export function ToolsAssetVisualPage() {
                     () => generateThreeView(projectId, assetId),
                     '三视图已生成（正/侧/背）',
                     '三视图生成失败',
+                    (result) => {
+                      setAssets((list) =>
+                        list.map((asset) =>
+                          asset.assetId === result.assetId ? { ...asset, threeViewImageFileId: result.imageFileId } : asset,
+                        ),
+                      )
+                    },
                   )
                 }
               >

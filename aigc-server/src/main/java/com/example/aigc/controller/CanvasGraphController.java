@@ -33,12 +33,13 @@ public class CanvasGraphController {
     public ApiResponse<PagedResult<CanvasGraphDto>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String projectId,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "x-aigc-token", required = false) String xAigcToken,
             @RequestHeader(value = "x-user-id", required = false) String xUserId
     ) {
         String ownerId = requestAuthService.requireUserId(authorization, xAigcToken, xUserId);
-        return ApiResponse.ok(canvasGraphService.list(ownerId, page, pageSize));
+        return ApiResponse.ok(canvasGraphService.list(ownerId, projectId, page, pageSize));
     }
 
     @GetMapping("/{id}")

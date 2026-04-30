@@ -1,0 +1,384 @@
+.cartoon-workflow-page {
+  width: 1920px;
+  height: 1080px;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+
+.cartoon-workflow-page__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 34px 47px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.cartoon-workflow-page__logo {
+  font-family: 'Lobster', sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 75px;
+}
+
+.cartoon-workflow-page__avatar {
+  width: 40px;
+  height: 40px;
+  background: #FFBFBF;
+  border-radius: 50%;
+}
+
+.cartoon-workflow-page__main {
+  display: flex;
+  width: 1920px;
+  height: 1080px;
+}
+
+.cartoon-workflow-page__sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 170px 47px 0;
+  box-sizing: border-box;
+}
+
+.cartoon-workflow-page__tabs {
+  display: flex;
+  gap: 78px;
+  margin-bottom: 51px;
+}
+
+.cartoon-workflow-page__tab {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cartoon-workflow-page__tab-label {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 500;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.cartoon-workflow-page__tab-count {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #818181;
+  line-height: 1;
+}
+
+.cartoon-workflow-page__project {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  margin-bottom: 23px;
+}
+
+.cartoon-workflow-page__folder-icon {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  position: relative;
+}
+
+.cartoon-workflow-page__folder-icon::before,
+.cartoon-workflow-page__folder-icon::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+}
+
+.cartoon-workflow-page__project-title {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.cartoon-workflow-page__arrow {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.cartoon-workflow-page__subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cartoon-workflow-page__subtitle-badge {
+  width: 8px;
+  height: 8px;
+  background: #0A0A0A;
+  border-radius: 4px;
+}
+
+.cartoon-workflow-page__subtitle-text {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #818181;
+  line-height: 1;
+}
+
+.cartoon-workflow-page__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 47px;
+  padding-top: 170px;
+  box-sizing: border-box;
+}
+
+.cartoon-workflow-page__cards {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cartoon-workflow-page__card {
+  width: 433px;
+  height: 331px;
+  background: #313131;
+  display: flex;
+  flex-direction: column;
+  padding: 7px 4px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.cartoon-workflow-page__card--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.cartoon-workflow-page__plus {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 66px;
+  color: #ffffff;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.cartoon-workflow-page__card-empty-bar {
+  width: 171px;
+  height: 22px;
+  background: transparent;
+  border: 1px dashed #3C3C3C;
+  border-radius: 10px;
+}
+
+.cartoon-workflow-page__card-image {
+  position: absolute;
+  top: 97px;
+  left: 175px;
+  width: 59px;
+  height: 53px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cartoon-workflow-page__card-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.cartoon-workflow-page__card-info {
+  position: absolute;
+  top: 224px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 248px;
+}
+
+.cartoon-workflow-page__card-bars {
+  display: flex;
+  gap: 10px;
+  width: 171px;
+}
+
+.cartoon-workflow-page__card-bar {
+  height: 22px;
+  flex: 1;
+  background: #0A0A0A;
+  border-radius: 11px;
+}
+
+.cartoon-workflow-page__card-bar--gray {
+  background: #666666;
+}
+
+.cartoon-workflow-page__card-title {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
+  line-height: 1;
+  width: 208px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cartoon-workflow-page__card-actions {
+  display: flex;
+  gap: 2px;
+  width: 74px;
+}
+
+.cartoon-workflow-page__card-action {
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #D6D6D6;
+  border-radius: 2px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #000000;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+}
+
+.cartoon-workflow-page__card-action--delete {
+  color: #FF0000;
+}
+
+.cartoon-workflow-page__card-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.49);
+  border-radius: 12px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  color: #000000;
+}
+
+.cartoon-workflow-page__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cartoon-workflow-page__menu-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.cartoon-workflow-page__menu-btn--gray {
+  background: rgba(255, 255, 255, 0.49);
+}
+
+.cartoon-workflow-page__menu-btn--dark {
+  background: rgba(7, 7, 7, 0.49);
+}
+
+.cartoon-workflow-page__menu-btn::before,
+.cartoon-workflow-page__menu-btn::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+}
+
+.cartoon-workflow-page__menu-btn--gray::before,
+.cartoon-workflow-page__menu-btn--gray::after {
+  background: #495259;
+}
+
+.cartoon-workflow-page__menu-btn--gray::before {
+  width: 9.56px;
+  height: 9.56px;
+  top: 4.25px;
+  left: 20.19px;
+  border-radius: 50%;
+}
+
+.cartoon-workflow-page__menu-btn--gray::after {
+  width: 25.5px;
+  height: 10.63px;
+  bottom: 4.25px;
+  left: 4.25px;
+  border-radius: 5px;
+}
+
+.cartoon-workflow-page__menu-btn--dark::before {
+  width: 25.5px;
+  height: 25.5px;
+  top: 4.25px;
+  left: 4.25px;
+  border-radius: 4px;
+  background: transparent;
+  border: 2px solid #fff;
+}
+
+.cartoon-workflow-page__menu-btn--dark::after {
+  display: none;
+}
+
+.cartoon-workflow-page__action-btn {
+  padding: 10px 20px;
+  background: #232323;
+  border: 1px solid #3C3C3C;
+  border-radius: 12px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.cartoon-workflow-page__start-btn {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 32px;
+  background: rgba(10, 10, 10, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 22px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #ffffff;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.cartoon-workflow-page__start-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}

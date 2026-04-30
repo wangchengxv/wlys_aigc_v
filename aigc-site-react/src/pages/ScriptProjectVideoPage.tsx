@@ -144,13 +144,27 @@ export function ScriptProjectVideoPage() {
 
   async function handleApplyFirstFrame(
     shotId: string,
-    payload: { assetId: string; mode: 'FULL_GRID' | 'CROPPED_PANEL'; panelIndex?: number },
+    payload: {
+      assetId?: string
+      mode?: 'NONE' | 'FULL_GRID' | 'CROPPED_PANEL' | 'ASSET_IMAGE' | 'UPLOADED_IMAGE'
+      panelIndex?: number
+      imageFileId?: string
+      imageUrl?: string
+    },
   ) {
     try {
       await applyStoryboardFirstFrameForShot(projectId, shotId, payload)
-      showToast(payload.mode === 'FULL_GRID' ? '已绑定整张九宫格首帧' : '已绑定单格裁剪首帧', 'success')
+      const msg =
+        payload.mode === 'FULL_GRID'
+          ? '已绑定整张九宫格首帧'
+          : payload.mode === 'CROPPED_PANEL'
+            ? '已绑定单格裁剪首帧'
+            : payload.mode === 'ASSET_IMAGE'
+              ? '已绑定项目素材图为首帧'
+              : '已绑定上传图片为首帧'
+      showToast(msg, 'success')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : '绑定九宫格首帧失败', 'error')
+      showToast(e instanceof Error ? e.message : '绑定首帧参考图失败', 'error')
     }
   }
 
@@ -186,7 +200,7 @@ export function ScriptProjectVideoPage() {
             <div className="project-subpage-shell__toolbar-copy">
               <p className="eyebrow">Video Pipeline</p>
               <h3>模型与主动作</h3>
-              <p className="muted">先拆分镜头，再补充分镜提示词与首帧引用，最后统一启动视频生成。</p>
+              <p className="muted">先拆分镜头，再为每个镜头选择首帧来源并补充分镜提示词，最后统一启动视频生成。</p>
             </div>
             <div className="project-subpage-shell__toolbar-side">
               <WorkflowModelPanel projectId={projectId} scope="video" allModels={allModels} />
@@ -230,7 +244,7 @@ export function ScriptProjectVideoPage() {
               onSaveShot={(id, payload) => void handleSaveShot(id, payload)}
               onRollbackShotVisual={(id, vid) => void handleRollbackShotVisual(id, vid)}
               onClearFirstFrame={(id) => void handleClearFirstFrame(id)}
-              storyboardAssets={storyboardAssets}
+              assets={assets}
               onApplyFirstFrame={(id, payload) => void handleApplyFirstFrame(id, payload)}
               onVideoHistoryRestored={async () => {
                 await loadVideoTasks(projectId)

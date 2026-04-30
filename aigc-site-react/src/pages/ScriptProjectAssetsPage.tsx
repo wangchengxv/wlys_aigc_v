@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getModels,
@@ -80,6 +80,7 @@ function AssetBlock({
   keyframeLoading,
   visualPromptLoading,
   onSave,
+  onAutoSave,
   onSaveVisualPrompt,
   onRollbackVisualPrompt,
   onGenerate,
@@ -106,6 +107,7 @@ function AssetBlock({
   keyframeLoading: boolean
   visualPromptLoading: boolean
   onSave: (a: ExtractedAsset) => void
+  onAutoSave: (a: ExtractedAsset) => Promise<void>
   onSaveVisualPrompt: (assetId: string, text: string) => void | Promise<void>
   onRollbackVisualPrompt: (assetId: string, versionId: string) => void | Promise<void>
   onGenerate: (assetId: string) => void
@@ -126,12 +128,16 @@ function AssetBlock({
   onReloadAfterHistory?: () => void | Promise<void>
 }) {
   const [draft, setDraft] = useState(initial)
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'error'>('idle')
   const [selectedPanelIndex, setSelectedPanelIndex] = useState(0)
   const [selectedShotId, setSelectedShotId] = useState('')
   const [rewriteInstruction, setRewriteInstruction] = useState('')
   const [histOpen, setHistOpen] = useState<{ type: AssetHistoryType; referenceId: string } | null>(null)
+  const initialSyncRef = useRef(true)
   useEffect(() => {
     setDraft(initial)
+    setAutosaveState('idle')
+    initialSyncRef.current = true
   }, [initial])
 
   const list = keyframes.filter((k) => k.assetId === draft.assetId)
@@ -143,6 +149,29 @@ function AssetBlock({
       setSelectedShotId(shots[0].shotId)
     }
   }, [shots, selectedShotId])
+
+  useEffect(() => {
+    if (initialSyncRef.current) {
+      initialSyncRef.current = false
+      return
+    }
+    const normalize = (asset: ExtractedAsset) =>
+      JSON.stringify({
+        name: asset.name,
+        description: asset.description,
+        promptDraft: asset.promptDraft,
+        tags: asset.tags,
+        visualPrompt: asset.visualPrompt ?? '',
+      })
+    if (normalize(draft) === normalize(initial)) return
+    const timer = window.setTimeout(() => {
+      setAutosaveState('saving')
+      void onAutoSave(draft)
+        .then(() => setAutosaveState('idle'))
+        .catch(() => setAutosaveState('error'))
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [draft, initial, onAutoSave])
 
   async function copyText(text: string) {
     try {
@@ -159,34 +188,35 @@ function AssetBlock({
           <h3>{draft.name}</h3>
           <p className="muted">状态：{draft.status}</p>
         </div>
-        <div className="actions">
-          <AppButton size="sm" loading={assetLoading} onClick={() => onSave(draft)}>
-            保存
+        <div className="actions asset-actions-group">
+          <AppButton size="sm" variant="ghost" loading={assetLoading} onClick={() => onSave(draft)}>
+            手动保存
           </AppButton>
           <AppButton
             size="sm"
-            variant="ghost"
+            variant={draft.visualPrompt ? 'ghost' : 'primary'}
+            className={draft.visualPrompt ? 'btn-completed' : ''}
             loading={visualPromptLoading}
             onClick={() => onVisualPrompt(draft.assetId)}
           >
-            生成视觉提示词
+            {draft.visualPrompt ? '视觉提示词已生成' : '生成视觉提示词'}
           </AppButton>
-          <AppButton size="sm" loading={visualPromptLoading} onClick={() => onThreeView(draft.assetId)}>
-            生成三视图
+          <AppButton size="sm" variant={draft.threeViewImageFileId ? 'ghost' : 'primary'} className={draft.threeViewImageFileId ? 'btn-completed' : ''} loading={visualPromptLoading} onClick={() => onThreeView(draft.assetId)}>
+            {draft.threeViewImageFileId ? '三视图已生成' : '生成三视图'}
           </AppButton>
           {isCharacter ? (
             <>
-              <AppButton size="sm" loading={visualPromptLoading} onClick={() => onTurnaroundPlan(draft.assetId)}>
+              <AppButton size="sm" variant="ghost" loading={visualPromptLoading} onClick={() => onTurnaroundPlan(draft.assetId)}>
                 九宫格规划 B-6
               </AppButton>
-              <AppButton size="sm" variant="primary" loading={visualPromptLoading} onClick={() => onTurnaroundImage(draft.assetId)}>
-                九宫格造型图 B-7
+              <AppButton size="sm" variant={draft.turnaroundImageFileId ? 'ghost' : 'primary'} className={draft.turnaroundImageFileId ? 'btn-completed' : ''} loading={visualPromptLoading} onClick={() => onTurnaroundImage(draft.assetId)}>
+                {draft.turnaroundImageFileId ? '九宫格造型图已生成' : '九宫格造型图 B-7'}
               </AppButton>
-              <AppButton size="sm" loading={visualPromptLoading} onClick={() => onStoryboardPlan(draft.assetId)}>
+              <AppButton size="sm" variant="ghost" loading={visualPromptLoading} onClick={() => onStoryboardPlan(draft.assetId)}>
                 分镜九宫格规划
               </AppButton>
-              <AppButton size="sm" loading={visualPromptLoading} onClick={() => onStoryboardImage(draft.assetId)}>
-                分镜九宫格出图
+              <AppButton size="sm" variant={draft.storyboardImageFileId ? 'ghost' : 'primary'} className={draft.storyboardImageFileId ? 'btn-completed' : ''} loading={visualPromptLoading} onClick={() => onStoryboardImage(draft.assetId)}>
+                {draft.storyboardImageFileId ? '分镜九宫格已出图' : '分镜九宫格出图'}
               </AppButton>
             </>
           ) : null}
@@ -195,6 +225,11 @@ function AssetBlock({
           </AppButton>
         </div>
       </div>
+      {autosaveState !== 'idle' ? (
+        <p className={`muted asset-autosave ${autosaveState === 'error' ? 'is-error' : ''}`}>
+          {autosaveState === 'saving' ? '正在自动保存…' : '自动保存失败，请稍后重试或点击手动保存'}
+        </p>
+      ) : null}
 
       <div className="form-grid">
         <AppInput value={draft.name} onChange={(v) => setDraft((d) => ({ ...d, name: String(v) }))} label="名称" />
@@ -487,6 +522,22 @@ export function ScriptProjectAssetsPage() {
     }
   }
 
+  async function handleAutoSave(asset: ExtractedAsset) {
+    try {
+      await saveAsset(projectId, asset.assetId, {
+        name: asset.name,
+        description: asset.description,
+        promptDraft: asset.promptDraft,
+        tags: asset.tags,
+        metadata: asset.metadata,
+        visualPrompt: asset.visualPrompt ?? undefined,
+      })
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '自动保存失败', 'error')
+      throw e
+    }
+  }
+
   async function handleSaveVisualPrompt(assetId: string, text: string) {
     try {
       await saveAsset(projectId, assetId, { visualPrompt: text })
@@ -603,7 +654,8 @@ export function ScriptProjectAssetsPage() {
       await generateThreeViewForAsset(projectId, assetId)
       showToast('三视图已生成（正/侧/背）', 'success')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : '三视图生成失败', 'error')
+      const message = e instanceof Error ? e.message : '三视图生成失败'
+      showToast(message, message.includes('已生成，但资产列表刷新失败') ? 'info' : 'error')
     }
   }
 
@@ -871,6 +923,7 @@ export function ScriptProjectAssetsPage() {
               keyframeLoading={keyframeLoading}
               visualPromptLoading={visualPromptLoading}
               onSave={(a) => void handleSave(a)}
+              onAutoSave={(a) => handleAutoSave(a)}
               onSaveVisualPrompt={(assetId, text) => void handleSaveVisualPrompt(assetId, text)}
               onRollbackVisualPrompt={(assetId, vid) => void handleRollbackVisualPrompt(assetId, vid)}
               onGenerate={(id) => void handleGenerate(id)}

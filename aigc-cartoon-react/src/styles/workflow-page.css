@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Lobster&display=swap');
+
+.workflow-page {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+}
+
+.workflow-page__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.workflow-page__background img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.workflow-page__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1080px;
+  pointer-events: none;
+}
+
+.workflow-page__logo {
+  position: absolute;
+  top: 34.5px;
+  left: 47.25px;
+  font-family: 'Lobster', cursive;
+  font-size: 28px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+.workflow-page__avatar {
+  position: absolute;
+  top: 28.5px;
+  left: 1842px;
+  width: 40.5px;
+  height: 40.5px;
+  border-radius: 50%;
+  background-color: #FFBFBF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #333;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.workflow-page__steps {
+  position: absolute;
+  top: 99px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 36px;
+  width: 110px;
+  height: 458px;
+}
+
+.workflow-page__step-item {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.workflow-page__step-icon {
+  font-size: 24px;
+  color: #000;
+}
+
+.workflow-page__step-label {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: #000;
+}
+
+.workflow-page__step-item--active {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.workflow-page__step-item--active .workflow-page__step-icon,
+.workflow-page__step-item--active .workflow-page__step-label {
+  color: #333;
+  font-weight: 700;
+}
+
+.workflow-page__footer {
+  position: absolute;
+  bottom: 1002px;
+  left: 717.75px;
+}
+
+.workflow-page__action-btn {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 484.5px;
+  height: 78px;
+  padding: 10px;
+  border: none;
+  border-radius: 200px;
+  background: rgba(255, 255, 255, 0.59);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.workflow-page__action-btn:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.workflow-page__action-btn .anticon {
+  font-size: 28px;
+  color: #000;
+}
+
+.workflow-page__action-btn span {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #000;
+}
+
+@media (max-width: 1920px) {
+  .workflow-page {
+    width: 100vw;
+    height: 56.25vw;
+    min-height: 100vh;
+  }
+}

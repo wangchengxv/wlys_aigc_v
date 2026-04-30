@@ -1,0 +1,236 @@
+.new-project-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.new-project-modal__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.new-project-modal__container {
+  position: relative;
+  width: 775px;
+  padding: 34px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  background: #000;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.new-project-modal__header {
+  display: flex;
+  justify-content: center;
+}
+
+.new-project-modal__title {
+  margin: 0;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 32px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.new-project-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.new-project-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+
+.new-project-modal__field-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-self: stretch;
+}
+
+.new-project-modal__label {
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.new-project-modal__input {
+  width: 416px;
+  height: 45px;
+  align-self: center;
+  background: #212121;
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 0 12px;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 28px;
+  color: #fff;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.new-project-modal__input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.new-project-modal__input:focus {
+  border-color: #00c3ff;
+}
+
+.new-project-modal__aspect-ratio-section {
+  gap: 23px;
+  padding-left: 59px;
+}
+
+.new-project-modal__aspect-ratio-options {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.new-project-modal__aspect-ratio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.new-project-modal__aspect-ratio-radio {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.new-project-modal__aspect-ratio-radio--active {
+  background: #00c3ff;
+  border-color: #00c3ff;
+}
+
+.new-project-modal__aspect-ratio-dot {
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.new-project-modal__aspect-ratio-text {
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.new-project-modal__visual-style-section {
+  flex-direction: column;
+  gap: 23px;
+  padding-left: 59px;
+}
+
+.new-project-modal__visual-style-grid {
+  display: grid;
+  grid-template-columns: 136px 140px 135px;
+  grid-template-rows: 138px 136px;
+  gap: 0;
+}
+
+.new-project-modal__visual-style-item {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: 3px solid transparent;
+  box-sizing: border-box;
+}
+
+.new-project-modal__visual-style-item:nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.new-project-modal__visual-style-item:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.new-project-modal__visual-style-item:nth-child(3) {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.new-project-modal__visual-style-item:nth-child(4) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.new-project-modal__visual-style-item:nth-child(5) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.new-project-modal__visual-style-item--selected {
+  border-color: #00c8ff;
+}
+
+.new-project-modal__visual-style-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.new-project-modal__upload-area {
+  width: 416px;
+  height: 130px;
+  align-self: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  background: #2b2b2b;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 22px;
+  color: #fff;
+}
+
+.new-project-modal__footer {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+
+.new-project-modal__btn {
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #fff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px 24px;
+}
+
+.new-project-modal__btn:hover {
+  opacity: 0.8;
+}

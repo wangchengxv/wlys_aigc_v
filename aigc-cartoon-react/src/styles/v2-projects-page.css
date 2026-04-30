@@ -1,0 +1,161 @@
+.v2-projects {
+  position: relative;
+  min-height: 100vh;
+  background: #000;
+  overflow: hidden;
+}
+
+.v2-projects__brand {
+  position: absolute;
+  left: 47px;
+  top: 34px;
+  font-family: 'Lobster', cursive;
+  font-size: 28px;
+  color: #fff;
+}
+
+.v2-projects__avatar {
+  position: absolute;
+  right: 78px;
+  top: 28px;
+  width: 40.5px;
+  height: 40.5px;
+  border-radius: 50%;
+  background: #ffbfbf;
+}
+
+.v2-projects__badge {
+  position: absolute;
+  right: 37px;
+  top: 148px;
+  width: 218px;
+  height: auto;
+}
+
+.v2-projects__nav {
+  position: absolute;
+  left: 41px;
+  top: 118px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.v2-projects__navItem {
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.v2-projects__navItem.is-active {
+  background: #afafaf;
+  color: #000;
+}
+
+.v2-projects__title {
+  position: absolute;
+  left: 172px;
+  top: 164px;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  color: #fff;
+}
+
+.v2-projects__grid {
+  position: relative;
+  padding: 300px 120px 80px 196px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(544px, 1fr));
+  gap: 40px;
+}
+
+.v2-projects__grid.is-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.v2-projects__createCard {
+  width: 544px;
+  height: 350px;
+  background: #efefef;
+  border: 0;
+  cursor: pointer;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  color: #000;
+}
+
+.v2-projects__card {
+  width: 564px;
+  height: 395px;
+  position: relative;
+}
+
+.v2-projects__cardMain {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.v2-projects__cardCover {
+  width: 100%;
+  height: 316px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #4f4e4e;
+}
+
+.v2-projects__cardCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0.85;
+}
+
+.v2-projects__cardName {
+  position: absolute;
+  left: 38px;
+  top: 243px;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: #fff;
+}
+
+.v2-projects__cardMeta {
+  position: absolute;
+  left: 38px;
+  top: 274px;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #fff;
+}
+
+.v2-projects__cardMenu {
+  position: absolute;
+  right: 39px;
+  top: 258px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.49);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}

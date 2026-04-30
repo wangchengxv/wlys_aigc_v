@@ -3,6 +3,8 @@ package com.example.aigc.service;
 import com.example.aigc.dto.ArtDirectionResponse;
 import com.example.aigc.dto.ApplyStoryboardFirstFrameRequest;
 import com.example.aigc.dto.BatchVisualPromptResponse;
+import com.example.aigc.dto.GenerateRequest;
+import com.example.aigc.dto.GenerateResponseData;
 import com.example.aigc.dto.GenerateGroupSceneRequest;
 import com.example.aigc.dto.GroupSceneResponse;
 import com.example.aigc.dto.ScriptDocumentPayload;
@@ -37,6 +39,7 @@ import com.example.aigc.enums.AssetHistoryType;
 import com.example.aigc.enums.AssetStatus;
 import com.example.aigc.enums.AssetType;
 import com.example.aigc.enums.DocumentVersionType;
+import com.example.aigc.enums.GenerateMode;
 import com.example.aigc.enums.PipelineStatus;
 import com.example.aigc.enums.PipelineType;
 import com.example.aigc.enums.ProjectStatus;
@@ -75,6 +78,8 @@ public class ScriptWorkflowService {
     private final PromptTemplateService promptTemplateService;
     private final PromptVersionService promptVersionService;
     private final AiCapabilityRoutingService aiCapabilityRoutingService;
+    private final GenerationService generationService;
+    private final ImageGenerationCapabilityService imageGenerationCapabilityService;
     private final ProviderHttpGateway providerHttpGateway;
     private final LocalAssetFileService localAssetFileService;
     private final ObjectMapper objectMapper;
@@ -85,12 +90,16 @@ public class ScriptWorkflowService {
     private static final String FIRST_FRAME_MODE_NONE = "NONE";
     private static final String FIRST_FRAME_MODE_FULL_GRID = "FULL_GRID";
     private static final String FIRST_FRAME_MODE_CROPPED_PANEL = "CROPPED_PANEL";
+    private static final String FIRST_FRAME_MODE_ASSET_IMAGE = "ASSET_IMAGE";
+    private static final String FIRST_FRAME_MODE_UPLOADED_IMAGE = "UPLOADED_IMAGE";
 
     public ScriptWorkflowService(
             ScriptProjectService scriptProjectService,
             PromptTemplateService promptTemplateService,
             PromptVersionService promptVersionService,
             AiCapabilityRoutingService aiCapabilityRoutingService,
+            GenerationService generationService,
+            ImageGenerationCapabilityService imageGenerationCapabilityService,
             ProviderHttpGateway providerHttpGateway,
             LocalAssetFileService localAssetFileService,
             ObjectMapper objectMapper,
@@ -101,6 +110,8 @@ public class ScriptWorkflowService {
         this.promptTemplateService = promptTemplateService;
         this.promptVersionService = promptVersionService;
         this.aiCapabilityRoutingService = aiCapabilityRoutingService;
+        this.generationService = generationService;
+        this.imageGenerationCapabilityService = imageGenerationCapabilityService;
         this.providerHttpGateway = providerHttpGateway;
         this.localAssetFileService = localAssetFileService;
         this.objectMapper = objectMapper;
@@ -673,12 +684,12 @@ public class ScriptWorkflowService {
         ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
         ExtractedAsset asset = findAsset(aggregate, assetId);
         PipelineRun pipelineRun = beginPipeline(aggregate, PipelineType.KEYFRAME_GENERATION, "KEYFRAME_" + asset.assetType.name(), 2);
-        aggregate.project.status = ProjectStatus.KEYFRAME_GENERATING;
-        asset.status = AssetStatus.KEYFRAME_GENERATING;
-        asset.updatedAt = Instant.now();
-        scriptProjectService.save(aggregate);
-
         try {
+            aggregate.project.status = ProjectStatus.KEYFRAME_GENERATING;
+            asset.status = AssetStatus.KEYFRAME_GENERATING;
+            asset.updatedAt = Instant.now();
+            scriptProjectService.save(aggregate);
+
             for (KeyframeRecord kf : new ArrayList<>(aggregate.keyframes)) {
                 if (Objects.equals(kf.assetId, assetId) && kf.imageFileId != null && !kf.imageFileId.isBlank()) {
                     assetHistoryService.appendSnapshot(
@@ -696,8 +707,8 @@ public class ScriptWorkflowService {
             String generationBatchId = nextId("keyframe-batch");
             for (int index = 1; index <= 2; index++) {
                 String prompt = buildKeyframePrompt(aggregate, asset, index);
-                StoredFileRecord imageFile = generateKeyframeImage(aggregate, asset, prompt, generationBatchId, index);
-                scriptProjectService.upsertFile(aggregate, imageFile);
+                GeneratedImageFile generated = generateKeyframeImage(aggregate, asset, prompt, generationBatchId, index);
+                scriptProjectService.upsertFile(aggregate, generated.file());
 
                 KeyframeRecord record = new KeyframeRecord();
                 record.keyframeId = nextId("kf");
@@ -707,10 +718,10 @@ public class ScriptWorkflowService {
                 record.promptVersions = promptVersionService.updateWithVersion(
                         null, prompt, record.promptVersions, PromptVersionSource.AI_GENERATED, null);
                 record.negativePrompt = "blurry, distorted, watermark, low quality";
-                record.imageFileId = imageFile.fileId;
+                record.imageFileId = generated.file().fileId;
                 record.selected = false;
                 record.status = "SUCCESS";
-                record.modelName = aiCapabilityRoutingService.resolveImage(aggregate.project.explicitImageModel).modelName();
+                record.modelName = generated.modelName();
                 record.createdAt = Instant.now();
                 record.updatedAt = record.createdAt;
                 created.add(record);
@@ -729,7 +740,7 @@ public class ScriptWorkflowService {
             if (ex instanceof BizException bizException) {
                 throw bizException;
             }
-            throw new BizException(500, "关键帧生成失败");
+            throw new BizException(500, "关键帧生成失败：" + safeError(ex));
         }
     }
 
@@ -1137,7 +1148,8 @@ public class ScriptWorkflowService {
             );
         }
         String basePath = "turnaround/" + asset.assetId + "/character-sheet";
-        StoredFileRecord file = generateStoredImage(aggregate, WorkflowModelKey.TURNAROUND_IMAGE, imagePrompt, basePath + ".png", asset.name);
+        GeneratedImageFile generated = generateStoredImage(aggregate, WorkflowModelKey.TURNAROUND_IMAGE, imagePrompt, basePath + ".png", asset.name);
+        StoredFileRecord file = generated.file();
         scriptProjectService.upsertFile(aggregate, file);
         asset.turnaroundImageFileId = file.fileId;
         asset.updatedAt = Instant.now();
@@ -1238,13 +1250,14 @@ public class ScriptWorkflowService {
                     null
             );
         }
-        StoredFileRecord file = generateStoredImage(
+        GeneratedImageFile generated = generateStoredImage(
                 aggregate,
                 WorkflowModelKey.STORYBOARD_IMAGE,
                 fullPrompt,
                 "storyboard/" + asset.assetId + "/grid.png",
                 asset.name
         );
+        StoredFileRecord file = generated.file();
         scriptProjectService.upsertFile(aggregate, file);
         asset.storyboardPromptText = fullPrompt;
         asset.storyboardImageFileId = file.fileId;
@@ -1271,14 +1284,46 @@ public class ScriptWorkflowService {
         StoryboardShot shot = findShot(aggregate, shotId);
         String mode = stringValue(request == null ? null : request.mode(), FIRST_FRAME_MODE_FULL_GRID).trim().toUpperCase(Locale.ROOT);
         if (FIRST_FRAME_MODE_NONE.equals(mode)) {
+            clearFirstFrameBinding(shot);
             shot.firstFrameMode = FIRST_FRAME_MODE_NONE;
-            shot.storyboardAssetId = null;
-            shot.storyboardImageFileId = null;
-            shot.storyboardCropFileId = null;
-            shot.storyboardCropIndex = null;
             shot.updatedAt = Instant.now();
             scriptProjectService.save(aggregate);
             return new StoryboardFirstFrameResponse(shot.shotId, FIRST_FRAME_MODE_NONE, null, null, null);
+        }
+
+        if (FIRST_FRAME_MODE_ASSET_IMAGE.equals(mode)) {
+            String imageFileId = stringValue(request == null ? null : request.imageFileId(), "").trim();
+            if (imageFileId.isBlank()) {
+                throw new BizException(400, "请选择项目内图片作为首帧");
+            }
+            StoredFileRecord image = scriptProjectService.findFile(aggregate, imageFileId);
+            if (image == null || !localAssetFileService.exists(image)) {
+                throw new BizException(404, "所选首帧图片不存在");
+            }
+            clearFirstFrameBinding(shot);
+            shot.firstFrameImageFileId = image.fileId;
+            shot.firstFrameMode = FIRST_FRAME_MODE_ASSET_IMAGE;
+            shot.updatedAt = Instant.now();
+            scriptProjectService.save(aggregate);
+            return new StoryboardFirstFrameResponse(shot.shotId, shot.firstFrameMode, null, null, shot.firstFrameImageFileId);
+        }
+
+        if (FIRST_FRAME_MODE_UPLOADED_IMAGE.equals(mode)) {
+            String imageUrl = stringValue(request == null ? null : request.imageUrl(), "").trim();
+            if (imageUrl.isBlank()) {
+                throw new BizException(400, "请上传图片或粘贴图片链接后再绑定首帧");
+            }
+            String relativePath = "storyboard-first-frame/" + shot.shotId + "/" + System.currentTimeMillis() + ".png";
+            StoredFileRecord image = imageUrl.startsWith("http://") || imageUrl.startsWith("https://")
+                    ? localAssetFileService.storeRemote(aggregate.project.projectId, relativePath, "image/png", imageUrl)
+                    : localAssetFileService.storeBase64(aggregate.project.projectId, relativePath, "image/png", imageUrl);
+            scriptProjectService.upsertFile(aggregate, image);
+            clearFirstFrameBinding(shot);
+            shot.firstFrameImageFileId = image.fileId;
+            shot.firstFrameMode = FIRST_FRAME_MODE_UPLOADED_IMAGE;
+            shot.updatedAt = Instant.now();
+            scriptProjectService.save(aggregate);
+            return new StoryboardFirstFrameResponse(shot.shotId, shot.firstFrameMode, null, null, shot.firstFrameImageFileId);
         }
 
         String assetId = stringValue(request == null ? null : request.assetId(), "").trim();
@@ -1290,10 +1335,9 @@ public class ScriptWorkflowService {
             throw new BizException(400, "该资产尚未生成九宫格分镜图");
         }
 
+        clearFirstFrameBinding(shot);
         shot.storyboardAssetId = asset.assetId;
         shot.storyboardImageFileId = asset.storyboardImageFileId;
-        shot.storyboardCropFileId = null;
-        shot.storyboardCropIndex = null;
         shot.firstFrameMode = FIRST_FRAME_MODE_FULL_GRID;
 
         if (FIRST_FRAME_MODE_CROPPED_PANEL.equals(mode)) {
@@ -1317,63 +1361,84 @@ public class ScriptWorkflowService {
         );
     }
 
+    private void clearFirstFrameBinding(StoryboardShot shot) {
+        shot.storyboardAssetId = null;
+        shot.storyboardImageFileId = null;
+        shot.storyboardCropFileId = null;
+        shot.storyboardCropIndex = null;
+        shot.firstFrameImageFileId = null;
+    }
+
     public ThreeViewResponse generateThreeView(String projectId, String assetId) {
         ScriptProjectAggregate aggregate = scriptProjectService.require(projectId);
         ExtractedAsset asset = findAsset(aggregate, assetId);
-        if (asset.visualPrompt == null || asset.visualPrompt.isBlank()) {
-            throw new BizException(400, "请先生成资产视觉提示词");
-        }
-        String summary = shortenWords(asset.visualPrompt, 40);
-        String artSuffix = "";
-        if (aggregate.project.artDirectionJson != null && !aggregate.project.artDirectionJson.isBlank()) {
-            Map<String, Object> ad = parseJsonObject(aggregate.project.artDirectionJson);
-            String anchors = stringValue(ad.get("consistencyAnchors"), "");
-            if (!anchors.isBlank()) {
-                artSuffix = "\nArt Direction consistency: " + anchors;
+        try {
+            if (asset.visualPrompt == null || asset.visualPrompt.isBlank()) {
+                throw new BizException(400, "请先生成资产视觉提示词");
             }
-        }
-        String templatePath;
-        String summaryKey;
-        switch (asset.assetType) {
-            case CHARACTER -> {
-                templatePath = "prompts/visual/three-view-character-user.md";
-                summaryKey = "characterSummary";
+            String summary = shortenWords(asset.visualPrompt, 40);
+            String artSuffix = "";
+            if (aggregate.project.artDirectionJson != null && !aggregate.project.artDirectionJson.isBlank()) {
+                Map<String, Object> ad = parseJsonObject(aggregate.project.artDirectionJson);
+                String anchors = stringValue(ad.get("consistencyAnchors"), "");
+                if (!anchors.isBlank()) {
+                    artSuffix = "\nArt Direction consistency: " + anchors;
+                }
             }
-            case BACKGROUND -> {
-                templatePath = "prompts/visual/three-view-background-user.md";
-                summaryKey = "sceneSummary";
+            String templatePath;
+            String summaryKey;
+            switch (asset.assetType) {
+                case CHARACTER -> {
+                    templatePath = "prompts/visual/three-view-character-user.md";
+                    summaryKey = "characterSummary";
+                }
+                case BACKGROUND -> {
+                    templatePath = "prompts/visual/three-view-background-user.md";
+                    summaryKey = "sceneSummary";
+                }
+                case PROP -> {
+                    templatePath = "prompts/visual/three-view-prop-user.md";
+                    summaryKey = "propSummary";
+                }
+                default -> throw new BizException(400, "未知资产类型");
             }
-            case PROP -> {
-                templatePath = "prompts/visual/three-view-prop-user.md";
-                summaryKey = "propSummary";
+            Map<String, Object> vars = new LinkedHashMap<>();
+            vars.put("visualStyle", resolveVisualStyleAnchor(aggregate.project.visualStyle));
+            vars.put("stylePrompt", stringValue(aggregate.project.aspectRatio, "16:9"));
+            vars.put("name", stringValue(asset.name, "资产"));
+            vars.put(summaryKey, summary);
+            vars.put("artDirectionSuffix", artSuffix);
+            String imagePrompt = promptTemplateService.renderForProject(aggregate.project, templatePath, vars, "");
+            if (asset.threeViewImageFileId != null && !asset.threeViewImageFileId.isBlank()) {
+                assetHistoryService.appendSnapshot(
+                        projectId,
+                        AssetHistoryType.THREE_VIEW,
+                        asset.assetId,
+                        asset.threeViewImageFileId,
+                        imagePrompt,
+                        null,
+                        null
+                );
             }
-            default -> throw new BizException(400, "未知资产类型");
-        }
-        Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("visualStyle", resolveVisualStyleAnchor(aggregate.project.visualStyle));
-        vars.put("stylePrompt", stringValue(aggregate.project.aspectRatio, "16:9"));
-        vars.put("name", stringValue(asset.name, "资产"));
-        vars.put(summaryKey, summary);
-        vars.put("artDirectionSuffix", artSuffix);
-        String imagePrompt = promptTemplateService.renderForProject(aggregate.project, templatePath, vars, "");
-        if (asset.threeViewImageFileId != null && !asset.threeViewImageFileId.isBlank()) {
-            assetHistoryService.appendSnapshot(
-                    projectId,
-                    AssetHistoryType.THREE_VIEW,
-                    asset.assetId,
-                    asset.threeViewImageFileId,
+            String basePath = "three-view/" + asset.assetId + "/sheet";
+            GeneratedImageFile generated = generateThreeViewImageWithWorkspaceT2I(
+                    aggregate,
+                    WorkflowModelKey.THREE_VIEW_IMAGE,
                     imagePrompt,
-                    null,
-                    null
+                    basePath + ".png",
+                    asset.name
             );
+            StoredFileRecord file = generated.file();
+            scriptProjectService.upsertFile(aggregate, file);
+            asset.threeViewImageFileId = file.fileId;
+            asset.updatedAt = Instant.now();
+            scriptProjectService.save(aggregate);
+            return new ThreeViewResponse(asset.assetId, file.fileId);
+        } catch (BizException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BizException(500, "三视图生成失败：" + safeError(ex));
         }
-        String basePath = "three-view/" + asset.assetId + "/sheet";
-        StoredFileRecord file = generateStoredImage(aggregate, WorkflowModelKey.THREE_VIEW_IMAGE, imagePrompt, basePath + ".png", asset.name);
-        scriptProjectService.upsertFile(aggregate, file);
-        asset.threeViewImageFileId = file.fileId;
-        asset.updatedAt = Instant.now();
-        scriptProjectService.save(aggregate);
-        return new ThreeViewResponse(asset.assetId, file.fileId);
     }
 
     public GroupSceneResponse generateGroupScene(String projectId, GenerateGroupSceneRequest request) {
@@ -1438,7 +1503,8 @@ public class ScriptWorkflowService {
         scriptProjectService.upsertFile(aggregate, promptFile);
         String imageFileId = null;
         if (Boolean.TRUE.equals(request.generateImage())) {
-            StoredFileRecord file = generateStoredImage(aggregate, WorkflowModelKey.GROUP_SCENE_IMAGE, promptText, basePath + ".png", "群像");
+            GeneratedImageFile generated = generateStoredImage(aggregate, WorkflowModelKey.GROUP_SCENE_IMAGE, promptText, basePath + ".png", "群像");
+            StoredFileRecord file = generated.file();
             scriptProjectService.upsertFile(aggregate, file);
             imageFileId = file.fileId;
         }
@@ -1838,7 +1904,7 @@ public class ScriptWorkflowService {
         return ex.getMessage();
     }
 
-    private StoredFileRecord generateKeyframeImage(
+    private GeneratedImageFile generateKeyframeImage(
             ScriptProjectAggregate aggregate,
             ExtractedAsset asset,
             String prompt,
@@ -1850,22 +1916,10 @@ public class ScriptWorkflowService {
     }
 
     /**
-     * 通用图像生成并落库（关键帧、九宫格、群像等共用）。
-     */
-    private StoredFileRecord generateStoredImage(
-            ScriptProjectAggregate aggregate,
-            String prompt,
-            String relativePathWithExt,
-            String labelForPlaceholder
-    ) {
-        return generateStoredImage(aggregate, null, prompt, relativePathWithExt, labelForPlaceholder);
-    }
-
-    /**
      * 通用图像生成并落库，支持功能键级模型覆盖。
-     * @param functionKey  WorkflowModelKey 常量，null 时回退到项目级 explicitImageModel
+     * @param functionKey  WorkflowModelKey 常量
      */
-    private StoredFileRecord generateStoredImage(
+    private GeneratedImageFile generateStoredImage(
             ScriptProjectAggregate aggregate,
             String functionKey,
             String prompt,
@@ -1873,76 +1927,88 @@ public class ScriptWorkflowService {
             String labelForPlaceholder
     ) {
         String effectiveModel = scriptProjectService.resolveWorkflowModel(aggregate.project, functionKey, "image");
-        AiCapabilityRoutingService.ResolvedAiModel resolvedModel = aiCapabilityRoutingService.resolveImage(effectiveModel);
-        if (!resolvedModel.hasProvider() || resolvedModel.apiKey() == null || resolvedModel.apiKey().isBlank()) {
-            return createPlaceholderImage(aggregate.project.projectId, relativePathWithExt.replace(".png", ".svg"), prompt, labelForPlaceholder);
+        ImageGenerationCapabilityService.ImageGenerationResult generationResult =
+                imageGenerationCapabilityService.generateImages(prompt, 1, effectiveModel, null, false);
+        List<String> results = generationResult.results();
+        if (results == null || results.isEmpty() || results.get(0) == null || results.get(0).isBlank()) {
+            throw new BizException(502, "图片模型未返回可用图片（模型：" + generationResult.modelName() + "）");
         }
+        String raw = results.get(0).trim();
         try {
-            Map<String, Object> responseBody;
-            if ("ark".equalsIgnoreCase(resolvedModel.provider().key())) {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("model", resolvedModel.modelName());
-                payload.put("prompt", prompt);
-                payload.put("response_format", "url");
-                payload.put("size", "2K");
-                payload.put("watermark", true);
-                responseBody = providerHttpGateway.generateImage(
-                        resolvedModel.provider(),
-                        resolvedModel.connection() == null ? "https://ark.cn-beijing.volces.com" : resolvedModel.connection().getBaseUrl(),
-                        resolvedModel.apiKey(),
-                        payload,
-                        Duration.ofSeconds(120)
-                );
+            StoredFileRecord file;
+            if (raw.startsWith("http://") || raw.startsWith("https://")) {
+                file = localAssetFileService.storeRemote(aggregate.project.projectId, relativePathWithExt, "image/png", raw);
             } else {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("model", resolvedModel.modelName());
-                payload.put("prompt", prompt);
-                payload.put("n", 1);
-                payload.put("size", "1024x1024");
-                payload.put("response_format", "url");
-                responseBody = providerHttpGateway.generateImage(
-                        resolvedModel.provider(),
-                        resolvedModel.connection().getBaseUrl(),
-                        resolvedModel.apiKey(),
-                        payload,
-                        Duration.ofSeconds(120)
-                );
+                file = localAssetFileService.storeBase64(aggregate.project.projectId, relativePathWithExt, "image/png", raw);
             }
-            String url = parseImageUrl(responseBody);
-            String b64 = parseBase64Image(responseBody);
-            if (url != null) {
-                try {
-                    return localAssetFileService.storeRemote(aggregate.project.projectId, relativePathWithExt, "image/png", url);
-                } catch (Exception storeEx) {
-                    if (resolvedModel.systemFallback()) {
-                        return createPlaceholderImage(aggregate.project.projectId, relativePathWithExt.replace(".png", ".svg"), prompt, labelForPlaceholder);
-                    }
-                    throw new BizException(502, "图片下载/存储失败：" + safeError(storeEx));
-                }
-            }
-            if (b64 != null) {
-                try {
-                    return localAssetFileService.storeBase64(aggregate.project.projectId, relativePathWithExt, "image/png", b64);
-                } catch (Exception storeEx) {
-                    if (resolvedModel.systemFallback()) {
-                        return createPlaceholderImage(aggregate.project.projectId, relativePathWithExt.replace(".png", ".svg"), prompt, labelForPlaceholder);
-                    }
-                    throw new BizException(502, "Base64 图片解码/存储失败：" + safeError(storeEx));
-                }
-            }
-            if (resolvedModel.systemFallback()) {
-                return createPlaceholderImage(aggregate.project.projectId, relativePathWithExt.replace(".png", ".svg"), prompt, labelForPlaceholder);
-            }
-            throw new BizException(502, "图片模型未返回可用图片（模型：" + resolvedModel.modelName() + "）");
+            return new GeneratedImageFile(file, generationResult.modelName());
         } catch (Exception ex) {
-            if (resolvedModel.systemFallback()) {
-                return createPlaceholderImage(aggregate.project.projectId, relativePathWithExt.replace(".png", ".svg"), prompt, labelForPlaceholder);
-            }
             if (ex instanceof BizException bizException) {
                 throw bizException;
             }
-            throw new BizException(502, "调用图片模型失败（模型：" + resolvedModel.modelName() + "）：" + safeError(ex));
+            throw new BizException(502, "调用图片模型失败（模型：" + generationResult.modelName() + "）：" + safeError(ex));
         }
+    }
+
+    /**
+     * 三视图改为复用工作台文生图链路（GenerateService.generate），并保持脚本项目内落库逻辑不变。
+     */
+    private GeneratedImageFile generateThreeViewImageWithWorkspaceT2I(
+            ScriptProjectAggregate aggregate,
+            String functionKey,
+            String prompt,
+            String relativePathWithExt,
+            String labelForPlaceholder
+    ) {
+        String ownerId = stringValue(aggregate.project.ownerId, "").trim();
+        if (ownerId.isBlank()) {
+            return generateStoredImage(aggregate, functionKey, prompt, relativePathWithExt, labelForPlaceholder);
+        }
+        String effectiveModel = scriptProjectService.resolveWorkflowModel(aggregate.project, functionKey, "image");
+        String style = stringValue(aggregate.project.visualStyle, VideoStylePresetRegistry.DEFAULT_STYLE_KEY);
+        try {
+            GenerateRequest request = new GenerateRequest(
+                    prompt,
+                    GenerateMode.image,
+                    style,
+                    "1024x1024",
+                    "medium",
+                    1,
+                    effectiveModel,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+            GenerateResponseData result = generationService.generate(request, ownerId);
+            String raw = firstNonBlank(result == null ? null : result.imageResults());
+            if (raw == null || raw.isBlank()) {
+                throw new BizException(502, "图片模型未返回可用图片（模型：" + stringValue(effectiveModel, "自动路由") + "）");
+            }
+            StoredFileRecord file;
+            if (raw.startsWith("http://") || raw.startsWith("https://")) {
+                file = localAssetFileService.storeRemote(aggregate.project.projectId, relativePathWithExt, "image/png", raw);
+            } else {
+                file = localAssetFileService.storeBase64(aggregate.project.projectId, relativePathWithExt, "image/png", raw);
+            }
+            return new GeneratedImageFile(file, stringValue(result.imageModel(), effectiveModel));
+        } catch (BizException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new BizException(502, "调用工作台文生图失败：" + safeError(ex));
+        }
+    }
+
+    private String firstNonBlank(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private Map<String, Object> fallbackStructuredScript(ScriptProjectAggregate aggregate, String originalText) {
@@ -2508,54 +2574,6 @@ public class ScriptWorkflowService {
         } catch (Exception ex) {
             return new LinkedHashMap<>();
         }
-    }
-
-    private StoredFileRecord createPlaceholderImage(String projectId, String relativePath, String prompt, String title) {
-        String safeTitle = escapeXml(title == null ? "关键帧" : title);
-        String safePrompt = escapeXml(prompt == null ? "" : prompt);
-        String svg = """
-                <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-                  <defs>
-                    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%%" stop-color="#1f2937"/>
-                      <stop offset="100%%" stop-color="#7c3aed"/>
-                    </linearGradient>
-                  </defs>
-                  <rect width="1024" height="1024" fill="url(#bg)"/>
-                  <rect x="72" y="72" width="880" height="880" rx="36" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)"/>
-                  <text x="96" y="180" font-size="54" fill="#f9fafb" font-family="Arial, sans-serif">%s</text>
-                  <foreignObject x="96" y="240" width="832" height="640">
-                    <div xmlns="http://www.w3.org/1999/xhtml" style="color:#e5e7eb;font-family:Arial,sans-serif;font-size:28px;line-height:1.6;white-space:pre-wrap;">%s</div>
-                  </foreignObject>
-                </svg>
-                """.formatted(safeTitle, safePrompt);
-        return localAssetFileService.storeText(projectId, relativePath, "image/svg+xml", svg);
-    }
-
-    private String parseImageUrl(Map<String, Object> body) {
-        Object dataNode = body.get("data");
-        if (!(dataNode instanceof List<?> dataList) || dataList.isEmpty()) {
-            return null;
-        }
-        Object first = dataList.get(0);
-        if (!(first instanceof Map<?, ?> firstMap)) {
-            return null;
-        }
-        Object url = firstMap.get("url");
-        return url == null ? null : String.valueOf(url);
-    }
-
-    private String parseBase64Image(Map<String, Object> body) {
-        Object dataNode = body.get("data");
-        if (!(dataNode instanceof List<?> dataList) || dataList.isEmpty()) {
-            return null;
-        }
-        Object first = dataList.get(0);
-        if (!(first instanceof Map<?, ?> firstMap)) {
-            return null;
-        }
-        Object value = firstMap.get("b64_json");
-        return value == null ? null : String.valueOf(value);
     }
 
     private PipelineRun beginPipeline(ScriptProjectAggregate aggregate, PipelineType pipelineType, String stage, int totalCount) {
@@ -3271,6 +3289,12 @@ public class ScriptWorkflowService {
                 .toList();
     }
 
+    private record GeneratedImageFile(
+            StoredFileRecord file,
+            String modelName
+    ) {
+    }
+
     private String firstNonBlankLine(String text, String fallback) {
         return java.util.Arrays.stream((text == null ? "" : text).split("\\r?\\n"))
                 .map(String::trim)
@@ -3293,12 +3317,5 @@ public class ScriptWorkflowService {
 
     private String nextId(String prefix) {
         return prefix + "-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
-    }
-
-    private String escapeXml(String value) {
-        return value.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
     }
 }

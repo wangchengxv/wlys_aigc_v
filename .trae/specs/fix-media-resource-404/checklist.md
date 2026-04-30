@@ -1,8 +1,0 @@
-- [x] JpaStoredFileRecordRepository.findByFileId方法已正确添加并可正常使用
-- [x] FileAssetController.preview方法通过StoredFileRecordRepository.findByFileId查询文件记录
-- [x] FileAssetController.download方法通过StoredFileRecordRepository.findByFileId查询文件记录
-- [x] 文件不存在时正确返回404错误
-- [x] StoredFileRecord实体有正确的数据库索引支持（主键索引已存在）
-- [x] 媒体资源列表页面点击"打开"按钮不再出现404错误
-- [x] 文件可以正常预览和下载
-- [x] 本次修改未破坏ScriptProjectAggregate.files相关的现有功能

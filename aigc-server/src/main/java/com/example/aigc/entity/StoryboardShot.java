@@ -64,6 +64,8 @@ public class StoryboardShot {
     public String storyboardCropFileId;
     @Column(name = "storyboard_crop_index")
     public Integer storyboardCropIndex;
+    @Column(name = "first_frame_image_file_id")
+    public String firstFrameImageFileId;
     @Column(name = "first_frame_mode")
     public String firstFrameMode;
     @Column(name = "visual_prompt", columnDefinition = "TEXT")

@@ -1256,6 +1256,7 @@ public class ScriptProductionOrchestrator {
         firstFrameAudit.put("storyboardImageFileId", safe(shot.storyboardImageFileId));
         firstFrameAudit.put("storyboardCropFileId", safe(shot.storyboardCropFileId));
         firstFrameAudit.put("storyboardCropIndex", shot.storyboardCropIndex);
+        firstFrameAudit.put("firstFrameImageFileId", safe(shot.firstFrameImageFileId));
         firstFrameAudit.put("resolvedFirstFrameFileId", firstFrameFileId);
         firstFrameAudit.put("resolvedFirstFrameImageUrl", firstFrameUrl);
         firstFrameAudit.put("boundAt", shot.updatedAt == null ? null : shot.updatedAt.toString());
@@ -1272,6 +1273,9 @@ public class ScriptProductionOrchestrator {
         }
         if ("FULL_GRID".equalsIgnoreCase(safe(shot.firstFrameMode))) {
             return shot.storyboardImageFileId;
+        }
+        if ("ASSET_IMAGE".equalsIgnoreCase(safe(shot.firstFrameMode)) || "UPLOADED_IMAGE".equalsIgnoreCase(safe(shot.firstFrameMode))) {
+            return shot.firstFrameImageFileId;
         }
         return null;
     }

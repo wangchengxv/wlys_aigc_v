@@ -36,6 +36,8 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(scriptProjectAccessInterceptor)
                 .addPathPatterns("/api/v1/script-projects")
-                .addPathPatterns("/api/v1/script-projects/**");
+                .addPathPatterns("/api/v1/script-projects/**")
+                .addPathPatterns("/api/v1/storyboard-lite")
+                .addPathPatterns("/api/v1/storyboard-lite/**");
     }
 }

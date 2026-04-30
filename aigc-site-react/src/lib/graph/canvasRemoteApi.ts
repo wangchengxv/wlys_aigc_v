@@ -25,6 +25,7 @@ type PagedResult<T> = {
   list: T[]
   total: number
 }
+const UNBOUND_PROJECT_KEY = '__unbound__'
 
 function getOrCreateClientUserId() {
   const existing = localStorage.getItem(CLIENT_USER_ID_KEY)
@@ -56,8 +57,22 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return payload.data
 }
 
-export async function listCanvasRemote(page = 1, pageSize = 1): Promise<PagedResult<CanvasRemoteRecord>> {
-  return requestJson<PagedResult<CanvasRemoteRecord>>(`/api/v1/canvas?page=${page}&pageSize=${pageSize}`, {
+export async function listCanvasRemote(
+  page = 1,
+  pageSize = 1,
+  options?: { projectId?: string | null },
+): Promise<PagedResult<CanvasRemoteRecord>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  })
+  const projectId = options?.projectId?.trim()
+  if (projectId) {
+    params.set('projectId', projectId)
+  } else if (options && options.projectId === null) {
+    params.set('projectId', UNBOUND_PROJECT_KEY)
+  }
+  return requestJson<PagedResult<CanvasRemoteRecord>>(`/api/v1/canvas?${params.toString()}`, {
     method: 'GET',
     headers: getHeaders(),
   })

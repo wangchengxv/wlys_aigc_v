@@ -33,6 +33,16 @@ public class JpaCanvasGraphRepository implements CanvasGraphRepository {
     }
 
     @Override
+    public List<CanvasGraph> findAllByOwnerIdAndProjectId(String ownerId, String projectId) {
+        return repository.findAllByOwnerIdAndProjectIdOrderByUpdatedAtDesc(ownerId, projectId);
+    }
+
+    @Override
+    public List<CanvasGraph> findAllByOwnerIdAndProjectIdIsNull(String ownerId) {
+        return repository.findAllByOwnerIdAndProjectIdIsNullOrderByUpdatedAtDesc(ownerId);
+    }
+
+    @Override
     public void deleteByIdAndOwnerId(String id, String ownerId) {
         repository.deleteByIdAndOwnerId(id, ownerId);
     }

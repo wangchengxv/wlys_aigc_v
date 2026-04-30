@@ -4,6 +4,7 @@ import com.example.aigc.entity.ExportPackageTask;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.enums.ExportPackageTaskStatus;
 import com.example.aigc.enums.ProjectStatus;
+import com.example.aigc.model.WorkflowModelKey;
 import com.example.aigc.service.ScriptProjectService;
 import com.example.aigc.service.LocalAssetFileService;
 import com.example.aigc.service.ProviderHttpGateway;
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -46,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -85,6 +88,7 @@ class ScriptProjectWorkflowIntegrationTest {
         registry.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.flyway.enabled", () -> false);
+        registry.add("aigc.ark.api-key", () -> "test-ark-api-key");
         registry.add("aigc.pipeline.video.max-parallel", () -> 2);
         registry.add("aigc.pipeline.video.poll-interval-ms", () -> 10L);
         registry.add("aigc.pipeline.video.max-retries", () -> 2);
@@ -119,6 +123,9 @@ class ScriptProjectWorkflowIntegrationTest {
             response.put("choices", List.of(Map.of("message", message)));
             return response;
         }).when(providerHttpGateway).invokeChat(any(), anyString(), anyString(), any(), anyMap(), any());
+        doAnswer(invocation -> Map.of(
+                "data", List.of(Map.of("url", "https://example.test/generated-image.png"))
+        )).when(providerHttpGateway).generateImage(any(), anyString(), anyString(), anyMap(), any());
     }
 
     @AfterAll
@@ -276,8 +283,8 @@ class ScriptProjectWorkflowIntegrationTest {
         MvcResult previewImage = mockMvc.perform(get("/api/v1/files/{fileId}", selectedImageFileId))
                 .andExpect(status().isOk())
                 .andReturn();
-        assertThat(previewImage.getResponse().getContentType()).startsWith("image/svg+xml");
-        assertThat(previewImage.getResponse().getContentAsString(StandardCharsets.UTF_8)).contains("<svg");
+        assertThat(previewImage.getResponse().getContentType()).startsWith("image/png");
+        assertThat(previewImage.getResponse().getContentAsByteArray()).isNotEmpty();
 
         MvcResult downloadVideo = mockMvc.perform(get("/api/v1/files/{fileId}/download", videoFileId))
                 .andExpect(status().isOk())
@@ -423,6 +430,206 @@ class ScriptProjectWorkflowIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(createdLong.path("project").path("visualStyle").asText().length()).isGreaterThan(8000);
+    }
+
+    @Test
+    void workflowImageModelSettingsPersistClearAndDriveKeyframeModelName() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，准备在摊位边完成今天第一张写生。
+                """, "gpt-4o-mini");
+        createCapabilityModelConfig("image-default-v1", "image");
+        createCapabilityModelConfig("image-override-v1", "image");
+
+        Map<String, Object> initialSettings = new LinkedHashMap<>();
+        initialSettings.put("defaultImageModel", "image-default-v1");
+        initialSettings.put("overrides", Map.of(WorkflowModelKey.KEYFRAME_IMAGE, "image-override-v1"));
+        JsonNode savedSettings = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(initialSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(savedSettings.path("defaultImageModel").asText()).isEqualTo("image-default-v1");
+        assertThat(savedSettings.path("overrides").path(WorkflowModelKey.KEYFRAME_IMAGE).asText()).isEqualTo("image-override-v1");
+
+        var configuredAggregate = scriptProjectService.require(projectId);
+        assertThat(configuredAggregate.project.explicitImageModel).isEqualTo("image-default-v1");
+        assertThat(scriptProjectService.parseOverrides(configuredAggregate.project.workflowModelOverrides))
+                .containsEntry(WorkflowModelKey.KEYFRAME_IMAGE, "image-override-v1");
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱来到古镇街口，准备在茶摊边完成今天的第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String assetId = extractedCharacters.get(0).path("assetId").asText();
+
+        JsonNode overriddenKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(overriddenKeyframes.size()).isEqualTo(2);
+        assertThat(overriddenKeyframes.get(0).path("modelName").asText()).isEqualTo("image-override-v1");
+
+        Map<String, Object> clearOverrideSettings = new LinkedHashMap<>();
+        clearOverrideSettings.put("defaultImageModel", "image-default-v1");
+        clearOverrideSettings.put("overrides", Map.of(WorkflowModelKey.KEYFRAME_IMAGE, ""));
+        JsonNode clearedSettings = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(clearOverrideSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(clearedSettings.path("overrides").has(WorkflowModelKey.KEYFRAME_IMAGE)).isFalse();
+
+        var clearedOverrideAggregate = scriptProjectService.require(projectId);
+        assertThat(scriptProjectService.parseOverrides(clearedOverrideAggregate.project.workflowModelOverrides))
+                .doesNotContainKey(WorkflowModelKey.KEYFRAME_IMAGE);
+
+        JsonNode defaultKeyframes = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/{assetId}/keyframes/generate", projectId, assetId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(defaultKeyframes.size()).isEqualTo(2);
+        assertThat(defaultKeyframes.get(0).path("modelName").asText()).isEqualTo("image-default-v1");
+
+        Map<String, Object> clearDefaultSettings = new LinkedHashMap<>();
+        clearDefaultSettings.put("defaultImageModel", "");
+        clearDefaultSettings.put("overrides", Map.of());
+        JsonNode clearedDefaultSettings = readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(clearDefaultSettings))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(clearedDefaultSettings.path("defaultImageModel").isNull()).isTrue();
+
+        var clearedDefaultAggregate = scriptProjectService.require(projectId);
+        assertThat(clearedDefaultAggregate.project.explicitImageModel).isNull();
+        assertThat(scriptProjectService.parseOverrides(clearedDefaultAggregate.project.workflowModelOverrides)).isEmpty();
+    }
+
+    @Test
+    void threeViewUsesWorkflowModelAndFailsWithoutPlaceholderWhenGatewayBreaks() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，准备在摊位边完成今天第一张写生。
+                """, "gpt-4o-mini");
+        createCapabilityModelConfig("image-three-default-v1", "image");
+        createCapabilityModelConfig("image-three-override-v1", "image");
+
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("defaultImageModel", "image-three-default-v1");
+        settings.put("overrides", Map.of(WorkflowModelKey.THREE_VIEW_IMAGE, "image-three-override-v1"));
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(settings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱来到古镇街口，准备在茶摊边完成今天的第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String assetId = extractedCharacters.get(0).path("assetId").asText();
+
+        Map<String, Object> updateAssetRequest = new LinkedHashMap<>();
+        updateAssetRequest.put("visualPrompt", "cinematic character design, full body, strong identity consistency");
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/assets/{assetId}", projectId, assetId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateAssetRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode generatedThreeView = readSuccessData(mockMvc.perform(withScriptAuth(post(
+                        "/api/v1/script-projects/{projectId}/assets/{assetId}/three-view/generate",
+                        projectId,
+                        assetId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String successFileId = generatedThreeView.path("imageFileId").asText();
+        assertThat(successFileId).isNotBlank();
+
+        JsonNode assetsAfterSuccess = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}/assets", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode updatedAsset = null;
+        for (JsonNode item : assetsAfterSuccess) {
+            if (assetId.equals(item.path("assetId").asText())) {
+                updatedAsset = item;
+                break;
+            }
+        }
+        assertThat(updatedAsset).isNotNull();
+        JsonNode verifiedUpdatedAsset = Objects.requireNonNull(updatedAsset);
+        assertThat(verifiedUpdatedAsset.path("threeViewImageFileId").asText()).isEqualTo(successFileId);
+
+        JsonNode detailAfterSuccess = readSuccessData(mockMvc.perform(withScriptAuth(get("/api/v1/script-projects/{projectId}", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode aggregateAsset = null;
+        for (JsonNode item : detailAfterSuccess.path("assets")) {
+            if (assetId.equals(item.path("assetId").asText())) {
+                aggregateAsset = item;
+                break;
+            }
+        }
+        if (aggregateAsset != null) {
+            assertThat(aggregateAsset.path("threeViewImageFileId").asText()).isEqualTo(successFileId);
+        }
+
+        var aggregateAfterSuccess = scriptProjectService.require(projectId);
+        StoredFileRecord successFile = aggregateAfterSuccess.files.stream()
+                .filter(file -> successFileId.equals(file.fileId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(successFile.relativePath).contains("three-view/" + assetId + "/");
+        assertThat(successFile.relativePath).endsWith(".png");
+
+        doThrow(new RuntimeException("mock-image-downstream-error"))
+                .when(providerHttpGateway)
+                .generateImage(any(), anyString(), anyString(), anyMap(), any());
+
+        JsonNode failedThreeView = readResponseTree(mockMvc.perform(withScriptAuth(post(
+                        "/api/v1/script-projects/{projectId}/assets/{assetId}/three-view/generate",
+                        projectId,
+                        assetId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(failedThreeView.path("code").asInt()).isEqualTo(502);
+        assertThat(failedThreeView.path("message").asText()).contains("调用图片模型失败");
+
+        var aggregateAfterFailure = scriptProjectService.require(projectId);
+        assertThat(aggregateAfterFailure.files.stream()
+                .map(file -> file.relativePath == null ? "" : file.relativePath)
+                .filter(path -> path.startsWith("three-view/" + assetId + "/"))
+                .noneMatch(path -> path.endsWith(".svg"))).isTrue();
     }
 
     @Test

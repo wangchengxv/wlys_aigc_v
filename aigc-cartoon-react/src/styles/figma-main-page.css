@@ -1,0 +1,51 @@
+.figma-page__search {
+  display: flex;
+  width: min(360px, 100%);
+  height: 64px;
+  border: 2px solid #333;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.figma-page__search input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  padding: 0 18px;
+  font-size: 30px;
+  line-height: 1;
+  color: #e0e0e0;
+  background: transparent;
+}
+
+.figma-page__search input::placeholder {
+  color: #666;
+}
+
+.figma-page__search button {
+  width: 62px;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(90deg, #3f45ff 0%, #5768ff 100%);
+  font-size: 24px;
+}
+
+@media (max-width: 900px) {
+  .figma-page__search {
+    width: min(300px, 100%);
+    height: 56px;
+    border-radius: 12px;
+  }
+
+  .figma-page__search input {
+    font-size: 24px;
+    padding: 0 14px;
+  }
+
+  .figma-page__search button {
+    width: 54px;
+    font-size: 20px;
+  }
+}

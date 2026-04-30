@@ -3,6 +3,8 @@ package com.example.aigc.dto;
 public record ApplyStoryboardFirstFrameRequest(
         String assetId,
         String mode,
-        Integer panelIndex
+        Integer panelIndex,
+        String imageFileId,
+        String imageUrl
 ) {
 }

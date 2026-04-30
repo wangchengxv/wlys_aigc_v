@@ -17,16 +17,24 @@ import java.util.UUID;
 public class CanvasGraphService {
     private final CanvasGraphRepository canvasGraphRepository;
     private final ObjectMapper objectMapper;
+    private static final String UNBOUND_PROJECT_KEY = "__unbound__";
 
     public CanvasGraphService(CanvasGraphRepository canvasGraphRepository, ObjectMapper objectMapper) {
         this.canvasGraphRepository = canvasGraphRepository;
         this.objectMapper = objectMapper;
     }
 
-    public PagedResult<CanvasGraphDto> list(String ownerId, int page, int pageSize) {
+    public PagedResult<CanvasGraphDto> list(String ownerId, String projectId, int page, int pageSize) {
         int p = Math.max(1, page);
         int size = Math.max(1, Math.min(pageSize, 100));
-        List<CanvasGraph> all = canvasGraphRepository.findAllByOwnerId(ownerId);
+        List<CanvasGraph> all;
+        if (projectId == null) {
+            all = canvasGraphRepository.findAllByOwnerId(ownerId);
+        } else if (projectId.isBlank() || UNBOUND_PROJECT_KEY.equals(projectId.trim())) {
+            all = canvasGraphRepository.findAllByOwnerIdAndProjectIdIsNull(ownerId);
+        } else {
+            all = canvasGraphRepository.findAllByOwnerIdAndProjectId(ownerId, projectId.trim());
+        }
         int from = Math.min((p - 1) * size, all.size());
         int to = Math.min(from + size, all.size());
         List<CanvasGraphDto> list = all.subList(from, to).stream().map(this::toDto).toList();

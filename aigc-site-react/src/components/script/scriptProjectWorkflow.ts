@@ -1,3 +1,5 @@
+import { filterScriptProjectWorkflowSteps } from '@/lib/scriptProject/workflowFeatureGate'
+
 export type ScriptProjectWorkflowStep = {
   key: string
   label: string
@@ -5,7 +7,7 @@ export type ScriptProjectWorkflowStep = {
   to: (projectId: string) => string
 }
 
-export const scriptProjectWorkflowSteps: ScriptProjectWorkflowStep[] = [
+const ALL_SCRIPT_PROJECT_WORKFLOW_STEPS: ScriptProjectWorkflowStep[] = [
   {
     key: 'global-settings',
     label: '全局设定',
@@ -61,6 +63,12 @@ export const scriptProjectWorkflowSteps: ScriptProjectWorkflowStep[] = [
     to: (id) => `/script-projects/${id}/export`,
   },
 ]
+
+export function getScriptProjectWorkflowSteps() {
+  return filterScriptProjectWorkflowSteps(ALL_SCRIPT_PROJECT_WORKFLOW_STEPS)
+}
+
+export const scriptProjectWorkflowSteps: ScriptProjectWorkflowStep[] = getScriptProjectWorkflowSteps()
 
 export function getScriptProjectWorkflowCurrentIndex(pathname: string, projectId: string) {
   return scriptProjectWorkflowSteps.findIndex((step) => {

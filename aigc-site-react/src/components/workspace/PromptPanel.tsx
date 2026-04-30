@@ -409,6 +409,16 @@ export function PromptPanel({
         )}
       </div>
 
+      {mode === 'video' && isImageToVideoEntry ? (
+        <div className="workspace-i2v-guide">
+          <div>
+            <p className="eyebrow">图生视频流程</p>
+            <h3>先选首帧图，再写视频描述</h3>
+          </div>
+          <p className="muted">支持本地上传、拖拽上传、图片链接和 Base64，不需要先生成九宫格也能直接发起图生视频。</p>
+        </div>
+      ) : null}
+
       {mode !== 'video' ? (
         needsTextLength ? (
           <div className="row">

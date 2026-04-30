@@ -1,0 +1,148 @@
+.v2-workspace {
+  min-height: 100vh;
+  background: #000;
+  padding: 34px 64px 64px;
+}
+
+.v2-workspace__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.v2-workspace__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.v2-workspace__projectName {
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: #fff;
+}
+
+.v2-workspace__tabs .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+.v2-workspace__tabs .ant-tabs-tab {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.v2-workspace__tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #000;
+}
+
+.v2-workspace__tabs .ant-tabs-ink-bar {
+  display: none;
+}
+
+.v2-workspace__tabs .ant-tabs-tab-active {
+  background: #afafaf;
+  border-radius: 10px;
+}
+
+.v2-workspace__tabs .ant-tabs-tab {
+  padding: 10px 14px;
+  margin: 0 8px 0 0;
+}
+
+.v2-workspace__content {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 22px;
+}
+
+.v2-workspace__card {
+  background: rgba(0, 0, 0, 0.66);
+  border-radius: 12px;
+}
+
+.v2-workspace__card .ant-card-head {
+  border-bottom: 0;
+}
+
+.v2-workspace__card .ant-card-head-title {
+  color: #fff;
+  font-weight: 700;
+}
+
+.v2-workspace__card .ant-card-body {
+  color: #fff;
+}
+
+.v2-workspace__kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.v2-workspace__k {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.v2-workspace__v {
+  color: #fff;
+}
+
+.v2-workspace__hint {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.v2-workspace__section {
+  margin-top: 18px;
+}
+
+.v2-workspace__sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.v2-workspace__sectionTitle {
+  font-weight: 700;
+}
+
+.v2-workspace__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.v2-workspace .ant-input,
+.v2-workspace .ant-input-affix-wrapper,
+.v2-workspace .ant-select-selector,
+.v2-workspace .ant-input-textarea textarea {
+  background: rgba(49, 49, 49, 1);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.v2-workspace .ant-select-dropdown {
+  background: #111;
+}
+
+.v2-workspace .ant-table {
+  background: transparent;
+}
+
+.v2-workspace .ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom: 0;
+}
+
+.v2-workspace .ant-table-tbody > tr > td {
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}

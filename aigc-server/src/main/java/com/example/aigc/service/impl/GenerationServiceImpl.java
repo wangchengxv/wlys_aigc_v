@@ -19,6 +19,7 @@ import com.example.aigc.repository.GenerationTaskRepository;
 import com.example.aigc.repository.ModelConfigRepository;
 import com.example.aigc.service.ApiKeyCryptoService;
 import com.example.aigc.service.GenerationService;
+import com.example.aigc.service.ImageGenerationCapabilityService;
 import com.example.aigc.service.LocalAssetFileService;
 import com.example.aigc.service.ModelCapabilityService;
 import com.example.aigc.service.ScriptProjectService;
@@ -55,7 +56,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
-public class GenerationServiceImpl implements GenerationService {
+public class GenerationServiceImpl implements GenerationService, ImageGenerationCapabilityService {
     private static final Logger log = LoggerFactory.getLogger(GenerationServiceImpl.class);
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final List<String> BLOCK_WORDS = List.of("暴恐", "色情", "违禁", "涉政");
@@ -199,7 +200,12 @@ public class GenerationServiceImpl implements GenerationService {
             throw ex;
         } finally {
             task.setLatencyMs(System.currentTimeMillis() - start);
-            repository.save(task);
+            try {
+                repository.save(task);
+            } catch (Exception saveEx) {
+                log.error("[generation] persist task failed: taskId={}, status={}, reason={}",
+                        taskId, task.getStatus(), saveEx.getMessage(), saveEx);
+            }
         }
     }
 
@@ -227,6 +233,43 @@ public class GenerationServiceImpl implements GenerationService {
             throw new BizException(403, "无权删除该任务");
         }
         repository.deleteByTaskId(taskId);
+    }
+
+    @Override
+    public ImageGenerationResult generateImages(
+            String prompt,
+            int count,
+            String requestedModel,
+            Map<String, Object> advancedMedia,
+            boolean strictConfiguredModel
+    ) {
+        int safeCount = safeCount(count);
+        NormalizedAdvancedMedia normalizedAdvancedMedia = normalizeAdvancedMedia(advancedMedia, requestedModel, null, null);
+        if (strictConfiguredModel) {
+            ResolvedModel resolvedModel = resolveModel("image", requestedModel);
+            if (resolvedModel == null) {
+                if (requestedModel != null && !requestedModel.isBlank()) {
+                    throw new BizException(400, "图片模型未在可用配置中");
+                }
+                throw new BizException(400, "未配置可用图片模型");
+            }
+            List<String> results = generateImagesWithConfiguredModel(prompt, safeCount, resolvedModel, normalizedAdvancedMedia);
+            return new ImageGenerationResult(
+                    resolvedModel.model().getModelName(),
+                    results,
+                    resolvedModel.source(),
+                    resolvedModel.matchedBy(),
+                    resolvedModel.rejectReason()
+            );
+        }
+        MediaResult imageResult = generateImages(prompt, safeCount, requestedModel, normalizedAdvancedMedia);
+        return new ImageGenerationResult(
+                imageResult.modelName(),
+                imageResult.results(),
+                imageResult.modelSource(),
+                imageResult.matchedBy(),
+                imageResult.rejectReason()
+        );
     }
 
     private void validatePrompt(String prompt) {
@@ -403,7 +446,16 @@ public class GenerationServiceImpl implements GenerationService {
     }
 
     private NormalizedAdvancedMedia normalizeAdvancedMedia(GenerateRequest request) {
-        Map<String, Object> advancedMedia = sanitizeObjectMap(request.advancedMedia());
+        return normalizeAdvancedMedia(request.advancedMedia(), request.imageModel(), request.videoReferenceImageUrl(), request.videoViduOptions());
+    }
+
+    private NormalizedAdvancedMedia normalizeAdvancedMedia(
+            Map<String, Object> rawAdvancedMedia,
+            String imageModel,
+            String requestVideoReferenceImageUrl,
+            Map<String, Object> requestVideoViduOptions
+    ) {
+        Map<String, Object> advancedMedia = sanitizeObjectMap(rawAdvancedMedia);
         Map<String, Object> imageSection = sanitizeObjectMap(advancedMedia.get("image"));
         Map<String, Object> imageExtra = sanitizeObjectMap(imageSection.get("extra"));
         Map<String, Object> reference2image = sanitizeObjectMap(imageExtra.get("reference2image"));
@@ -456,16 +508,16 @@ public class GenerationServiceImpl implements GenerationService {
                         ? "outpaint" : null,
                 !omni.isEmpty() || omniSourceImageUrl != null && !omniSourceImageUrl.isBlank()
                         ? "omni" : null,
-                inferImageAdvancedCapability(request.imageModel())
+                inferImageAdvancedCapability(imageModel)
         ));
 
         String videoReferenceImageUrl = firstNonBlank(
                 valueAsString(videoSection.get("referenceImageUrl")),
                 valueAsString(videoSection.get("videoReferenceImageUrl")),
-                request.videoReferenceImageUrl()
+                requestVideoReferenceImageUrl
         );
 
-        Map<String, Object> mergedViduOptions = new HashMap<>(extractViduOptions(request.videoViduOptions()));
+        Map<String, Object> mergedViduOptions = new HashMap<>(extractViduOptions(requestVideoViduOptions));
         mergedViduOptions.putAll(extractViduOptions(sanitizeObjectMap(videoSection.get("videoViduOptions"))));
         mergedViduOptions.putAll(extractViduOptions(sanitizeObjectMap(videoSection.get("viduOptions"))));
         Map<String, Object> mergedVideoExtraOptions = extractOneLinkSeedanceVideoExtraOptions(videoExtra);
@@ -618,29 +670,35 @@ public class GenerationServiceImpl implements GenerationService {
         }
         List<String> images = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            Map<String, Object> body;
-            if ("ark".equalsIgnoreCase(provider.key())) {
-                body = callArkImageApi(resolvedModel.connection().getBaseUrl(), resolvedModel.apiKey(), prompt, resolvedModel.model().getModelName());
-            } else {
-                body = providerHttpGateway.generateImage(
-                        provider,
-                        resolvedModel.connection().getBaseUrl(),
-                        resolvedModel.apiKey(),
-                        Map.of(
-                                "model", resolvedModel.model().getModelName(),
-                                "prompt", prompt,
-                                "n", 1,
-                                "size", requestImageSize(),
-                                "response_format", "url"
-                        ),
-                        Duration.ofSeconds(60)
-                );
+            try {
+                Map<String, Object> body;
+                if ("ark".equalsIgnoreCase(provider.key())) {
+                    body = callArkImageApi(resolvedModel.connection().getBaseUrl(), resolvedModel.apiKey(), prompt, resolvedModel.model().getModelName());
+                } else {
+                    body = providerHttpGateway.generateImage(
+                            provider,
+                            resolvedModel.connection().getBaseUrl(),
+                            resolvedModel.apiKey(),
+                            Map.of(
+                                    "model", resolvedModel.model().getModelName(),
+                                    "prompt", prompt,
+                                    "n", 1,
+                                    "size", requestImageSize(),
+                                    "response_format", "url"
+                            ),
+                            Duration.ofSeconds(60)
+                    );
+                }
+                String imageUrl = parseImageUrl(body);
+                if (imageUrl == null || imageUrl.isBlank()) {
+                    throw new BizException(502, "模型服务返回异常，未获取到图片地址");
+                }
+                images.add(imageUrl);
+            } catch (BizException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new BizException(502, "调用图片模型失败：" + ex.getMessage());
             }
-            String imageUrl = parseImageUrl(body);
-            if (imageUrl == null || imageUrl.isBlank()) {
-                throw new BizException(502, "模型服务返回异常，未获取到图片地址");
-            }
-            images.add(imageUrl);
         }
         return images;
     }

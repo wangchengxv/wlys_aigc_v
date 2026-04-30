@@ -1,0 +1,68 @@
+.v2-landing {
+  position: relative;
+  min-height: 100vh;
+  background-position: center;
+  background-size: cover;
+  overflow: hidden;
+}
+
+.v2-landing__brand {
+  position: absolute;
+  left: 47px;
+  top: 34px;
+  font-family: 'Lobster', cursive;
+  font-size: 28px;
+  color: #fff;
+}
+
+.v2-landing__avatar {
+  position: absolute;
+  right: 78px;
+  top: 28px;
+  width: 40.5px;
+  height: 40.5px;
+  border-radius: 50%;
+  background: #ffbfbf;
+}
+
+.v2-landing__nav {
+  position: absolute;
+  left: 24px;
+  top: 99px;
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.v2-landing__navItem {
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: #000;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.v2-landing__navItem.is-active {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.v2-landing__cta {
+  position: absolute;
+  left: 50%;
+  bottom: 121px;
+  transform: translateX(-50%);
+  width: 485px;
+  height: 78px;
+  border-radius: 200px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.59);
+  color: #000;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 32px;
+  cursor: pointer;
+}

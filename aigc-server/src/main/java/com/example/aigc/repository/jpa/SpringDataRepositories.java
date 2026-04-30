@@ -23,6 +23,10 @@ import com.example.aigc.entity.SocialAccount;
 import com.example.aigc.entity.StyleTemplate;
 import com.example.aigc.entity.StoredFileRecord;
 import com.example.aigc.entity.StoryboardShot;
+import com.example.aigc.entity.StoryboardLiteKeyframe;
+import com.example.aigc.entity.StoryboardLiteScript;
+import com.example.aigc.entity.StoryboardLiteSession;
+import com.example.aigc.entity.StoryboardLiteVideoTask;
 import com.example.aigc.entity.TeachingAssignment;
 import com.example.aigc.entity.TeachingCourse;
 import com.example.aigc.entity.VideoEditDraft;
@@ -178,6 +182,22 @@ interface SpringDataStoryboardShotRepository extends JpaRepository<StoryboardSho
     void deleteByProjectId(String projectId);
 }
 
+interface SpringDataStoryboardLiteSessionRepository extends JpaRepository<StoryboardLiteSession, String> {
+    List<StoryboardLiteSession> findAllByOwnerIdOrderByUpdatedAtDesc(String ownerId);
+}
+
+interface SpringDataStoryboardLiteScriptRepository extends JpaRepository<StoryboardLiteScript, String> {
+    List<StoryboardLiteScript> findAllBySessionIdOrderByVersionNoDesc(String sessionId);
+}
+
+interface SpringDataStoryboardLiteKeyframeRepository extends JpaRepository<StoryboardLiteKeyframe, String> {
+    List<StoryboardLiteKeyframe> findAllBySessionIdOrderByCreatedAtAsc(String sessionId);
+}
+
+interface SpringDataStoryboardLiteVideoTaskRepository extends JpaRepository<StoryboardLiteVideoTask, String> {
+    List<StoryboardLiteVideoTask> findAllBySessionIdOrderByCreatedAtDesc(String sessionId);
+}
+
 interface SpringDataVideoSegmentTaskRepository extends JpaRepository<VideoSegmentTask, String> {
     List<VideoSegmentTask> findAllByProjectId(String projectId);
 
@@ -232,6 +252,8 @@ interface SpringDataPipelineRunRepository extends JpaRepository<PipelineRun, Str
 
 interface SpringDataCanvasGraphRepository extends JpaRepository<CanvasGraph, String> {
     List<CanvasGraph> findAllByOwnerIdOrderByUpdatedAtDesc(String ownerId);
+    List<CanvasGraph> findAllByOwnerIdAndProjectIdOrderByUpdatedAtDesc(String ownerId, String projectId);
+    List<CanvasGraph> findAllByOwnerIdAndProjectIdIsNullOrderByUpdatedAtDesc(String ownerId);
 
     Optional<CanvasGraph> findByIdAndOwnerId(String id, String ownerId);
 

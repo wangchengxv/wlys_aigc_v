@@ -56,7 +56,8 @@ const SHELL_NAV: ShellNavGroup[] = [
     title: '工作台',
     items: [
       { label: '首页', to: '/', patterns: ['/'] },
-      { label: '创作工作台', to: '/workspace', patterns: ['/workspace', '/tools/image', '/tools/video', '/tools/image-to-video', '/canvas'] },
+      { label: '创作工作台', to: '/workspace', patterns: ['/workspace', '/tools/image', '/tools/video', '/tools/image-to-video', '/tools/storyboard-lite', '/canvas'] },
+      { label: '剧本闭环Lite', to: '/tools/storyboard-lite', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
       { label: '无限画布', to: '/canvas' },
       { label: '历史记录', to: '/history' },
     ],

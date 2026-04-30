@@ -84,6 +84,13 @@ import type {
   ScriptProjectSummary,
   ScriptProjectUploadRequest,
   ScriptRevision,
+  StoryboardLiteCreateSessionRequest,
+  StoryboardLiteGenerateKeyframesRequest,
+  StoryboardLiteGenerateVideoRequest,
+  StoryboardLiteKeyframe,
+  StoryboardLiteSession,
+  StoryboardLiteSaveScriptRequest,
+  StoryboardLiteVideoTask,
   ShotVisualPromptResponse,
   StoryboardFirstFrameResponse,
   StoryboardImageResponse,
@@ -1679,7 +1686,7 @@ export async function applyStoryboardFirstFrame(
     `/api/v1/script-projects/${encodeURIComponent(projectId)}/shots/${encodeURIComponent(shotId)}/storyboard-first-frame/apply`,
     payload,
   )
-  return unwrapApiData(data, '应用九宫格首帧失败')
+  return unwrapApiData(data, '应用首帧参考图失败')
 }
 
 export async function splitScriptProjectShots(projectId: string): Promise<StoryboardShot[]> {
@@ -2009,6 +2016,53 @@ export async function updateWorkflowModelSettings(
     request
   )
   return unwrapApiData(data, '保存模型设置失败')
+}
+
+export async function createStoryboardLiteSession(request: StoryboardLiteCreateSessionRequest): Promise<StoryboardLiteSession> {
+  const { data } = await http.post<ApiEnvelope<StoryboardLiteSession>>('/api/v1/storyboard-lite/sessions', request)
+  return unwrapApiData(data, '创建剧本闭环会话失败')
+}
+
+export async function saveStoryboardLiteScript(sessionId: string, request: StoryboardLiteSaveScriptRequest): Promise<StoryboardLiteSession> {
+  const { data } = await http.put<ApiEnvelope<StoryboardLiteSession>>(
+    `/api/v1/storyboard-lite/sessions/${encodeURIComponent(sessionId)}/script`,
+    request,
+  )
+  return unwrapApiData(data, '保存剧本失败')
+}
+
+export async function generateStoryboardLiteKeyframes(
+  sessionId: string,
+  request: StoryboardLiteGenerateKeyframesRequest,
+): Promise<StoryboardLiteKeyframe[]> {
+  const { data } = await http.post<ApiEnvelope<StoryboardLiteKeyframe[]>>(
+    `/api/v1/storyboard-lite/sessions/${encodeURIComponent(sessionId)}/keyframes/generate`,
+    request,
+  )
+  return unwrapApiData(data, '生成关键帧失败')
+}
+
+export async function confirmStoryboardLiteKeyframe(sessionId: string, keyframeId: string): Promise<void> {
+  const { data } = await http.post<ApiEnvelope<{ keyframeId: string; selected: boolean }>>(
+    `/api/v1/storyboard-lite/sessions/${encodeURIComponent(sessionId)}/keyframes/${encodeURIComponent(keyframeId)}/confirm`,
+  )
+  unwrapApiData(data, '确认关键帧失败')
+}
+
+export async function generateStoryboardLiteVideo(
+  sessionId: string,
+  request: StoryboardLiteGenerateVideoRequest,
+): Promise<StoryboardLiteVideoTask> {
+  const { data } = await http.post<ApiEnvelope<StoryboardLiteVideoTask>>(
+    `/api/v1/storyboard-lite/sessions/${encodeURIComponent(sessionId)}/video/generate`,
+    request,
+  )
+  return unwrapApiData(data, '图生视频生成失败')
+}
+
+export async function queryStoryboardLiteSession(sessionId: string): Promise<StoryboardLiteSession> {
+  const { data } = await http.get<ApiEnvelope<StoryboardLiteSession>>(`/api/v1/storyboard-lite/sessions/${encodeURIComponent(sessionId)}`)
+  return unwrapApiData(data, '查询会话失败')
 }
 
 export function resolveScriptFileUrl(fileId?: string | null): string {

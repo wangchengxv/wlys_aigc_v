@@ -4,6 +4,7 @@ import com.example.aigc.config.AigcArkProperties;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.model.ConnectionConfig;
 import com.example.aigc.model.ModelConfig;
+import com.example.aigc.model.PresetModelRegistry;
 import com.example.aigc.repository.ConnectionConfigRepository;
 import com.example.aigc.repository.ModelConfigRepository;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class AiCapabilityRoutingService {
     private final ModelCapabilityService modelCapabilityService;
     private final RouterRoutingService routerRoutingService;
     private final AigcArkProperties arkProperties;
+    private final PresetModelRegistry presetModelRegistry;
 
     public AiCapabilityRoutingService(
             ModelConfigRepository modelConfigRepository,
@@ -32,7 +34,8 @@ public class AiCapabilityRoutingService {
             ApiKeyCryptoService apiKeyCryptoService,
             ModelCapabilityService modelCapabilityService,
             RouterRoutingService routerRoutingService,
-            AigcArkProperties arkProperties
+            AigcArkProperties arkProperties,
+            PresetModelRegistry presetModelRegistry
     ) {
         this.modelConfigRepository = modelConfigRepository;
         this.connectionConfigRepository = connectionConfigRepository;
@@ -41,6 +44,7 @@ public class AiCapabilityRoutingService {
         this.modelCapabilityService = modelCapabilityService;
         this.routerRoutingService = routerRoutingService;
         this.arkProperties = arkProperties;
+        this.presetModelRegistry = presetModelRegistry;
     }
 
     public ResolvedAiModel resolveText(String explicitModelName) {
@@ -75,6 +79,10 @@ public class AiCapabilityRoutingService {
                     }
                 }
             }
+            ResolvedAiModel presetFallback = tryResolveViaPreset(capability, explicitModelName.trim());
+            if (presetFallback != null) {
+                return presetFallback;
+            }
             return fallback(capability, explicitModelName.trim(), "NO_MATCH");
         }
 
@@ -101,6 +109,61 @@ public class AiCapabilityRoutingService {
         }
 
         return fallback(capability, null, "NO_ENABLED_MODEL");
+    }
+
+    private ResolvedAiModel tryResolveViaPreset(String capability, String modelName) {
+        for (var p : presetModelRegistry.getAll()) {
+            if (!p.getCapabilities().contains(capability)) {
+                continue;
+            }
+            if (!normalize(p.getModelName()).equals(normalize(modelName))) {
+                continue;
+            }
+            var connOpt = connectionConfigRepository.findAll().stream()
+                    .filter(c -> c.isEnabled() && providerCatalog.require(c.getProvider()).key().equalsIgnoreCase(p.getProvider()))
+                    .findFirst();
+            if (connOpt.isEmpty()) {
+                continue;
+            }
+            ConnectionConfig conn = connOpt.get();
+            ProviderCatalog.ProviderDefinition providerDef = providerCatalog.require(p.getProvider());
+            if (!supportsInvocation(providerDef, capability)) {
+                continue;
+            }
+            Map<String, Object> metaPlain = ConnectionMetadataHelper.decryptForUse(conn.getMetadata(), apiKeyCryptoService);
+            String apiKey = resolvePlainApiKeyWithoutExplicitCheck(conn, providerDef);
+            if (apiKey == null) {
+                continue;
+            }
+            return new ResolvedAiModel(
+                    capability,
+                    modelName,
+                    "PRESET_FALLBACK",
+                    "preset-model",
+                    null,
+                    conn,
+                    providerDef,
+                    apiKey,
+                    metaPlain,
+                    true
+            );
+        }
+        return null;
+    }
+
+    private String resolvePlainApiKeyWithoutExplicitCheck(ConnectionConfig conn, ProviderCatalog.ProviderDefinition provider) {
+        if (provider.gatewayKind() == GatewayKind.BEDROCK) {
+            String encrypted = conn.getEncryptedApiKey();
+            if (encrypted == null || encrypted.isBlank()) return null;
+            return apiKeyCryptoService.decrypt(encrypted);
+        }
+        if (provider.gatewayKind() == GatewayKind.VERTEX) return "";
+        if (provider.authMode() != ProviderCatalog.AuthMode.NONE) {
+            String encrypted = conn.getEncryptedApiKey();
+            if (encrypted == null || encrypted.isBlank()) return null;
+            return apiKeyCryptoService.decrypt(encrypted);
+        }
+        return "";
     }
 
     private ResolvedAiModel toResolved(ModelConfig modelConfig, String capability, boolean explicitSelection) {

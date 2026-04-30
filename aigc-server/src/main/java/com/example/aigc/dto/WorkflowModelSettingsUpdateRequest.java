@@ -4,7 +4,7 @@ import java.util.Map;
 
 /**
  * Request DTO for PUT /api/v1/script-projects/{projectId}/model-settings.
- * Sends the full overrides map plus optional project-level defaults.
+ * Sends the full overrides snapshot plus optional project-level defaults.
  * Any key present in {@code overrides} with a blank/null value is treated as "remove override".
  */
 public record WorkflowModelSettingsUpdateRequest(

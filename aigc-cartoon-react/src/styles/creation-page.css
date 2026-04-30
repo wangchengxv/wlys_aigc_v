@@ -1,0 +1,493 @@
+.creation-page {
+  min-height: 100vh;
+  padding: 48px;
+  background: #000;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.workflow-container {
+  width: 100%;
+  max-width: 1400px;
+  margin-bottom: 80px;
+  position: relative;
+}
+
+.workflow-progress-bar {
+  position: absolute;
+  top: 24px;
+  left: 5%;
+  right: 5%;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(43, 110, 255, 0.3) 0%, 
+    rgba(43, 110, 255, 0.6) 20%, 
+    rgba(43, 110, 255, 0.3) 40%,
+    rgba(43, 110, 255, 0.3) 60%,
+    rgba(43, 110, 255, 0.3) 80%,
+    rgba(43, 110, 255, 0.3) 100%
+  );
+  z-index: 0;
+  border-radius: 2px;
+}
+
+.workflow-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, #2b6eff, #5e9cff);
+  border-radius: 2px;
+  box-shadow: 0 0 20px rgba(43, 110, 255, 0.5);
+  animation: progressPulse 3s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.workflow-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.workflow-step-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.workflow-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 28px;
+  background: linear-gradient(145deg, rgba(30, 30, 30, 0.9), rgba(20, 20, 20, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  color: #a0a0a0;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  min-width: 120px;
+}
+
+.workflow-step::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(43, 110, 255, 0.15) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.workflow-step__glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(43, 110, 255, 0.3) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.workflow-step__number {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #3a3a3a, #2a2a2a);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.4s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.workflow-step__icon {
+  position: relative;
+  font-size: 24px;
+  transition: all 0.4s ease;
+  filter: grayscale(1);
+}
+
+.workflow-step__label {
+  position: relative;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.4s ease;
+}
+
+.workflow-step:hover {
+  background: linear-gradient(145deg, rgba(40, 40, 40, 0.95), rgba(25, 25, 25, 0.98));
+  border-color: rgba(43, 110, 255, 0.3);
+  color: #fff;
+  transform: translateY(-4px);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(43, 110, 255, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.workflow-step:hover .workflow-step__glow {
+  opacity: 1;
+  animation: glowRotate 4s linear infinite;
+}
+
+.workflow-step:hover .workflow-step__number {
+  background: linear-gradient(145deg, #2b6eff, #1a5ed9);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(43, 110, 255, 0.4);
+}
+
+.workflow-step:hover .workflow-step__icon {
+  filter: grayscale(0);
+  transform: scale(1.1);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.workflow-step:hover::before {
+  opacity: 1;
+}
+
+.workflow-step--active {
+  background: linear-gradient(145deg, rgba(35, 70, 140, 0.4), rgba(25, 50, 100, 0.5));
+  border-color: rgba(43, 110, 255, 0.6);
+  color: #fff;
+  box-shadow: 
+    0 0 60px rgba(43, 110, 255, 0.25),
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.workflow-step--active .workflow-step__glow {
+  opacity: 0.6;
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+.workflow-step--active .workflow-step__number {
+  background: linear-gradient(145deg, #2b6eff, #5e9cff);
+  color: #fff;
+  box-shadow: 0 0 30px rgba(43, 110, 255, 0.6);
+  animation: numberPulse 2s ease-in-out infinite;
+}
+
+.workflow-step--active .workflow-step__icon {
+  filter: grayscale(0);
+  color: #5e9cff;
+  text-shadow: 0 0 15px rgba(94, 156, 255, 0.5);
+}
+
+.workflow-step--active::before {
+  opacity: 1;
+}
+
+@keyframes glowRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes numberPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.workflow-connector {
+  display: flex;
+  align-items: center;
+  margin: 0 -4px;
+  z-index: 0;
+}
+
+.workflow-connector__line {
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    rgba(43, 110, 255, 0.5), 
+    rgba(43, 110, 255, 0.2),
+    rgba(43, 110, 255, 0.5)
+  );
+  position: relative;
+}
+
+.workflow-connector__line::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(43, 110, 255, 0.3),
+    transparent
+  );
+  animation: lineGlow 2s ease-in-out infinite;
+}
+
+@keyframes lineGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.workflow-connector__arrow {
+  font-size: 18px;
+  color: rgba(43, 110, 255, 0.4);
+  margin-left: 4px;
+  animation: arrowPulse 2s ease-in-out infinite;
+}
+
+@keyframes arrowPulse {
+  0%, 100% { opacity: 0.4; transform: translateX(0); }
+  50% { opacity: 0.8; transform: translateX(3px); }
+}
+
+.creation-page__greeting {
+  width: 100%;
+  max-width: 1920px;
+  margin-bottom: 200px;
+}
+
+.creation-page__greeting h1 {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: #fff;
+}
+
+.creation-page__input-area {
+  width: 100%;
+  max-width: 929px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.creation-page__input-box {
+  position: relative;
+  width: 100%;
+  height: 223px;
+  background: #232323;
+  border-radius: 26px;
+  overflow: hidden;
+}
+
+.creation-page__textarea {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  padding: 24px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: #656565;
+  outline: none;
+  resize: none;
+}
+
+.creation-page__textarea::placeholder {
+  color: #656565;
+}
+
+.creation-page__upload-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 73.42px;
+  height: 85.26px;
+  background: #afafaf;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.creation-page__upload-btn span {
+  font-size: 48px;
+  color: #000;
+  line-height: 1;
+}
+
+.creation-page__config-row {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.creation-page__config-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #232323;
+  border: 1px solid #3c3c3c;
+  border-radius: 12px;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.creation-page__config-btn:hover {
+  border-color: #5c5c5c;
+}
+
+.creation-page__config-arrow {
+  font-size: 14px;
+  color: #fff;
+}
+
+.creation-page__start-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 189px;
+  padding: 10px 20px;
+  background: #2b6eff;
+  border: none;
+  border-radius: 22px;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.4;
+}
+
+.creation-page__start-btn:hover {
+  opacity: 0.6;
+}
+
+.creation-page__start-icon {
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.creation-page__batch-btn {
+  position: fixed;
+  bottom: 48px;
+  right: 48px;
+  padding: 16px 32px;
+  background: #2b6eff;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 24px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.creation-page__batch-btn:hover {
+  background: #1a5ed9;
+}
+
+.batch-generate-modal {
+  width: 775px;
+  background: #000;
+  border-radius: 0;
+  padding: 34px 20px;
+}
+
+.batch-generate-modal__title {
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 32px;
+  color: #fff;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.batch-generate-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-bottom: 40px;
+}
+
+.batch-generate-modal__field {
+  display: flex;
+  align-items: center;
+  padding: 0 53px;
+  gap: 40px;
+}
+
+.batch-generate-modal__field label {
+  width: 140px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 28px;
+  color: #fff;
+}
+
+.batch-generate-modal__select {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #232323;
+  border: 1px solid #3c3c3c;
+  border-radius: 12px;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.batch-generate-modal__actions {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+
+.batch-generate-modal__btn {
+  padding: 16px 48px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Alibaba PuHuiTi 2.0', sans-serif;
+  font-weight: 400;
+  font-size: 28px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.batch-generate-modal__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
