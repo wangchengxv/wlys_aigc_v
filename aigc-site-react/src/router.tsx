@@ -160,7 +160,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'tools/storyboard-lite',
-        lazy: lazyPage(() => import('@/pages/StoryboardLitePage'), 'StoryboardLitePage'),
+        lazy: lazyPage(() => import('@/pages/storyboard-lite'), 'StoryboardLitePage'),
         handle: H({
           title: '剧本闭环Lite',
           eyebrow: '',

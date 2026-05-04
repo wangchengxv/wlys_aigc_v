@@ -13,6 +13,8 @@ import SubjectPage from './pages/SubjectPage';
 import V2LandingPage from './pages/v2/V2LandingPage';
 import V2ProjectsPage from './pages/v2/V2ProjectsPage';
 import V2ProjectWorkspacePage from './pages/v2/V2ProjectWorkspacePage';
+import V2AssetsPage from './pages/v2/V2AssetsPage';
+import V2ConfigPage from './pages/v2/V2ConfigPage';
 
 function App() {
   return (
@@ -38,6 +40,8 @@ function App() {
             <Route index element={<V2LandingPage />} />
             <Route path="projects" element={<V2ProjectsPage />} />
             <Route path="projects/:projectId" element={<V2ProjectWorkspacePage />} />
+            <Route path="assets" element={<V2AssetsPage />} />
+            <Route path="config" element={<V2ConfigPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

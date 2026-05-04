@@ -22,7 +22,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,27 +55,12 @@ class StoryboardLiteServiceIntegrationTest {
     @Test
     void generateKeyframesPersistsBase64ImageAsStoredFile() {
         String base64Image = Base64.getEncoder().encodeToString("fake-png".getBytes());
-        when(generationService.generate(any(), eq("u1"))).thenReturn(new GenerateResponseData(
-                "task-img",
-                TaskStatus.SUCCESS,
-                List.of(),
-                List.of(base64Image),
-                List.of(),
-                "2026-04-30T00:00:00",
-                12L,
-                "prompt",
-                GenerateMode.image,
-                "影视级真实",
+        when(imageGenerationCapabilityService.generateImages(any(), eq(1), any(), eq(null), eq(false))).thenReturn(new ImageGenerationCapabilityService.ImageGenerationResult(
                 "image-model",
+                List.of(base64Image),
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                List.of()
+                null
         ));
 
         StoryboardLiteDtos.SessionData session = storyboardLiteService.createSession(
@@ -108,53 +92,69 @@ class StoryboardLiteServiceIntegrationTest {
     }
 
     @Test
+    void generateKeyframesKeepsRemoteImageUrlWhenLocalPersistenceFails() {
+        when(imageGenerationCapabilityService.generateImages(any(), eq(1), any(), eq(null), eq(false))).thenReturn(new ImageGenerationCapabilityService.ImageGenerationResult(
+                "image-model",
+                List.of("https://"),
+                null,
+                null,
+                null
+        ));
+
+        StoryboardLiteDtos.SessionData session = storyboardLiteService.createSession(
+                "u2",
+                new StoryboardLiteDtos.CreateSessionRequest(null, "Lite Remote Fallback Test")
+        );
+        storyboardLiteService.saveScript(
+                "u2",
+                session.sessionId(),
+                new StoryboardLiteDtos.SaveScriptRequest("主角站在白色背景中展示正侧背。")
+        );
+
+        StoryboardLiteDtos.KeyframeData keyframe = storyboardLiteService.generateKeyframes(
+                "u2",
+                session.sessionId(),
+                new StoryboardLiteDtos.GenerateKeyframesRequest(null, null, null)
+        ).get(0);
+
+        assertThat(keyframe.imageUrl()).isEqualTo("https://");
+        assertThat(keyframe.imageFileId()).isNull();
+        assertThat(keyframe.modelName()).isEqualTo("image-model");
+    }
+
+    @Test
     void generateVideoUsesStoredImageAsDataUrlWhenLiteKeyframeWasPersistedLocally() {
         String base64Image = Base64.getEncoder().encodeToString("fake-png".getBytes());
-        when(generationService.generate(any(), eq("u1")))
-                .thenReturn(new GenerateResponseData(
-                        "task-img",
-                        TaskStatus.SUCCESS,
-                        List.of(),
-                        List.of(base64Image),
-                        List.of(),
-                        "2026-04-30T00:00:00",
-                        12L,
-                        "prompt",
-                        GenerateMode.image,
-                        "影视级真实",
+        when(imageGenerationCapabilityService.generateImages(any(), eq(1), eq("custom-image-model"), eq(null), eq(false)))
+                .thenReturn(new ImageGenerationCapabilityService.ImageGenerationResult(
                         "image-model",
+                        List.of(base64Image),
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        List.of(),
-                        List.of()
-                ))
-                .thenReturn(new GenerateResponseData(
-                        "task-video",
-                        TaskStatus.SUCCESS,
-                        List.of(),
-                        List.of(),
-                        List.of("https://cdn.example.com/video.mp4"),
-                        "2026-04-30T00:00:02",
-                        24L,
-                        "video-prompt",
-                        GenerateMode.video,
-                        "影视级真实",
-                        null,
-                        "video-model",
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        List.of(),
-                        List.of()
+                        null
                 ));
+        when(generationService.generate(any(), eq("u1"))).thenReturn(new GenerateResponseData(
+                "task-video",
+                TaskStatus.SUCCESS,
+                List.of(),
+                List.of(),
+                List.of("https://cdn.example.com/video.mp4"),
+                "2026-04-30T00:00:02",
+                24L,
+                "video-prompt",
+                GenerateMode.video,
+                "影视级真实",
+                null,
+                "video-model",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of()
+        ));
 
         StoryboardLiteDtos.SessionData session = storyboardLiteService.createSession(
                 "u1",
@@ -179,11 +179,9 @@ class StoryboardLiteServiceIntegrationTest {
         );
 
         ArgumentCaptor<com.example.aigc.dto.GenerateRequest> captor = ArgumentCaptor.forClass(com.example.aigc.dto.GenerateRequest.class);
-        verify(generationService, times(2)).generate(captor.capture(), eq("u1"));
-        List<com.example.aigc.dto.GenerateRequest> requests = captor.getAllValues();
-        assertThat(requests.get(0).imageModel()).isEqualTo("custom-image-model");
-        assertThat(requests.get(1).videoModel()).isEqualTo("custom-video-model");
-        assertThat(requests.get(1).videoReferenceImageUrl()).startsWith("data:image/");
+        verify(generationService).generate(captor.capture(), eq("u1"));
+        assertThat(captor.getValue().videoModel()).isEqualTo("custom-video-model");
+        assertThat(captor.getValue().videoReferenceImageUrl()).startsWith("data:image/");
         assertThat(keyframe.modelName()).isEqualTo("image-model");
         assertThat(videoTask.modelName()).isEqualTo("video-model");
     }

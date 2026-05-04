@@ -12,7 +12,6 @@ import java.util.Map;
 
 public record GenerateRequest(
         @NotBlank(message = "prompt不能为空")
-        @Size(max = 500, message = "prompt最长500字")
         String prompt,
 
         @NotNull(message = "mode不能为空")

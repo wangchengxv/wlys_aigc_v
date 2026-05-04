@@ -385,6 +385,17 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function trimToUndefined(value?: string | null) {
+  const normalized = value?.trim()
+  return normalized ? normalized : undefined
+}
+
+function trimToNull(value?: string | null) {
+  if (value === undefined) return undefined
+  const normalized = value?.trim()
+  return normalized ? normalized : null
+}
+
 export async function generateContent(req: GenerateRequest): Promise<GenerateResponse> {
   if (!USE_MOCK) {
     const { data } = await http.post<ApiEnvelope<GenerateResponse>>('/api/v1/generate', req)
@@ -1334,10 +1345,16 @@ export async function listScriptProjects(options?: { deleted?: boolean }): Promi
 
 export async function createScriptProject(payload: ScriptProjectCreateRequest): Promise<ScriptProjectAggregate> {
   requireScriptApi()
+  const normalizedPayload: ScriptProjectCreateRequest = {
+    ...payload,
+    explicitTextModel: trimToUndefined(payload.explicitTextModel),
+    explicitImageModel: trimToUndefined(payload.explicitImageModel),
+    explicitVideoModel: trimToUndefined(payload.explicitVideoModel),
+  }
   const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>(
     '/api/v1/script-projects',
-    payload,
-    courseHeaderConfig(payload.courseId),
+    normalizedPayload,
+    courseHeaderConfig(normalizedPayload.courseId),
   )
   return unwrapApiData(data, '创建剧本工程失败')
 }
@@ -1353,9 +1370,12 @@ export async function uploadScriptProject(payload: ScriptProjectUploadRequest): 
   if (payload.targetDuration != null) formData.append('targetDuration', String(payload.targetDuration))
   if (payload.language) formData.append('language', payload.language)
   if (payload.courseId) formData.append('courseId', payload.courseId)
-  if (payload.explicitTextModel) formData.append('explicitTextModel', payload.explicitTextModel)
-  if (payload.explicitImageModel) formData.append('explicitImageModel', payload.explicitImageModel)
-  if (payload.explicitVideoModel) formData.append('explicitVideoModel', payload.explicitVideoModel)
+  const explicitTextModel = trimToUndefined(payload.explicitTextModel)
+  const explicitImageModel = trimToUndefined(payload.explicitImageModel)
+  const explicitVideoModel = trimToUndefined(payload.explicitVideoModel)
+  if (explicitTextModel) formData.append('explicitTextModel', explicitTextModel)
+  if (explicitImageModel) formData.append('explicitImageModel', explicitImageModel)
+  if (explicitVideoModel) formData.append('explicitVideoModel', explicitVideoModel)
   const { data } = await http.post<ApiEnvelope<ScriptProjectAggregate>>(
     '/api/v1/script-projects/upload',
     formData,
@@ -2011,9 +2031,21 @@ export async function updateWorkflowModelSettings(
   projectId: string,
   request: WorkflowModelSettingsUpdateRequest
 ): Promise<WorkflowModelSettings> {
+  const normalizedRequest: WorkflowModelSettingsUpdateRequest = {
+    ...request,
+    defaultTextModel: trimToNull(request.defaultTextModel),
+    defaultImageModel: trimToNull(request.defaultImageModel),
+    defaultVideoModel: trimToNull(request.defaultVideoModel),
+    defaultTtsModel: trimToNull(request.defaultTtsModel),
+    dubbingVoice: trimToNull(request.dubbingVoice),
+    dubbingLanguage: trimToNull(request.dubbingLanguage),
+    overrides: request.overrides
+      ? Object.fromEntries(Object.entries(request.overrides).map(([key, value]) => [key, value.trim()]))
+      : undefined,
+  }
   const { data } = await http.put<ApiEnvelope<WorkflowModelSettings>>(
     `/api/v1/script-projects/${encodeURIComponent(projectId)}/model-settings`,
-    request
+    normalizedRequest
   )
   return unwrapApiData(data, '保存模型设置失败')
 }

@@ -4,6 +4,9 @@ import com.example.aigc.config.AigcArkProperties;
 import com.example.aigc.dto.GenerateRequest;
 import com.example.aigc.enums.GenerateMode;
 import com.example.aigc.exception.BizException;
+import com.example.aigc.model.ConnectionConfig;
+import com.example.aigc.model.ModelConfig;
+import com.example.aigc.model.PresetModelRegistry;
 import com.example.aigc.model.VideoStylePresetRegistry;
 import com.example.aigc.repository.ConnectionConfigRepository;
 import com.example.aigc.repository.GenerationTaskRepository;
@@ -29,6 +32,7 @@ import java.lang.reflect.Method;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,9 +52,108 @@ class GenerationServiceImplViduTest {
             new ModelCapabilityService(),
             Mockito.mock(RouterRoutingService.class),
             new VideoStylePresetRegistry(),
+            new PresetModelRegistry(),
             Mockito.mock(LocalAssetFileService.class),
             Mockito.mock(ScriptProjectService.class)
     );
+
+    @Test
+    void generateImagesMatchesProviderQualifiedConfiguredModel() {
+        ConnectionConfigRepository connectionRepository = Mockito.mock(ConnectionConfigRepository.class);
+        ModelConfigRepository modelRepository = Mockito.mock(ModelConfigRepository.class);
+        ApiKeyCryptoService cryptoService = Mockito.mock(ApiKeyCryptoService.class);
+        ProviderHttpGateway gateway = Mockito.mock(ProviderHttpGateway.class);
+        GenerationServiceImpl localService = new GenerationServiceImpl(
+                Mockito.mock(GenerationTaskRepository.class),
+                new AigcArkProperties(),
+                connectionRepository,
+                modelRepository,
+                cryptoService,
+                providerCatalog,
+                gateway,
+                new ModelCapabilityService(),
+                Mockito.mock(RouterRoutingService.class),
+                new VideoStylePresetRegistry(),
+                new PresetModelRegistry(),
+                Mockito.mock(LocalAssetFileService.class),
+                Mockito.mock(ScriptProjectService.class)
+        );
+
+        ConnectionConfig connection = ConnectionConfig.create(
+                "Test OpenAI Connection",
+                "openai",
+                "https://api.openai.com/v1",
+                "encrypted-key",
+                true
+        );
+        connection.setId("conn-image-1");
+        ModelConfig model = ModelConfig.create(
+                "Test Image Model",
+                "openai",
+                "image-three-override-v1",
+                "conn-image-1",
+                true,
+                Map.of("capabilities", List.of("image"))
+        );
+
+        Mockito.when(modelRepository.findAll()).thenReturn(List.of(model));
+        Mockito.when(connectionRepository.findById("conn-image-1")).thenReturn(Optional.of(connection));
+        Mockito.when(cryptoService.decrypt("encrypted-key")).thenReturn("plain-key");
+        Mockito.when(gateway.generateImage(
+                Mockito.any(),
+                Mockito.eq("https://api.openai.com/v1"),
+                Mockito.eq("plain-key"),
+                Mockito.argThat((Map<String, Object> payload) ->
+                        payload != null && "image-three-override-v1".equals(payload.get("model"))),
+                Mockito.any()
+        )).thenReturn(Map.of("data", List.of(Map.of("url", "https://example.test/generated-image.png"))));
+
+        var result = localService.generateImages(
+                "生成角色三视图",
+                1,
+                "openai:image-three-override-v1",
+                null,
+                true
+        );
+
+        assertThat(result.modelName()).isEqualTo("image-three-override-v1");
+        assertThat(result.matchedBy()).isEqualTo("provider:modelName");
+        assertThat(result.results()).containsExactly("https://example.test/generated-image.png");
+    }
+
+    @Test
+    void generateImagesReturnsHelpfulMessageWhenConfiguredModelMissing() {
+        ConnectionConfigRepository connectionRepository = Mockito.mock(ConnectionConfigRepository.class);
+        ModelConfigRepository modelRepository = Mockito.mock(ModelConfigRepository.class);
+        GenerationServiceImpl localService = new GenerationServiceImpl(
+                Mockito.mock(GenerationTaskRepository.class),
+                new AigcArkProperties(),
+                connectionRepository,
+                modelRepository,
+                Mockito.mock(ApiKeyCryptoService.class),
+                providerCatalog,
+                Mockito.mock(ProviderHttpGateway.class),
+                new ModelCapabilityService(),
+                Mockito.mock(RouterRoutingService.class),
+                new VideoStylePresetRegistry(),
+                new PresetModelRegistry(),
+                Mockito.mock(LocalAssetFileService.class),
+                Mockito.mock(ScriptProjectService.class)
+        );
+
+        Mockito.when(modelRepository.findAll()).thenReturn(List.of());
+
+        assertThatThrownBy(() -> localService.generateImages(
+                "生成角色三视图",
+                1,
+                "openai:missing-image-model",
+                null,
+                true
+        ))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("openai:missing-image-model")
+                .hasMessageContaining("provider:modelName");
+    }
 
     @Test
     void validateAndNormalizeViduOptionsSupportsRecModeAndAudioRules() throws Exception {

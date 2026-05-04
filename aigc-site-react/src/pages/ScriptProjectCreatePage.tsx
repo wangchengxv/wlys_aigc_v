@@ -7,6 +7,7 @@ import { AppInput } from '@/components/common/AppInput'
 import { HelpHint } from '@/components/common/HelpHint'
 import { useToast } from '@/context/ToastContext'
 import { getPresetById, groupPresetsByCategory, presetDescriptor, resolveVisualStyleForProject, styleSummaryShort } from '@/data/videoStylePresets'
+import { sanitizeEnabledModelName } from '@/lib/scriptProject/modelSelection'
 import { useGlobalSettingsStore } from '@/stores/globalSettingsStore'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
 import { useStyleTemplateStore } from '@/stores/styleTemplateStore'
@@ -156,9 +157,9 @@ export function ScriptProjectCreatePage() {
         const te = enabled.filter((item) => hasCapability(item, 'text')).map((item) => item.modelName)
         const im = enabled.filter((item) => hasCapability(item, 'image')).map((item) => item.modelName)
         const vm = enabled.filter((item) => hasCapability(item, 'video')).map((item) => item.modelName)
-        setExplicitTextModel((prev) => prev || te[0] || '')
-        setExplicitImageModel((prev) => prev || im[0] || '')
-        setExplicitVideoModel((prev) => prev || vm[0] || '')
+        setExplicitTextModel((prev) => (prev && te.includes(prev) ? prev : te[0] || ''))
+        setExplicitImageModel((prev) => (prev && im.includes(prev) ? prev : im[0] || ''))
+        setExplicitVideoModel((prev) => (prev && vm.includes(prev) ? prev : vm[0] || ''))
       } catch (e) {
         if (!cancelled) setWarnings((w) => [...w, e instanceof Error ? `模型列表加载失败：${e.message}` : '模型列表加载失败'])
       } finally {
@@ -177,15 +178,18 @@ export function ScriptProjectCreatePage() {
     const textM = normalizeExplicitValue(explicitTextModel, textModelInputMode)
     const imageM = normalizeExplicitValue(explicitImageModel, imageModelInputMode)
     const videoM = normalizeExplicitValue(explicitVideoModel, videoModelInputMode)
+    const safeTextModel = sanitizeEnabledModelName(modelOptions, 'text', textM)
+    const safeImageModel = sanitizeEnabledModelName(modelOptions, 'image', imageM)
+    const safeVideoModel = sanitizeEnabledModelName(modelOptions, 'video', videoM)
     const nextWarnings: string[] = []
-    if (textModelInputMode === 'custom' && textM && !textModelOptions.includes(textM)) {
-      nextWarnings.push('文本模型不在已配置模型中，运行时可能走系统 fallback。')
+    if (textM && !safeTextModel) {
+      nextWarnings.push('文本模型无效或已失效，已改为不传后端。')
     }
-    if (imageModelInputMode === 'custom' && imageM && !imageModelOptions.includes(imageM)) {
-      nextWarnings.push('图片模型不在已配置模型中，运行时可能走系统 fallback。')
+    if (imageM && !safeImageModel) {
+      nextWarnings.push('图片模型无效或已失效，已改为不传后端。')
     }
-    if (videoModelInputMode === 'custom' && videoM && !videoModelOptions.includes(videoM)) {
-      nextWarnings.push('视频模型不在已配置模型中，运行时可能走系统 fallback。')
+    if (videoM && !safeVideoModel) {
+      nextWarnings.push('视频模型无效或已失效，已改为不传后端。')
     }
     setWarnings(nextWarnings)
 
@@ -207,9 +211,9 @@ export function ScriptProjectCreatePage() {
         targetDuration,
         language,
         courseId: queryCourseId || undefined,
-        explicitTextModel: textM || undefined,
-        explicitImageModel: imageM || undefined,
-        explicitVideoModel: videoM || undefined,
+        explicitTextModel: safeTextModel,
+        explicitImageModel: safeImageModel,
+        explicitVideoModel: safeVideoModel,
       }
       if (mode === 'text') {
         if (!sourceText.trim()) {

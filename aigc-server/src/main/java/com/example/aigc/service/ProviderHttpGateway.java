@@ -17,9 +17,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -333,7 +335,170 @@ public class ProviderHttpGateway {
         if (definition.imageGenerationPath() == null || definition.imageGenerationPath().isBlank()) {
             throw new ProviderGatewayException(400, "当前提供商未配置图片接口");
         }
-        return postJson(baseUrl, definition.imageGenerationPath(), definition, apiKey, null, payload, timeout);
+        try {
+            HttpRequest request = buildJsonRequest(
+                    baseUrl,
+                    definition.imageGenerationPath(),
+                    definition,
+                    apiKey,
+                    null,
+                    payload,
+                    timeout
+            ).build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() >= 400) {
+                byte[] errorBody = response.body() == null ? new byte[0] : response.body();
+                throw new ProviderGatewayException(response.statusCode(), extractMessage(new String(errorBody, StandardCharsets.UTF_8)));
+            }
+            return decodeImageResponse(response.body(), response.headers().firstValue("Content-Type").orElse(""));
+        } catch (ProviderGatewayException ex) {
+            throw ex;
+        } catch (IOException ex) {
+            throw new ProviderGatewayException(502, "模型服务返回了无法解析的数据");
+        } catch (Exception ex) {
+            throw new ProviderGatewayException(502, "模型服务调用失败");
+        }
+    }
+
+    private Map<String, Object> decodeImageResponse(byte[] body, String contentTypeHeader) throws IOException {
+        byte[] bytes = body == null ? new byte[0] : body;
+        String contentType = normalizeContentType(contentTypeHeader);
+        if (bytes.length == 0) {
+            throw new IOException("empty image response");
+        }
+        if (isJsonContentType(contentType)) {
+            return objectMapper.readValue(bytes, MAP_TYPE);
+        }
+        if (looksLikeImageBytes(bytes) || contentType.startsWith("image/")) {
+            return wrapBase64Image(Base64.getEncoder().encodeToString(bytes));
+        }
+        String text = new String(bytes, StandardCharsets.UTF_8).trim();
+        if (looksLikeUrl(text)) {
+            return wrapImageUrl(text);
+        }
+        if (looksLikeDataImageUrl(text)) {
+            return wrapBase64Image(extractDataUrlBase64(text));
+        }
+        String jsonCandidate = unwrapJsonCodeFence(text);
+        if (looksLikeJson(jsonCandidate)) {
+            return objectMapper.readValue(jsonCandidate, MAP_TYPE);
+        }
+        if (looksLikeBase64Payload(text)) {
+            return wrapBase64Image(text);
+        }
+        throw new IOException("unrecognized image response: " + abbreviate(text, 160));
+    }
+
+    private String normalizeContentType(String contentTypeHeader) {
+        if (contentTypeHeader == null || contentTypeHeader.isBlank()) {
+            return "";
+        }
+        return contentTypeHeader.split(";")[0].trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isJsonContentType(String contentType) {
+        return "application/json".equals(contentType)
+                || "text/json".equals(contentType)
+                || contentType.endsWith("+json");
+    }
+
+    private boolean looksLikeJson(String text) {
+        if (text == null) {
+            return false;
+        }
+        String trimmed = text.trim();
+        return (trimmed.startsWith("{") && trimmed.endsWith("}"))
+                || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+    }
+
+    private boolean looksLikeUrl(String text) {
+        if (text == null) {
+            return false;
+        }
+        String trimmed = text.trim();
+        return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+    }
+
+    private boolean looksLikeDataImageUrl(String text) {
+        if (text == null) {
+            return false;
+        }
+        String trimmed = text.trim().toLowerCase(Locale.ROOT);
+        return trimmed.startsWith("data:image/") && trimmed.contains(";base64,");
+    }
+
+    private String extractDataUrlBase64(String dataUrl) {
+        int index = dataUrl.indexOf(";base64,");
+        return index < 0 ? dataUrl.trim() : dataUrl.substring(index + ";base64,".length()).trim();
+    }
+
+    private boolean looksLikeBase64Payload(String text) {
+        if (text == null) {
+            return false;
+        }
+        String normalized = text.trim().replaceAll("\\s+", "");
+        if (normalized.length() < 64 || normalized.length() % 4 != 0) {
+            return false;
+        }
+        return normalized.matches("^[A-Za-z0-9+/=]+$");
+    }
+
+    private boolean looksLikeImageBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) {
+            return false;
+        }
+        if ((bytes[0] & 0xFF) == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return true;
+        }
+        if ((bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8 && (bytes[2] & 0xFF) == 0xFF) {
+            return true;
+        }
+        if (bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == '8') {
+            return true;
+        }
+        return bytes.length >= 12
+                && bytes[0] == 'R'
+                && bytes[1] == 'I'
+                && bytes[2] == 'F'
+                && bytes[3] == 'F'
+                && bytes[8] == 'W'
+                && bytes[9] == 'E'
+                && bytes[10] == 'B'
+                && bytes[11] == 'P';
+    }
+
+    private Map<String, Object> wrapImageUrl(String url) {
+        return Map.of("data", List.of(Map.of("url", url.trim())));
+    }
+
+    private Map<String, Object> wrapBase64Image(String b64) {
+        return Map.of("data", List.of(Map.of("b64_json", b64.trim())));
+    }
+
+    private String unwrapJsonCodeFence(String text) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.trim();
+        if (!trimmed.startsWith("```")) {
+            return trimmed;
+        }
+        int firstLineEnd = trimmed.indexOf('\n');
+        if (firstLineEnd < 0) {
+            return trimmed;
+        }
+        int fenceEnd = trimmed.lastIndexOf("```");
+        if (fenceEnd <= firstLineEnd) {
+            return trimmed;
+        }
+        return trimmed.substring(firstLineEnd + 1, fenceEnd).trim();
+    }
+
+    private String abbreviate(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength);
     }
 
     public Map<String, Object> submitVideoTask(ProviderDefinition definition, String baseUrl, String apiKey, Map<String, Object> payload, Duration timeout) {

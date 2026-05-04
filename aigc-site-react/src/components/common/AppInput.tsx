@@ -8,6 +8,7 @@ type Props = {
   rows?: number
   min?: number
   max?: number
+  disabled?: boolean
 }
 
 export function AppInput({
@@ -20,6 +21,7 @@ export function AppInput({
   rows = 5,
   min,
   max,
+  disabled = false,
 }: Props) {
   function onUpdate(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const t = e.target
@@ -34,9 +36,9 @@ export function AppInput({
     <label className="input-wrap">
       {label ? <span className="label">{label}</span> : null}
       {as === 'textarea' ? (
-        <textarea className="ctrl" rows={rows} placeholder={placeholder} value={String(value)} onChange={onUpdate} />
+        <textarea className="ctrl" rows={rows} placeholder={placeholder} value={String(value)} onChange={onUpdate} disabled={disabled} />
       ) : (
-        <input className="ctrl" type={type} placeholder={placeholder} value={String(value)} min={min} max={max} onChange={onUpdate} />
+        <input className="ctrl" type={type} placeholder={placeholder} value={String(value)} min={min} max={max} onChange={onUpdate} disabled={disabled} />
       )}
     </label>
   )

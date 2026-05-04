@@ -14,25 +14,52 @@ import com.example.aigc.exception.BizException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 @Service
 public class StoryboardLiteService {
+    private static final Logger log = LoggerFactory.getLogger(StoryboardLiteService.class);
+    private static final String THREE_VIEW_EXTRACTION_TEMPLATE = "prompts/visual/three-view-extraction-user.md";
+
     private final GenerationService generationService;
+    private final ImageGenerationCapabilityService imageGenerationCapabilityService;
     private final LocalAssetFileService localAssetFileService;
+    private final TransactionTemplate transactionTemplate;
+    private final AiCapabilityRoutingService aiCapabilityRoutingService;
+    private final ProviderHttpGateway providerHttpGateway;
+    private final PromptTemplateService promptTemplateService;
     @PersistenceContext
     private EntityManager entityManager;
 
-    public StoryboardLiteService(GenerationService generationService, LocalAssetFileService localAssetFileService) {
+    public StoryboardLiteService(
+            GenerationService generationService,
+            ImageGenerationCapabilityService imageGenerationCapabilityService,
+            LocalAssetFileService localAssetFileService,
+            PlatformTransactionManager transactionManager,
+            AiCapabilityRoutingService aiCapabilityRoutingService,
+            ProviderHttpGateway providerHttpGateway,
+            PromptTemplateService promptTemplateService
+    ) {
         this.generationService = generationService;
+        this.imageGenerationCapabilityService = imageGenerationCapabilityService;
         this.localAssetFileService = localAssetFileService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.aiCapabilityRoutingService = aiCapabilityRoutingService;
+        this.providerHttpGateway = providerHttpGateway;
+        this.promptTemplateService = promptTemplateService;
     }
 
     @Transactional
@@ -67,47 +94,60 @@ public class StoryboardLiteService {
         return toSessionData(session);
     }
 
-    @Transactional
     public List<StoryboardLiteDtos.KeyframeData> generateKeyframes(String ownerId, String sessionId, StoryboardLiteDtos.GenerateKeyframesRequest request) {
         try {
-            StoryboardLiteSession session = requireSession(ownerId, sessionId);
-            StoryboardLiteScript script = requireLatestScript(sessionId);
-            String style = request.style() == null || request.style().isBlank() ? "影视级真实" : request.style().trim();
-            String prompt = request.prompt() == null || request.prompt().isBlank()
-                    ? "请基于下述剧本生成一张三视图（正面、侧面、背面）设定图，画面清晰，角色主体明确：\n"
-                    + abbreviate(script.scriptText, 1200)
-                    : request.prompt().trim();
-            GenerateRequest generateRequest = new GenerateRequest(
-                    prompt,
-                    GenerateMode.image,
-                    style,
-                    "1024x1024",
-                    "medium",
-                    1,
-                    trimToNull(request.imageModel()),
-                    null,
-                    null,
-                    null,
-                    null
-            );
-            GeneratedLiteImage generatedImage = generateLiteImage(session, ownerId, generateRequest);
-            Instant now = Instant.now();
-            StoryboardLiteKeyframe keyframe = new StoryboardLiteKeyframe();
-            keyframe.keyframeId = nextId("sbl-kf");
-            keyframe.sessionId = sessionId;
-            keyframe.promptText = prompt;
-            keyframe.imageUrl = generatedImage.imageUrl();
-            keyframe.imageFileId = generatedImage.imageFileId();
-            keyframe.modelName = firstNonBlank(generatedImage.modelName(), trimToNull(request.imageModel()));
-            keyframe.selected = listKeyframes(sessionId).isEmpty();
-            keyframe.status = "SUCCESS";
-            keyframe.createdAt = now;
-            keyframe.updatedAt = now;
-            entityManager.persist(keyframe);
-            session.status = "KEYFRAME_READY";
-            session.updatedAt = now;
-            entityManager.merge(session);
-            return listKeyframes(sessionId).stream().map(this::toKeyframeData).toList();
+            LiteKeyframeGenerationInput input = transactionTemplate.execute(status -> {
+                StoryboardLiteSession session = requireSession(ownerId, sessionId);
+                StoryboardLiteScript script = requireLatestScript(sessionId);
+                String prompt;
+                if (request.prompt() == null || request.prompt().isBlank()) {
+                    String extractedPrompt = extractThreeViewPromptWithLlm(script.scriptText);
+                    prompt = extractedPrompt != null ? extractedPrompt
+                        : "请基于下述剧本生成一张三视图（正面、侧面、背面）设定图，画面清晰，角色主体明确：\n"
+                          + abbreviate(script.scriptText, 1200);
+                } else {
+                    prompt = request.prompt().trim();
+                }
+                return new LiteKeyframeGenerationInput(
+                        prompt,
+                        trimToNull(request.imageModel())
+                );
+            });
+            if (input == null) {
+                throw new BizException(500, "关键帧生成失败：事务未返回上下文");
+            }
+
+            ImageGenerationCapabilityService.ImageGenerationResult generationResult =
+                    imageGenerationCapabilityService.generateImages(input.prompt(), 1, input.imageModel(), null, false);
+            if (generationResult == null) {
+                throw new BizException(500, "关键帧生成失败：服务未返回结果");
+            }
+            String rawImage = firstNonBlank(generationResult.results());
+            if (rawImage == null) {
+                throw new BizException(502, "图片模型未返回可用图片（模型：" + firstNonBlank(generationResult.modelName(), input.imageModel(), "自动路由") + "）");
+            }
+
+            return transactionTemplate.execute(status -> {
+                StoryboardLiteSession session = requireSession(ownerId, sessionId);
+                GeneratedLiteImage generatedImage = storeGeneratedLiteImage(session, rawImage, generationResult.modelName());
+                Instant now = Instant.now();
+                StoryboardLiteKeyframe keyframe = new StoryboardLiteKeyframe();
+                keyframe.keyframeId = nextId("sbl-kf");
+                keyframe.sessionId = sessionId;
+                keyframe.promptText = input.prompt();
+                keyframe.imageUrl = generatedImage.imageUrl();
+                keyframe.imageFileId = generatedImage.imageFileId();
+                keyframe.modelName = firstNonBlank(generatedImage.modelName(), input.imageModel());
+                keyframe.selected = listKeyframes(sessionId).isEmpty();
+                keyframe.status = "SUCCESS";
+                keyframe.createdAt = now;
+                keyframe.updatedAt = now;
+                entityManager.persist(keyframe);
+                session.status = "KEYFRAME_READY";
+                session.updatedAt = now;
+                entityManager.merge(session);
+                return listKeyframes(sessionId).stream().map(this::toKeyframeData).toList();
+            });
         } catch (BizException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -132,65 +172,81 @@ public class StoryboardLiteService {
         return new StoryboardLiteDtos.ConfirmKeyframeResponse(target.keyframeId, true);
     }
 
-    @Transactional
     public StoryboardLiteDtos.VideoTaskData generateVideo(String ownerId, String sessionId, StoryboardLiteDtos.GenerateVideoRequest request) {
         try {
-            StoryboardLiteSession session = requireSession(ownerId, sessionId);
-            String directReference = trimToNull(request.referenceImageUrl());
-            StoryboardLiteKeyframe keyframe = null;
-            if (directReference == null) {
-                String keyframeId = trimToNull(request.keyframeId());
-                if (keyframeId == null) {
-                    throw new BizException(400, "请先确认关键帧，或上传/粘贴一张首帧图片");
+            LiteVideoGenerationInput input = transactionTemplate.execute(status -> {
+                requireSession(ownerId, sessionId);
+                String directReference = trimToNull(request.referenceImageUrl());
+                StoryboardLiteKeyframe keyframe = null;
+                if (directReference == null) {
+                    String keyframeId = trimToNull(request.keyframeId());
+                    if (keyframeId == null) {
+                        throw new BizException(400, "请先确认关键帧，或上传/粘贴一张首帧图片");
+                    }
+                    keyframe = listKeyframes(sessionId).stream()
+                            .filter(item -> Objects.equals(item.keyframeId, keyframeId))
+                            .findFirst()
+                            .orElseThrow(() -> new BizException(404, "关键帧不存在"));
+                    if (!keyframe.selected) {
+                        throw new BizException(400, "请先确认关键帧后再生成视频");
+                    }
                 }
-                keyframe = listKeyframes(sessionId).stream()
-                        .filter(item -> Objects.equals(item.keyframeId, keyframeId))
-                        .findFirst()
-                        .orElseThrow(() -> new BizException(404, "关键帧不存在"));
-                if (!keyframe.selected) {
-                    throw new BizException(400, "请先确认关键帧后再生成视频");
-                }
+                String style = request.style() == null || request.style().isBlank() ? "影视级真实" : request.style().trim();
+                String prompt = request.prompt() == null || request.prompt().isBlank() ? "请基于参考图生成5秒电影感镜头。" : request.prompt().trim();
+                return new LiteVideoGenerationInput(
+                        keyframe == null ? null : keyframe.keyframeId,
+                        prompt,
+                        style,
+                        trimToNull(request.videoModel()),
+                        directReference != null ? directReference : resolveVideoReferenceImage(keyframe)
+                );
+            });
+            if (input == null) {
+                throw new BizException(500, "图生视频生成失败：事务未返回上下文");
             }
-            String style = request.style() == null || request.style().isBlank() ? "影视级真实" : request.style().trim();
-            String prompt = request.prompt() == null || request.prompt().isBlank() ? "请基于参考图生成5秒电影感镜头。" : request.prompt().trim();
+
             GenerateRequest generateRequest = new GenerateRequest(
-                    prompt,
+                    input.prompt(),
                     GenerateMode.video,
-                    style,
+                    input.style(),
                     "1024x1024",
                     "medium",
                     1,
                     null,
-                    trimToNull(request.videoModel()),
+                    input.videoModel(),
                     null,
-                    directReference != null ? directReference : resolveVideoReferenceImage(keyframe),
+                    input.referenceImageUrl(),
                     null
             );
             GenerateResponseData result = generationService.generate(generateRequest, ownerId);
             if (result == null) {
                 throw new BizException(500, "图生视频生成失败：服务未返回结果");
             }
-            String videoUrl = firstOrNull(result.videoResults());
-            String videoFileId = firstOrNull(result.persistedVideoFileIds());
-            Instant now = Instant.now();
-            StoryboardLiteVideoTask task = new StoryboardLiteVideoTask();
-            task.videoTaskId = nextId("sbl-vtask");
-            task.sessionId = sessionId;
-            task.keyframeId = keyframe == null ? null : keyframe.keyframeId;
-            task.promptText = prompt;
-            task.providerTaskId = result.taskId();
-            task.status = String.valueOf(result.status());
-            task.videoUrl = videoUrl;
-            task.resultVideoFileId = videoFileId;
-            task.modelName = firstNonBlank(trimToNull(result.videoModel()), trimToNull(request.videoModel()));
-            task.errorMessage = null;
-            task.createdAt = now;
-            task.updatedAt = now;
-            entityManager.persist(task);
-            session.status = "VIDEO_READY";
-            session.updatedAt = now;
-            entityManager.merge(session);
-            return toVideoTaskData(task);
+
+            return transactionTemplate.execute(status -> {
+                StoryboardLiteSession session = requireSession(ownerId, sessionId);
+                String videoUrl = firstOrNull(result.videoResults());
+                String videoFileId = firstOrNull(result.persistedVideoFileIds());
+                Instant now = Instant.now();
+                StoryboardLiteVideoTask task = new StoryboardLiteVideoTask();
+                task.videoTaskId = nextId("sbl-vtask");
+                task.sessionId = sessionId;
+                task.keyframeId = input.keyframeId();
+                task.promptText = input.prompt();
+                task.providerTaskId = result.taskId();
+                task.status = String.valueOf(result.status());
+                task.videoUrl = videoUrl;
+                task.resultVideoFileId = videoFileId;
+                task.modelName = firstNonBlank(trimToNull(result.videoModel()), input.videoModel());
+                task.errorMessage = null;
+                task.createdAt = now;
+                task.updatedAt = now;
+                entityManager.persist(task);
+                session.status = "VIDEO_READY";
+                session.updatedAt = now;
+                entityManager.merge(session);
+                return toVideoTaskData(task);
+            });
         } catch (BizException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -313,38 +369,24 @@ public class StoryboardLiteService {
         return value == null || value.isBlank() ? null : value;
     }
 
-    private GeneratedLiteImage generateLiteImage(StoryboardLiteSession session, String ownerId, GenerateRequest request) {
-        GenerateResponseData result = generationService.generate(request, ownerId);
-        if (result == null) {
-            throw new BizException(500, "关键帧生成失败：服务未返回结果");
-        }
-
-        String imageUrl = firstOrNull(result.imageResults());
-        String imageFileId = firstOrNull(result.persistedImageFileIds());
-        if (imageFileId != null) {
-            return new GeneratedLiteImage(
-                    firstNonBlank(localAssetFileService.toPublicUrl(imageFileId), imageUrl),
-                    imageFileId,
-                    trimToNull(result.imageModel())
-            );
-        }
-        if (imageUrl == null) {
-            throw new BizException(500, "关键帧生成失败：未返回图片");
-        }
-
-        StoredFileRecord stored = storeGeneratedLiteImage(session, imageUrl);
-        return new GeneratedLiteImage(localAssetFileService.toPublicUrl(stored.fileId), stored.fileId, trimToNull(result.imageModel()));
-    }
-
-    private StoredFileRecord storeGeneratedLiteImage(StoryboardLiteSession session, String rawImage) {
+    private GeneratedLiteImage storeGeneratedLiteImage(StoryboardLiteSession session, String rawImage, String modelName) {
         String projectId = firstNonBlank(trimToNull(session.projectId), WorkspaceConstants.WORKSPACE_PROJECT_ID);
         String relativePath = "storyboard-lite/" + session.sessionId + "/" + nextId("keyframe") + ".png";
         String trimmed = rawImage.trim();
-        StoredFileRecord file = trimmed.startsWith("http://") || trimmed.startsWith("https://")
-                ? localAssetFileService.storeRemote(projectId, relativePath, "image/png", trimmed)
-                : localAssetFileService.storeBase64(projectId, relativePath, "image/png", trimmed);
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            try {
+                StoredFileRecord file = localAssetFileService.storeRemote(projectId, relativePath, "image/png", trimmed);
+                entityManager.persist(file);
+                return new GeneratedLiteImage(localAssetFileService.toPublicUrl(file.fileId), file.fileId, trimToNull(modelName));
+            } catch (Exception ex) {
+                log.warn("[StoryboardLite] 三视图远程图片落盘失败，保留模型外链继续流程: sessionId={}, error={}",
+                        session.sessionId, rootMessage(ex));
+                return new GeneratedLiteImage(trimmed, null, trimToNull(modelName));
+            }
+        }
+        StoredFileRecord file = localAssetFileService.storeBase64(projectId, relativePath, "image/png", trimmed);
         entityManager.persist(file);
-        return file;
+        return new GeneratedLiteImage(localAssetFileService.toPublicUrl(file.fileId), file.fileId, trimToNull(modelName));
     }
 
     private String resolveVideoReferenceImage(StoryboardLiteKeyframe keyframe) {
@@ -360,7 +402,13 @@ public class StoryboardLiteService {
             fileId = trimToNull(direct.substring("/api/v1/files/".length()));
         }
         if (fileId == null) {
-            return direct;
+            if (direct != null && direct.startsWith("/api/v1/files/")) {
+                log.warn("[StoryboardLite] 关键帧参考图 fileId 不存在但路径有效，尝试从路径提取: direct={}", direct);
+                fileId = trimToNull(direct.substring("/api/v1/files/".length()));
+            }
+            if (fileId == null) {
+                return direct;
+            }
         }
         StoredFileRecord record = entityManager.find(StoredFileRecord.class, fileId);
         if (record == null || !localAssetFileService.exists(record)) {
@@ -373,6 +421,88 @@ public class StoryboardLiteService {
 
     private String firstNonBlank(String... values) {
         if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String extractThreeViewPromptWithLlm(String scriptText) {
+        try {
+            AiCapabilityRoutingService.ResolvedAiModel resolved = aiCapabilityRoutingService.resolveText(null);
+            if (resolved == null || !resolved.hasProvider()) {
+                log.warn("[StoryboardLite] 未找到可用的文本模型，跳过 LLM 提示词增强");
+                return null;
+            }
+            String template = promptTemplateService.load(THREE_VIEW_EXTRACTION_TEMPLATE, null);
+            if (template == null) {
+                log.warn("[StoryboardLite] 未找到三视图提取提示词模板，跳过 LLM 增强");
+                return null;
+            }
+            String userPrompt = template.replace("{{scriptText}}", abbreviate(scriptText, 4000));
+            Map<String, Object> payload;
+            if ("anthropic".equalsIgnoreCase(resolved.provider().apiFormat())) {
+                payload = Map.of(
+                        "model", resolved.modelName(),
+                        "messages", List.of(Map.of("role", "user", "content", userPrompt)),
+                        "max_tokens", 2000,
+                        "temperature", 0.5
+                );
+            } else {
+                payload = Map.of(
+                        "model", resolved.modelName(),
+                        "messages", List.of(Map.of("role", "user", "content", userPrompt)),
+                        "max_tokens", 2000,
+                        "temperature", 0.5
+                );
+            }
+            Map<String, Object> response = providerHttpGateway.invokeChat(
+                    resolved.provider(),
+                    resolved.connection().getBaseUrl(),
+                    resolved.apiKey(),
+                    resolved.metadataPlain(),
+                    payload,
+                    Duration.ofSeconds(30)
+            );
+            String content = parseAssistantContent(response, resolved.provider().apiFormat());
+            if (content == null || content.isBlank()) {
+                log.warn("[StoryboardLite] LLM 返回内容为空，跳过提示词增强");
+                return null;
+            }
+            log.info("[StoryboardLite] LLM 提示词增强成功，长度: {}", content.length());
+            return content.trim();
+        } catch (Exception ex) {
+            log.warn("[StoryboardLite] LLM 提示词增强失败，回退到简单模板: {}", rootMessage(ex));
+            return null;
+        }
+    }
+
+    private String parseAssistantContent(Map<String, Object> response, String apiFormat) {
+        if ("anthropic".equalsIgnoreCase(apiFormat)) {
+            Object contentNode = response.get("content");
+            if (contentNode instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+                Object text = first.get("text");
+                return text == null ? "" : String.valueOf(text);
+            }
+            return "";
+        }
+        Object choicesNode = response.get("choices");
+        if (choicesNode instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first) {
+            Object messageNode = first.get("message");
+            if (messageNode instanceof Map<?, ?> message) {
+                Object content = message.get("content");
+                return content == null ? "" : String.valueOf(content);
+            }
+        }
+        return "";
+    }
+
+    private String firstNonBlank(List<String> values) {
+        if (values == null || values.isEmpty()) {
             return null;
         }
         for (String value : values) {
@@ -396,5 +526,11 @@ public class StoryboardLiteService {
     }
 
     private record GeneratedLiteImage(String imageUrl, String imageFileId, String modelName) {
+    }
+
+    private record LiteKeyframeGenerationInput(String prompt, String imageModel) {
+    }
+
+    private record LiteVideoGenerationInput(String keyframeId, String prompt, String style, String videoModel, String referenceImageUrl) {
     }
 }

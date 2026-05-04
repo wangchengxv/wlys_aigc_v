@@ -1435,7 +1435,11 @@ public class ScriptWorkflowService {
             scriptProjectService.save(aggregate);
             return new ThreeViewResponse(asset.assetId, file.fileId);
         } catch (BizException ex) {
-            throw ex;
+            String message = ex.getMessage();
+            if (message != null && message.startsWith("三视图生成失败：")) {
+                throw ex;
+            }
+            throw new BizException(ex.getStatus(), "三视图生成失败：" + message);
         } catch (Exception ex) {
             throw new BizException(500, "三视图生成失败：" + safeError(ex));
         }
@@ -1904,6 +1908,12 @@ public class ScriptWorkflowService {
         return ex.getMessage();
     }
 
+    private String buildThreeViewGenerationErrorMessage(String effectiveModel, String detail) {
+        String modelDesc = effectiveModel == null || effectiveModel.isBlank() ? "自动路由" : effectiveModel.trim();
+        String reason = detail == null || detail.isBlank() ? "未知错误" : detail.trim();
+        return "三视图生成失败：图片模型[" + modelDesc + "]处理失败，" + reason;
+    }
+
     private GeneratedImageFile generateKeyframeImage(
             ScriptProjectAggregate aggregate,
             ExtractedAsset asset,
@@ -1981,7 +1991,10 @@ public class ScriptWorkflowService {
                     null
             );
             GenerateResponseData result = generationService.generate(request, ownerId);
-            String raw = firstNonBlank(result == null ? null : result.imageResults());
+            if (result == null) {
+                throw new BizException(502, "工作台文生图未返回任务结果");
+            }
+            String raw = firstNonBlank(result.imageResults());
             if (raw == null || raw.isBlank()) {
                 throw new BizException(502, "图片模型未返回可用图片（模型：" + stringValue(effectiveModel, "自动路由") + "）");
             }
@@ -1993,9 +2006,9 @@ public class ScriptWorkflowService {
             }
             return new GeneratedImageFile(file, stringValue(result.imageModel(), effectiveModel));
         } catch (BizException ex) {
-            throw ex;
+            throw new BizException(ex.getStatus(), buildThreeViewGenerationErrorMessage(effectiveModel, ex.getMessage()));
         } catch (Exception ex) {
-            throw new BizException(502, "调用工作台文生图失败：" + safeError(ex));
+            throw new BizException(502, buildThreeViewGenerationErrorMessage(effectiveModel, "调用工作台文生图失败：" + safeError(ex)));
         }
     }
 

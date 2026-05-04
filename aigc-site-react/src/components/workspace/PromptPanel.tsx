@@ -15,6 +15,7 @@ import {
   resolveImageAdvancedCapability,
   workspaceVideoNeedsFirstFrameImage,
 } from '@/lib/workspace/advancedMedia'
+import { buildEnabledModelConfigsFromOptions, sanitizeEnabledModelName } from '@/lib/scriptProject/modelSelection'
 import type { ImageAdvancedFormState, ViduFormState, ViduTri } from '@/lib/workspace/advancedMedia'
 import type { WorkspaceRouteVariant } from '@/routes/types'
 import { useGenerationStore } from '@/stores/generationStore'
@@ -94,7 +95,6 @@ export function PromptPanel({
   const [imageAdvancedForm, setImageAdvancedForm] = useState<ImageAdvancedFormState>(() => emptyImageAdvancedForm())
 
   const promptCount = prompt.length
-  const promptPercent = Math.min(100, Math.round((promptCount / 500) * 100))
   const needsImageModel = mode === 'image' || mode === 'both'
   const needsVideoModel = mode === 'video'
   const needsTextLength = mode === 'text' || mode === 'both'
@@ -108,7 +108,18 @@ export function PromptPanel({
     () => (videoModelInputMode === 'custom' ? customVideoModel.trim() : videoModel.trim()),
     [videoModelInputMode, customVideoModel, videoModel],
   )
-  const imageAdvancedCapability = useMemo(() => resolveImageAdvancedCapability(finalImageModel), [finalImageModel])
+  const enabledImageModels = useMemo(
+    () => buildEnabledModelConfigsFromOptions('image', imageModelOptions),
+    [imageModelOptions],
+  )
+  const safeImageModel = useMemo(
+    () => sanitizeEnabledModelName(enabledImageModels, 'image', finalImageModel),
+    [enabledImageModels, finalImageModel],
+  )
+  const imageAdvancedCapability = useMemo(
+    () => resolveImageAdvancedCapability(safeImageModel || ''),
+    [safeImageModel],
+  )
 
   const globalStyleSlice = useMemo(
     () => ({
@@ -217,10 +228,6 @@ export function PromptPanel({
       setError('请输入提示词后再生成')
       return
     }
-    if (prompt.length > 500) {
-      setError('提示词请控制在 500 字以内')
-      return
-    }
     if (needVid) {
       const mergedLen =
         globalResolvedStyle.trim().length > 0 && prompt.trim().length > 0
@@ -275,7 +282,7 @@ export function PromptPanel({
         imageSize,
         textLength: needTxtLen ? textLength : 'medium',
         count: Math.max(1, Math.min(4, count)),
-        imageModel: needImg ? finalImageModel || undefined : undefined,
+        imageModel: needImg ? safeImageModel : undefined,
         videoModel: needVid ? finalVideoModel || undefined : undefined,
         advancedMedia: payload.advancedMedia,
         videoReferenceImageUrl: payload.videoReferenceImageUrl,
@@ -344,10 +351,7 @@ export function PromptPanel({
     <section className="prompt panel glass">
       <AppInput value={prompt} onChange={(v) => setPrompt(String(v))} label="提示词" as="textarea" placeholder="例如：春季服装上新活动，生成年轻化营销文案与海报配图..." />
       <div className="progress">
-        <span className="muted">字数：{promptCount}/500</span>
-        <div className="bar">
-          <span style={{ width: `${promptPercent}%` }} />
-        </div>
+        <span className="muted">字数：{promptCount}</span>
       </div>
 
       <div className="field">

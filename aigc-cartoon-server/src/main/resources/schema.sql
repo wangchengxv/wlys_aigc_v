@@ -1,8 +1,4 @@
 -- AIGC漫剧工具数据库初始化脚本
--- 创建数据库
-CREATE DATABASE IF NOT EXISTS aigc_cartoon DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE aigc_cartoon;
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS t_user (
@@ -45,12 +41,12 @@ CREATE TABLE IF NOT EXISTS t_project (
     FOREIGN KEY (user_id) REFERENCES t_user(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='项目表';
 
--- 兼容已存在库的增量字段（MySQL 8.0+）
-ALTER TABLE t_project ADD COLUMN IF NOT EXISTS style_template_id VARCHAR(100) COMMENT '风格模板ID' AFTER style;
-ALTER TABLE t_project ADD COLUMN IF NOT EXISTS visual_style_prompt TEXT COMMENT '视觉风格提示词' AFTER style_template_id;
-ALTER TABLE t_project ADD COLUMN IF NOT EXISTS visual_style_mode VARCHAR(20) DEFAULT 'preset' COMMENT '视觉风格模式：preset/custom' AFTER visual_style_prompt;
-ALTER TABLE t_project ADD COLUMN IF NOT EXISTS visual_style_long_text_mode TINYINT(1) DEFAULT 0 COMMENT '视觉风格长文本模式：0-否，1-是' AFTER visual_style_mode;
-ALTER TABLE t_project ADD COLUMN IF NOT EXISTS custom_style_text TEXT COMMENT '自定义风格文本' AFTER visual_style_long_text_mode;
+-- 兼容已存在库的增量字段（若字段已存在会报错，但 application.yml 已开启 continue-on-error）
+ALTER TABLE t_project ADD COLUMN style_template_id VARCHAR(100) COMMENT '风格模板ID' AFTER style;
+ALTER TABLE t_project ADD COLUMN visual_style_prompt TEXT COMMENT '视觉风格提示词' AFTER style_template_id;
+ALTER TABLE t_project ADD COLUMN visual_style_mode VARCHAR(20) DEFAULT 'preset' COMMENT '视觉风格模式：preset/custom' AFTER visual_style_prompt;
+ALTER TABLE t_project ADD COLUMN visual_style_long_text_mode TINYINT(1) DEFAULT 0 COMMENT '视觉风格长文本模式：0-否，1-是' AFTER visual_style_mode;
+ALTER TABLE t_project ADD COLUMN custom_style_text TEXT COMMENT '自定义风格文本' AFTER visual_style_long_text_mode;
 
 -- 项目配置表
 CREATE TABLE IF NOT EXISTS t_project_config (
@@ -138,5 +134,5 @@ CREATE TABLE IF NOT EXISTS t_video (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='视频表';
 
 -- 插入默认管理员用户（密码：admin123）
-INSERT IGNORE INTO t_user (username, password, nickname, email, role) VALUES 
-('admin', '$2a$10$abc123hashedpasswordfortest', '管理员', 'admin@example.com', 'admin');
+INSERT IGNORE INTO t_user (id, username, password, nickname, email, role) VALUES 
+(1, 'admin', '$2a$10$abc123hashedpasswordfortest', '管理员', 'admin@example.com', 'admin');

@@ -521,7 +521,7 @@ class ScriptProjectWorkflowIntegrationTest {
     }
 
     @Test
-    void threeViewUsesWorkflowModelAndFailsWithoutPlaceholderWhenGatewayBreaks() throws Exception {
+    void threeViewAcceptsProviderQualifiedWorkflowModelAndFailsWithoutPlaceholderWhenGatewayBreaks() throws Exception {
         String projectId = createTextProject("""
                 第一幕：清晨，古镇街口。
                 阿满背着画箱穿过薄雾，准备在摊位边完成今天第一张写生。
@@ -531,7 +531,7 @@ class ScriptProjectWorkflowIntegrationTest {
 
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("defaultImageModel", "image-three-default-v1");
-        settings.put("overrides", Map.of(WorkflowModelKey.THREE_VIEW_IMAGE, "image-three-override-v1"));
+        settings.put("overrides", Map.of(WorkflowModelKey.THREE_VIEW_IMAGE, "openai:image-three-override-v1"));
         readSuccessData(mockMvc.perform(
                         withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -630,6 +630,64 @@ class ScriptProjectWorkflowIntegrationTest {
                 .map(file -> file.relativePath == null ? "" : file.relativePath)
                 .filter(path -> path.startsWith("three-view/" + assetId + "/"))
                 .noneMatch(path -> path.endsWith(".svg"))).isTrue();
+    }
+
+    @Test
+    void threeViewReturnsHelpfulErrorWhenWorkflowModelCannotBeResolved() throws Exception {
+        String projectId = createTextProject("""
+                第一幕：清晨，古镇街口。
+                阿满背着画箱穿过薄雾，准备在摊位边完成今天第一张写生。
+                """, "gpt-4o-mini");
+
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("defaultImageModel", "openai:missing-three-view-model");
+        settings.put("overrides", Map.of(WorkflowModelKey.THREE_VIEW_IMAGE, "openai:missing-three-view-model"));
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/model-settings", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(settings))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        Map<String, Object> updateScriptRequest = new LinkedHashMap<>();
+        updateScriptRequest.put("refinedMarkdown", """
+                # 古镇清晨
+
+                阿满背着画箱来到古镇街口，准备在茶摊边完成今天的第一张写生。
+                """);
+        updateScriptRequest.put("structuredScript", buildManualStructuredScript());
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/script", projectId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateScriptRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode extractedCharacters = readSuccessData(mockMvc.perform(withScriptAuth(post("/api/v1/script-projects/{projectId}/assets/extract/characters", projectId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        String assetId = extractedCharacters.get(0).path("assetId").asText();
+
+        Map<String, Object> updateAssetRequest = new LinkedHashMap<>();
+        updateAssetRequest.put("visualPrompt", "cinematic character design, full body, strong identity consistency");
+        readSuccessData(mockMvc.perform(
+                        withScriptAuth(put("/api/v1/script-projects/{projectId}/assets/{assetId}", projectId, assetId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(updateAssetRequest))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        JsonNode failedThreeView = readResponseTree(mockMvc.perform(withScriptAuth(post(
+                        "/api/v1/script-projects/{projectId}/assets/{assetId}/three-view/generate",
+                        projectId,
+                        assetId)))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(failedThreeView.path("code").asInt()).isEqualTo(400);
+        assertThat(failedThreeView.path("message").asText())
+                .contains("三视图生成失败")
+                .contains("openai:missing-three-view-model")
+                .contains("provider:modelName");
     }
 
     @Test

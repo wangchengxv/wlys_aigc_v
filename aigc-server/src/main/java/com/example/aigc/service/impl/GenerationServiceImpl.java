@@ -13,6 +13,8 @@ import com.example.aigc.enums.TaskStatus;
 import com.example.aigc.exception.BizException;
 import com.example.aigc.model.ConnectionConfig;
 import com.example.aigc.model.ModelConfig;
+import com.example.aigc.model.PresetModel;
+import com.example.aigc.model.PresetModelRegistry;
 import com.example.aigc.model.VideoStylePresetRegistry;
 import com.example.aigc.repository.ConnectionConfigRepository;
 import com.example.aigc.repository.GenerationTaskRepository;
@@ -93,6 +95,7 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
     private final ModelCapabilityService modelCapabilityService;
     private final RouterRoutingService routerRoutingService;
     private final VideoStylePresetRegistry videoStylePresetRegistry;
+    private final PresetModelRegistry presetModelRegistry;
     private final LocalAssetFileService localAssetFileService;
     private final ScriptProjectService scriptProjectService;
 
@@ -107,6 +110,7 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
             ModelCapabilityService modelCapabilityService,
             RouterRoutingService routerRoutingService,
             VideoStylePresetRegistry videoStylePresetRegistry,
+            PresetModelRegistry presetModelRegistry,
             LocalAssetFileService localAssetFileService,
             ScriptProjectService scriptProjectService
     ) {
@@ -120,6 +124,7 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
         this.modelCapabilityService = modelCapabilityService;
         this.routerRoutingService = routerRoutingService;
         this.videoStylePresetRegistry = videoStylePresetRegistry;
+        this.presetModelRegistry = presetModelRegistry;
         this.localAssetFileService = localAssetFileService;
         this.scriptProjectService = scriptProjectService;
     }
@@ -249,7 +254,7 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
             ResolvedModel resolvedModel = resolveModel("image", requestedModel);
             if (resolvedModel == null) {
                 if (requestedModel != null && !requestedModel.isBlank()) {
-                    throw new BizException(400, "图片模型未在可用配置中");
+                    throw new BizException(400, buildExplicitModelMissingMessage("图片", requestedModel, "image"));
                 }
                 throw new BizException(400, "未配置可用图片模型");
             }
@@ -353,7 +358,7 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
             );
         }
         if (requestedModel != null && !requestedModel.isBlank()) {
-            throw new BizException(400, "图片模型未在可用配置中");
+            throw new BizException(400, buildExplicitModelMissingMessage("图片", requestedModel, "image"));
         }
         String selectedModel = arkProperties.getDefaultImageModel();
         return new MediaResult(
@@ -2806,6 +2811,10 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
                     }
                 }
             }
+            ResolvedModel presetFallback = tryResolveViaPreset(capability, requestedModel.trim());
+            if (presetFallback != null) {
+                return presetFallback;
+            }
             return null;
         }
 
@@ -2842,6 +2851,83 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
         return new ResolvedModel(model, connection, provider, apiKey, metaPlain, "USER_CONFIGURED", "modelName", null);
     }
 
+    private ResolvedModel tryResolveViaPreset(String capability, String requestedModel) {
+        String expected = normalize(requestedModel);
+        if (expected.isBlank()) {
+            return null;
+        }
+        for (PresetModel preset : presetModelRegistry.getAll()) {
+            if (!preset.getCapabilities().contains(capability)) {
+                continue;
+            }
+            if (!matchesPresetModel(preset, expected)) {
+                continue;
+            }
+            ConnectionConfig connection = connectionConfigRepository.findAll().stream()
+                    .filter(item -> item.isEnabled()
+                            && providerCatalog.require(item.getProvider()).key().equalsIgnoreCase(preset.getProvider()))
+                    .findFirst()
+                    .orElse(null);
+            if (connection == null) {
+                continue;
+            }
+            ProviderCatalog.ProviderDefinition provider = providerCatalog.require(connection.getProvider());
+            if (!supportsInvocation(provider, capability)) {
+                continue;
+            }
+            String apiKey = resolveApiKeyForPreset(provider, connection);
+            if (apiKey == null) {
+                continue;
+            }
+            Map<String, Object> metaPlain = com.example.aigc.service.ConnectionMetadataHelper.decryptForUse(
+                    connection.getMetadata(),
+                    apiKeyCryptoService
+            );
+            ModelConfig presetAsModel = ModelConfig.create(
+                    preset.getDisplayName(),
+                    preset.getProvider(),
+                    preset.getModelName(),
+                    connection.getId(),
+                    true,
+                    Map.of("preset", true)
+            );
+            return new ResolvedModel(
+                    presetAsModel,
+                    connection,
+                    provider,
+                    apiKey,
+                    metaPlain,
+                    "PRESET_FALLBACK",
+                    "preset-model",
+                    null
+            );
+        }
+        return null;
+    }
+
+    private boolean matchesPresetModel(PresetModel preset, String expected) {
+        return expected.equals(normalize(preset.getModelName()))
+                || expected.equals(normalize(preset.getDisplayName()))
+                || expected.equals(normalize(preset.getId()))
+                || expected.equals(normalize(preset.getProvider() + ":" + preset.getModelName()))
+                || expected.equals(normalize(preset.getProvider() + "/" + preset.getModelName()));
+    }
+
+    private String resolveApiKeyForPreset(ProviderCatalog.ProviderDefinition provider, ConnectionConfig connection) {
+        if (provider.gatewayKind() == GatewayKind.BEDROCK) {
+            String encrypted = connection.getEncryptedApiKey();
+            return encrypted == null || encrypted.isBlank() ? null : apiKeyCryptoService.decrypt(encrypted);
+        }
+        if (provider.gatewayKind() == GatewayKind.VERTEX) {
+            return "";
+        }
+        if (provider.authMode() == ProviderCatalog.AuthMode.NONE) {
+            return "";
+        }
+        String encrypted = connection.getEncryptedApiKey();
+        return encrypted == null || encrypted.isBlank() ? null : apiKeyCryptoService.decrypt(encrypted);
+    }
+
     private String resolveApiKeyForGeneration(ProviderCatalog.ProviderDefinition provider, ConnectionConfig connection) {
         if (provider.gatewayKind() == GatewayKind.BEDROCK) {
             return decryptRequiredApiKey(connection);
@@ -2863,6 +2949,18 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
         if (expected.equals(normalize(modelConfig.getName()))) {
             return "name";
         }
+        if (expected.equals(normalize(modelConfig.getProvider() + ":" + modelConfig.getModelName()))) {
+            return "provider:modelName";
+        }
+        if (expected.equals(normalize(modelConfig.getProvider() + "/" + modelConfig.getModelName()))) {
+            return "provider/modelName";
+        }
+        if (expected.equals(normalize(modelConfig.getProvider() + ":" + modelConfig.getName()))) {
+            return "provider:name";
+        }
+        if (expected.equals(normalize(modelConfig.getProvider() + "/" + modelConfig.getName()))) {
+            return "provider/name";
+        }
         Object rawAliases = modelConfig.getMetadata() == null ? null : modelConfig.getMetadata().get("aliases");
         if (rawAliases instanceof List<?> list) {
             for (Object item : list) {
@@ -2879,6 +2977,26 @@ public class GenerationServiceImpl implements GenerationService, ImageGeneration
             }
         }
         return null;
+    }
+
+    private String buildExplicitModelMissingMessage(String label, String requestedModel, String capability) {
+        String trimmed = requestedModel == null ? "" : requestedModel.trim();
+        return "%s模型不可用或未匹配到可用配置：%s。请检查模型名称是否填写为 modelName、别名或 provider:modelName，并确认已启用支持 %s 能力的模型与连接"
+                .formatted(label, trimmed, capability);
+    }
+
+    private boolean supportsInvocation(ProviderCatalog.ProviderDefinition provider, String capability) {
+        return switch (capability) {
+            case "text", "tts" -> provider.textProxySupported() && textGatewayReady(provider);
+            case "image" -> provider.imageGenerationPath() != null && !provider.imageGenerationPath().isBlank();
+            case "video" -> provider.videoSubmitPath() != null && !provider.videoSubmitPath().isBlank()
+                    && provider.videoResultPath() != null && !provider.videoResultPath().isBlank();
+            default -> false;
+        };
+    }
+
+    private boolean textGatewayReady(ProviderCatalog.ProviderDefinition provider) {
+        return provider.chatPath() != null && !provider.chatPath().isBlank();
     }
 
     private String normalize(String value) {

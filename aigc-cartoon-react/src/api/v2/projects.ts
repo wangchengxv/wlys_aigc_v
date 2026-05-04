@@ -1,4 +1,5 @@
 import type { Project, ProjectForm } from '@/types/project';
+import { apiV2, type ApiEnvelope } from './client';
 import { deleteApiData, getApiData, postApiData, putApiData } from './client';
 
 export function listProjects() {
@@ -28,5 +29,8 @@ export async function renameProject(id: number, name: string) {
 export async function uploadProjectCover(file: File) {
   const form = new FormData();
   form.append('file', file);
-  return postApiData<{ url: string }>('/projects/upload-cover', form);
+  const res = await apiV2.post<ApiEnvelope<{ url: string }>>('/projects/upload-cover', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data.data;
 }

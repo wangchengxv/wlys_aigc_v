@@ -4,10 +4,11 @@
  * 放置在剧本预览页、资产页、视频页右上角，允许为每个功能节点单独覆盖模型。
  * 层级：函数覆盖 → 项目默认 → 路由器默认
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppButton } from '@/components/common/AppButton'
 import { useScriptProjectStore } from '@/stores/scriptProjectStore'
 import { useToast } from '@/context/ToastContext'
+import { getEnabledModelNames, isEnabledModelName, type ModelCapability } from '@/lib/scriptProject/modelSelection'
 import type { ModelConfig } from '@/types'
 import { WorkflowModelKey } from '@/types'
 
@@ -45,6 +46,9 @@ const SCOPE_KEYS: Record<PageScope, { key: string; label: string; capability: 't
 }
 
 const CAP_LABEL: Record<string, string> = { text: '文本', image: '图像', video: '视频', tts: '配音' }
+const ALL_SCOPE_ENTRIES = Object.values(SCOPE_KEYS).flat()
+const CAPABILITY_BY_KEY = new Map(ALL_SCOPE_ENTRIES.map((item) => [item.key, item.capability]))
+const LABEL_BY_KEY = new Map(ALL_SCOPE_ENTRIES.map((item) => [item.key, item.label]))
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -139,6 +143,37 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
   }, [open, panelPos])
 
   const keys = SCOPE_KEYS[scope]
+  const enabledModelNames = useMemo(
+    () => ({
+      text: new Set(getEnabledModelNames(allModels, 'text')),
+      image: new Set(getEnabledModelNames(allModels, 'image')),
+      video: new Set(getEnabledModelNames(allModels, 'video')),
+      tts: new Set(getEnabledModelNames(allModels, 'tts')),
+    }),
+    [allModels],
+  )
+  const invalidSelections = useMemo(() => {
+    const items: string[] = []
+    const check = (label: string, capability: ModelCapability, value: string) => {
+      const normalized = value.trim()
+      if (normalized && !enabledModelNames[capability].has(normalized)) {
+        items.push(`${label}：${normalized}`)
+      }
+    }
+
+    check('默认文本模型', 'text', defaultText)
+    check('默认图像模型', 'image', defaultImage)
+    check('默认视频模型', 'video', defaultVideo)
+    check('默认配音模型', 'tts', defaultTts)
+
+    Object.entries(draft).forEach(([key, value]) => {
+      const capability = CAPABILITY_BY_KEY.get(key)
+      if (!capability) return
+      check(LABEL_BY_KEY.get(key) || key, capability, value)
+    })
+
+    return items
+  }, [defaultImage, defaultText, defaultTts, defaultVideo, draft, enabledModelNames])
 
   // 按 capability 过滤可选模型
   function modelsFor(cap: string): ModelConfig[] {
@@ -159,23 +194,47 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
   }
 
   async function handleSave() {
-    // 保留空字符串以显式清除后端已有覆盖。
+    const skipped: string[] = []
+    const sanitizeDefaultModel = (label: string, capability: ModelCapability, value: string) => {
+      const normalized = value.trim()
+      if (!normalized) return null
+      if (isEnabledModelName(allModels, capability, normalized)) {
+        return normalized
+      }
+      skipped.push(`${label}：${normalized}`)
+      return null
+    }
+    // 覆盖项保留空字符串，用来显式清除后端上一次保存的无效覆盖。
     const nextOverrides: Record<string, string> = {}
     for (const [k, v] of Object.entries(draft)) {
-      nextOverrides[k] = v.trim()
+      const normalized = v.trim()
+      if (!normalized) {
+        nextOverrides[k] = ''
+        continue
+      }
+      const capability = CAPABILITY_BY_KEY.get(k)
+      if (!capability || isEnabledModelName(allModels, capability, normalized)) {
+        nextOverrides[k] = normalized
+        continue
+      }
+      skipped.push(`${LABEL_BY_KEY.get(k) || k}：${normalized}`)
+      nextOverrides[k] = ''
     }
     try {
       await saveSettings(projectId, {
-        defaultTextModel:  defaultText.trim(),
-        defaultImageModel: defaultImage.trim(),
-        defaultVideoModel: defaultVideo.trim(),
-        defaultTtsModel: defaultTts.trim(),
+        defaultTextModel: sanitizeDefaultModel('默认文本模型', 'text', defaultText),
+        defaultImageModel: sanitizeDefaultModel('默认图像模型', 'image', defaultImage),
+        defaultVideoModel: sanitizeDefaultModel('默认视频模型', 'video', defaultVideo),
+        defaultTtsModel: sanitizeDefaultModel('默认配音模型', 'tts', defaultTts),
         dubbingVoice: dubbingVoice.trim() || null,
         dubbingLanguage: dubbingLanguage.trim() || null,
         dubbingSpeed: parseDubbingSpeed(dubbingSpeed),
         overrides: nextOverrides,
       })
-      showToast('模型设置已保存', 'success')
+      showToast(
+        skipped.length > 0 ? `模型设置已保存，已自动清空 ${skipped.length} 个失效模型名` : '模型设置已保存',
+        skipped.length > 0 ? 'info' : 'success',
+      )
     } catch (e) {
       showToast(e instanceof Error ? e.message : '保存失败', 'error')
     }
@@ -301,7 +360,7 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
                         ))}
                         {/* 允许手动输入非列表模型 */}
                         {val && !list.find((m) => m.modelName === val) && (
-                          <option value={val}>{val}（手动）</option>
+                          <option value={val}>{val}（已失效，保存时清空）</option>
                         )}
                       </select>
                     </div>
@@ -370,13 +429,18 @@ export function WorkflowModelPanel({ projectId, scope, allModels }: Props) {
                           </option>
                         ))}
                         {val && !list.find((m) => m.modelName === val) && (
-                          <option value={val}>{val}（手动）</option>
+                          <option value={val}>{val}（已失效，保存时清空）</option>
                         )}
                       </select>
                     </div>
                   )
                 })}
               </div>
+              {invalidSelections.length > 0 ? (
+                <p className="muted" style={{ margin: '8px 0 0' }}>
+                  检测到失效模型名，保存时会自动清空，不再传给后端。
+                </p>
+              ) : null}
 
               <div className="wf-model-panel__actions">
                 <AppButton

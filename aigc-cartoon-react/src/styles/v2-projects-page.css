@@ -57,6 +57,32 @@
   color: #000;
 }
 
+.v2-nav {
+  position: absolute;
+  left: 41px;
+  top: 118px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+.v2-nav__item {
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.v2-nav__item.is-active {
+  background: #afafaf;
+  color: #000;
+}
+
 .v2-projects__title {
   position: absolute;
   left: 172px;
@@ -158,4 +184,115 @@
   align-items: center;
   justify-content: center;
   font-size: 18px;
+}
+
+.v2-projects__emptyBox {
+  width: 564px;
+  height: 350px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+}
+
+.v2-projects__emptyTitle {
+  font-family: 'Alibaba PuHuiTi 2.0', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v2-projects__emptyHint {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  max-width: 300px;
+}
+
+.v2-projects__errorBox {
+  width: 564px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 2px solid rgba(255, 80, 80, 0.4);
+  border-radius: 12px;
+}
+
+.v2-projects__errorMsg {
+  font-size: 18px;
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.v2-projects__retryBtn {
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.v2-projects__retryBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.v2-workspace__assetList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.v2-workspace__assetItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.v2-workspace__assetAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.v2-workspace__assetAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.v2-workspace__assetAvatar span {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v2-workspace__assetInfo {
+  flex: 1;
+}
+
+.v2-workspace__assetName {
+  font-weight: 700;
+  color: #fff;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.v2-workspace__assetDesc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
 }
