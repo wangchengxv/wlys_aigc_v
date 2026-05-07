@@ -6,14 +6,29 @@ frontend/.vite/
 # Java
 backend/target/
 *.class
+target/
+dist/
+dist.zip
 
 # IDE
 .idea/
 .vscode/
+*.iml
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*
 
 # Runtime
 *.log
-.env
-.env.*
+.log/
+*.pid
 backend/uploads/
