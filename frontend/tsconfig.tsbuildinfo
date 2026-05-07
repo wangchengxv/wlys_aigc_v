@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/api/authapi.ts","./src/api/http.ts","./src/hooks/usetaskpolling.ts","./src/pages/loginpage.tsx","./src/pages/projectlistpage.tsx","./src/pages/workspacepage.tsx","./src/router/index.tsx","./src/stores/projectstore.ts","./src/stores/userstore.ts"],"version":"5.9.3"}

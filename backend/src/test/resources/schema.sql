@@ -1,0 +1,54 @@
+DROP TABLE IF EXISTS ai_task;
+DROP TABLE IF EXISTS asset;
+DROP TABLE IF EXISTS subject;
+DROP TABLE IF EXISTS script_episode;
+DROP TABLE IF EXISTS script;
+DROP TABLE IF EXISTS project;
+
+CREATE TABLE project (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR(512)
+);
+
+CREATE TABLE script (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id BIGINT NOT NULL,
+  title VARCHAR(255),
+  content TEXT
+);
+
+CREATE TABLE script_episode (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  script_id BIGINT NOT NULL,
+  episode_no INT NOT NULL,
+  title VARCHAR(255),
+  content TEXT
+);
+
+CREATE TABLE subject (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id BIGINT NOT NULL,
+  subject_type VARCHAR(32) NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  finalized TINYINT DEFAULT 0
+);
+
+CREATE TABLE asset (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id BIGINT NOT NULL,
+  asset_type VARCHAR(32) NOT NULL,
+  url VARCHAR(1024) NOT NULL,
+  starred TINYINT DEFAULT 0
+);
+
+CREATE TABLE ai_task (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  project_id BIGINT NOT NULL,
+  task_type VARCHAR(64) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  progress INT DEFAULT 0,
+  error_message VARCHAR(1024)
+);

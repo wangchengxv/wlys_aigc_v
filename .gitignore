@@ -1,0 +1,19 @@
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Java
+backend/target/
+*.class
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Runtime
+*.log
+.env
+.env.*
+backend/uploads/
